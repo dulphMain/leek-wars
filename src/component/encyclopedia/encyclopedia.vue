@@ -64,7 +64,7 @@
 		<panel v-if="page" class="first encyclopedia last">
 			<template #content>
 				<div class="table">
-					<div v-if="edition" ref="codemirror" class="codemirror" :style="{lineHeight: 1.6, fontSize: 14}"></div>
+					<div v-if="edition" ref="monacoContainer" class="monaco-container"></div>
 					<div v-if="LeekWars.encyclopedia[this.language] && Object.keys(LeekWars.encyclopedia[this.language]).length" ref="markdown" class="markdown" @scroll="markdownScroll">
 						<!-- {{ parents }} -->
 
@@ -145,6 +145,7 @@
 </template>
 
 <script lang="ts">
+	import type * as Monaco from 'monaco-editor'
 	import Markdown from '@/component/encyclopedia/markdown.vue'
 	import { locale } from '@/locale'
 	import { i18n, mixins } from '@/model/i18n'
@@ -155,7 +156,7 @@
 	import Breadcrumb from '../forum/breadcrumb.vue'
 	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 	import { FUNCTIONS } from '@/model/functions'
-	import { nextTick } from 'vue'
+	import { markRaw, nextTick } from 'vue'
 	import { emitter } from '@/model/vue'
 
 	@Options({ name: 'encyclopedia', i18n: {}, mixins: [...mixins], components: { Markdown, Breadcrumb, RichTooltipFarmer } })
@@ -163,12 +164,11 @@
 		english: string = ''
 		page: any = null
 		edition: boolean = false
-		codemirror: any = null
-		editor: CodeMirror.Editor | null = null
+		editor: Monaco.editor.IStandaloneCodeEditor | null = null
 		scrolling: boolean = false
 		pages: any = {}
 		modified: boolean = false
-		initialGeneration: number = 0
+		initialVersionId: number = 0
 		statsExpanded: boolean = false
 		searchQuery: string = ''
 		actions = [
@@ -255,6 +255,11 @@
 			LeekWars.box = false
 			LeekWars.footer = true
 
+			if (this.editor) {
+				this.editor.getModel()?.dispose()
+				this.editor.dispose()
+				this.editor = null
+			}
 			if (this.edition) {
 				this.editEnd()
 			}
@@ -363,73 +368,48 @@ ${ret}
 				return
 			}
 			nextTick(() => {
-				const codeMirrorElement = this.$refs.codemirror as any
-				import(/* webpackChunkName: "codemirror-markdown" */ "@/component/encyclopedia/codemirror-markdown").then(wrapper => {
-					// console.log("CM", wrapper)
-					this.codemirror = wrapper.CodeMirror
-					this.editor = wrapper.CodeMirror(codeMirrorElement, {
-						value: "",
-						mode: "markdown",
-						theme: "leekwars",
+				import(/* webpackChunkName: "monaco" */ 'monaco-editor').then((monaco) => {
+					const container = this.$refs.monacoContainer as HTMLElement
+					if (!container) { return }
+					this.editor = markRaw(monaco.editor.create(container, {
+						value: this.page ? this.page.content : "",
+						language: "markdown",
+						automaticLayout: true,
+						wordWrap: "on",
+						fontSize: 14,
+						lineHeight: 22,
+						theme: "vs",
 						tabSize: 4,
-						indentUnit: 4,
-						indentWithTabs: true,
-						highlightSelectionMatches: true,
-						matchBrackets: true,
-						lineNumbers: true,
-						lineWrapping: true,
-						continueComments: true,
-						undoDepth: 200,
-						autofocus: true,
-						smartIndent: true,
-						cursorHeight: 1,
-						foldGutter: true,
-						gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"]
-					} as any)
+						insertSpaces: false,
+						lineNumbers: "on",
+						folding: true,
+						minimap: { enabled: false },
+						scrollBeyondLastLine: false,
+						overviewRulerLanes: 0,
+						overviewRulerBorder: false,
+						renderLineHighlight: "line",
+					}))
 
-					// console.log(this.editor)
-
-					this.setEditorContent()
-
-					this.editor.on('change', (editor, changes) => {
-						this.page.content = editor.getValue()
-
-						const generation = (editor.getDoc() as any).history.generation
-						// console.log("generation", generation, this.editor.doc)
-						this.modified = generation !== this.initialGeneration
-
-						nextTick(() => {
-							const title = (this.$refs.markdown as HTMLElement).querySelector('h1')
-							if (title) {
-								let text = ''
-								for (var i = 0; i < title.childNodes.length; ++i)
-									if (title.childNodes[i].nodeType === Node.TEXT_NODE)
-										text += title.childNodes[i].textContent
-								this.page.title = text.trim()
-							}
-							const parent = (this.$refs.markdown as HTMLElement).querySelector('blockquote')
-							if (parent) {
-								const text = parent.innerText.trim().toLowerCase().replace(/_/g, ' ')
-								if (text in LeekWars.encyclopedia[this.language]) {
-									this.page.parent = LeekWars.encyclopedia[this.language][text].id
-								} else {
-									this.page.parent = 1
-								}
-							}
-						})
-						this.scrolling = true
+					this.editor.onDidChangeModelContent(() => {
+						this.modified = true
+						this.page.content = this.editor!.getValue()
 					})
 
-					this.editor.on('scroll', (editor) => {
-						// console.log('scroll editor')
+					this.editor.onDidScrollChange((e) => {
 						if (this.scrolling) { this.scrolling = false; return }
-						const doc = editor.getDoc() as any
-						const percent = doc.scrollTop / (doc.height - (this.editor as any).display.lastWrapHeight)
+						const scrollTop = e.scrollTop
+						const scrollHeight = e.scrollHeight
+						const editorHeight = this.editor!.getLayoutInfo().height
+						if (scrollHeight <= editorHeight) { return }
+						const percent = scrollTop / (scrollHeight - editorHeight)
 
 						this.scrolling = true
 						const markdown = this.$refs.markdown as HTMLElement
 						markdown.scrollTop = (markdown.scrollHeight - markdown.clientHeight) * percent
 					})
+					
+					this.initialVersionId = this.editor.getModel()!.getAlternativeVersionId()
+					this.modified = false
 				})
 			})
 		}
@@ -437,11 +417,8 @@ ${ret}
 		setEditorContent() {
 			if (!this.page || !this.editor) { return }
 			this.editor.setValue(this.page.content)
-			this.editor.getDoc().clearHistory()
-			this.initialGeneration = (this.editor as any).doc.history.generation
-			// console.log("initial generation", this.initialGeneration)
+			this.initialVersionId = this.editor.getModel()!.getAlternativeVersionId()
 			this.modified = false
-			// console.log(this.editor)
 		}
 
 		editEnd() {
@@ -449,7 +426,11 @@ ${ret}
 			LeekWars.large = false
 			LeekWars.box = false
 			LeekWars.footer = true
-			this.editor = null
+			if (this.editor) {
+				this.editor.getModel()?.dispose()
+				this.editor.dispose()
+				this.editor = null
+			}
 			this.page.locker = null
 			this.releasePage()
 		}
@@ -464,16 +445,15 @@ ${ret}
 		}
 
 		markdownScroll(e: Event) {
-			// console.log("scroll markdown", e)
 			if (this.scrolling) { this.scrolling = false; return }
-			// console.log(e)
 			const markdown = (this.$refs.markdown as HTMLElement)
 			const percent = markdown.scrollTop / (markdown.scrollHeight - markdown.clientHeight)
 
 			this.scrolling = true
-			// console.log(percent, this.editor)
 			if (this.editor) {
-				this.editor.scrollTo(0, Math.ceil(((this.editor.getDoc() as any).height - (this.editor as any).display.lastWrapHeight) * percent))
+				const scrollHeight = this.editor.getScrollHeight()
+				const editorHeight = this.editor.getLayoutInfo().height
+				this.editor.setScrollTop(Math.ceil((scrollHeight - editorHeight) * percent))
 			}
 		}
 
@@ -502,8 +482,7 @@ ${ret}
 				}
 			}).error(error => LeekWars.toast("Sauvegarde échouée : " + error.error))
 
-			this.initialGeneration = (this.editor as any).doc.history.generation
-			// console.log("initial generation", this.initialGeneration)
+			this.initialVersionId = this.editor!.getModel()!.getAlternativeVersionId()
 			this.modified = false
 			this.page.last_edition_time = Date.now() / 1000
 			this.page.last_editor = store.state.farmer!.id
@@ -577,9 +556,11 @@ h1 {
 		min-height: 0;
 		min-width: 0;
 	}
-	.codemirror .CodeMirror {
-		height: 100%;
-	}
+}
+.monaco-container {
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
 }
 
 .stats {

@@ -116,6 +116,23 @@
 						</div>
 						<div v-else-if="myFarmer" class="add add-github" @click="githubDialog = true">{{ $t('add_github') }}</div>
 					</div>
+
+					<div v-if="farmer" class="log-time grey">
+						<span v-if="$store.getters.moderator">{{ $t('registered_the', [LeekWars.formatDateTime(farmer.register_date)]) }}</span>
+						<span v-else>{{ $t('registered_the', [LeekWars.formatDate(farmer.register_date)]) }}</span>
+						<br>
+						<span v-if="farmer.connected">{{ $t('connected') }}</span>
+						<span v-else>{{ $t('last_connection', [LeekWars.formatDuration(farmer.last_connection)]) }}</span>
+						<br>
+						<span v-if="farmer.verified">{{ $t('verified') }}</span>
+						<span v-else>{{ $t('not_verified') }}</span>
+					</div>
+					<div v-if="farmer" class="grades">
+						<div v-if="farmer.admin" class="grade admin">{{ $t('admin') }}</div>
+						<div v-else-if="farmer.moderator" class="grade moderator">{{ $t('moderator') }}</div>
+						<div v-if="farmer.contributor" class="grade contributor">{{ $t('contributor') }}</div>
+					</div>
+					
 				</div></template>
 			</panel>
 
@@ -139,6 +156,7 @@
 						</v-tooltip>
 						<ranking-badge v-if="farmer && farmer.ranking && farmer.ranking <= 1000 && farmer.in_garden" :id="farmer.id" :ranking="farmer.ranking" category="farmer" />
 					</div>
+
 					<v-tooltip v-if="farmer">
 						<template #activator="{ props }">
 							<table v-bind="props">
@@ -174,21 +192,8 @@
 						</tr>
 					</table>
 
-					<div v-if="farmer" class="log-time grey">
-						<span v-if="$store.getters.moderator">{{ $t('registered_the', [LeekWars.formatDateTime(farmer.register_date)]) }}</span>
-						<span v-else>{{ $t('registered_the', [LeekWars.formatDate(farmer.register_date)]) }}</span>
-						<br>
-						<span v-if="farmer.connected">{{ $t('connected') }}</span>
-						<span v-else>{{ $t('last_connection', [LeekWars.formatDuration(farmer.last_connection)]) }}</span>
-						<br>
-						<span v-if="farmer.verified">{{ $t('verified') }}</span>
-						<span v-else>{{ $t('not_verified') }}</span>
-					</div>
-					<div v-if="farmer" class="grades">
-						<div v-if="farmer.admin" class="grade admin">{{ $t('admin') }}</div>
-						<div v-else-if="farmer.moderator" class="grade moderator">{{ $t('moderator') }}</div>
-						<div v-if="farmer.contributor" class="grade contributor">{{ $t('contributor') }}</div>
-					</div>
+					<Line v-if="chartData" :data="chartData" :options="chartOptions" class="talent-history" />
+					
 					<div v-if="farmer" class="godfather grey">
 						<div v-if="farmer.godfather">
 							<i18n-t keypath="godson_of" tag="div">
@@ -216,6 +221,7 @@
 							</i18n-t>
 						</div>
 					</div>
+
 				</div></template>
 			</panel>
 
@@ -604,9 +610,11 @@
 	import { TROPHIES } from '@/model/trophies'
 	import LWTitle from '@/component/title/title.vue'
 import { emitter } from '@/model/vue'
+	import { Line } from 'vue-chartjs'
+	import { ChartData, ChartOptions } from 'chart.js'
 
 	@Options({ name: "farmer", i18n: {}, mixins: [...mixins], components: {
-		RichTooltipFarmer, RichTooltipTeam, RichTooltipLeek, FightsHistory, TournamentsHistory, TitlePicker, ReportDialog, 'lw-title': LWTitle, 'rich-tooltip-item': RichTooltipItem
+		RichTooltipFarmer, RichTooltipTeam, RichTooltipLeek, FightsHistory, TournamentsHistory, TitlePicker, ReportDialog, 'lw-title': LWTitle, 'rich-tooltip-item': RichTooltipItem, Line,
 	} })
 	export default class FarmerPage extends Vue {
 		farmer: Farmer | null = null
@@ -655,6 +663,8 @@ import { emitter } from '@/model/vue'
 			10000: { hat: 'gold_fedora', item: 280 },
 		}
 		xp_bar: number = 0
+		chartData: ChartData | null = null
+		chartOptions: ChartOptions | null = null
 
 		get id(): any {
 			return this.$route.params.id ? parseInt(this.$route.params.id, 10) : (this.$store.state.farmer ? this.$store.state.farmer.id : null)
@@ -734,6 +744,7 @@ import { emitter } from '@/model/vue'
 					{icon: 'mdi-email-outline', click: () => this.$router.push('/chat/new/' + farmer.id + '/' + farmer.name + '/'+ farmer.avatar_changed)}
 				])
 			}
+			this.chart()
 			this.getTrophies()
 			this.warnings()
 			this.newWebsite = this.farmer.website
@@ -753,6 +764,41 @@ import { emitter } from '@/model/vue'
 			} else {
 				this.trophiesMode = 'list'
 				localStorage.setItem('farmer/trophies-mode', 'list')
+			}
+		}
+
+		chart() {
+			if (!this.farmer || !this.farmer.talent_history || this.farmer.talent_history.length === 0) { return }
+			const labels = []
+			const time = LeekWars.time
+			for (let i = 1; i <= 7; ++i) {
+				labels.push(LeekWars.formatDayMonthShort(time - i * 24 * 3600))
+			}
+			this.chartData = {
+				labels: labels.reverse(),
+				datasets: [
+					{
+						tension: 0.2,
+						data: this.farmer.talent_history,
+						borderColor: '#5fad1b',
+						pointBackgroundColor: '#5fad1b',
+						borderWidth: 2,
+						fill: {
+							target: 'origin',
+							above: '#5fad1b30',
+						},
+					}
+				]
+			}
+			this.chartOptions = {
+				aspectRatio: 2.5,
+				plugins: { legend: { display: false } },
+				elements: {
+					point: {
+						radius: 4,
+						hoverRadius: 6,
+					}
+				},
 			}
 		}
 
@@ -1019,7 +1065,7 @@ import { emitter } from '@/model/vue'
 	}
 	.infos {
 		text-align: left;
-		width: 250px;
+		padding: 0 15px;
 		margin: 0 auto;
 		margin-top: 6px;
 	}
@@ -1106,6 +1152,9 @@ import { emitter } from '@/model/vue'
 		margin-left: 5px;
 		color: #888;
 	}
+	.talent-history {
+		margin-top: 3px;
+	}
 	.stats {
 		vertical-align: top;
 		.tournaments td {
@@ -1137,36 +1186,36 @@ import { emitter } from '@/model/vue'
 		.v-icon {
 			color: #777;
 		}
-		.log-time, .godfather {
-			margin-top: 10px;
-			padding: 0 20px;
-			font-size: 13px;
-		}
-		.log-time {
-			margin-top: 20px;
-		}
-		.grades {
-			margin-left: 20px;
-		}
-		.grade {
-			border-radius: 5px;
-			color: white;
-			display: inline-block;
-			padding: 3px 6px;
-			margin-top: 5px;
-			font-weight: normal;
-			font-size: 14px;
-			margin-right: 5px;
-		}
-		.grade.admin {
-			background: #ff3333;
-		}
-		.grade.moderator {
-			background: #ffa900;
-		}
-		.grade.contributor {
-			background: #009c1d;
-		}
+	}
+	.log-time, .godfather {
+		margin-top: 10px;
+		padding: 0 15px;
+		font-size: 13px;
+		color: #999;
+		text-align: left;
+	}
+	.grades {
+		margin-left: 15px;
+		text-align: left;
+	}
+	.grade {
+		border-radius: 5px;
+		color: white;
+		display: inline-block;
+		padding: 3px 6px;
+		margin-top: 5px;
+		font-weight: normal;
+		font-size: 14px;
+		margin-right: 5px;
+	}
+	.grade.admin {
+		background: #ff3333;
+	}
+	.grade.moderator {
+		background: #ffa900;
+	}
+	.grade.contributor {
+		background: #009c1d;
 	}
 	#app.app .leeks {
 		display: grid;
