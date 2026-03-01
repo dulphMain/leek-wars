@@ -1,5 +1,5 @@
 {
-	"core": "Heart XN.a-56",
+	"core": "XN.a-56 computing core",
 	"core2": "X.v-57 computing core",
 	"core2_desc": "X.v-57 computing core: 10 Tera-flops of raw computing power. 2.4 GHz, 3.2 GHz in Turbo mode. 1000MB cache memory.",
 	"core3": "X.v-57 computing core",
@@ -16,8 +16,8 @@
 	"fan": "Fan",
 	"sdcard": "SD card",
 	"cd": "CD",
-	"neural_core": "Neural heart",
-	"neural_core_pro": "Neural Heart Pro",
+	"neural_core": "Neural Core",
+	"neural_core_pro": "Pro Neural Core",
 	"power_supply": "Power supply",
 	"chiyembekezo": "Chiyembekezo",
 	"uzoma": "Uzoma",
@@ -52,9 +52,9 @@
 	"switch2": "Switch Pro",
 	"rgb": "RGB",
 	"rgb_desc": "It's expensive, but it looks good!",
-	"recovery_ram": "RAM for troubleshooting",
-	"recovery_core": "Troubleshooting core",
+	"recovery_ram": "Recovery RAM",
+	"recovery_core": "Recovery core",
 	"core_desc": "XN.a-56 computing core: 1 Tera-flops of raw computing power. Clocked at 0.4GHz. 100MB cache memory.",
-	"recovery_ram_desc": "Troubleshooting component. Removes two component slots.",
-	"recovery_core_desc": "Troubleshooting component. Removes two component slots."
+	"recovery_ram_desc": "Recovery component. Removes two component slots.",
+	"recovery_core_desc": "Recovery component. Removes two component slots."
 }

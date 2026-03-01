@@ -5,9 +5,12 @@
 	"edited_by_x_the_y": "Editado por {farmer} el {date}",
 	"n_views": "{v} visualizaciones",
 	"n_contributions": "{n} contribuciones",
-	"not_found": "La página \"{name}\" no existe en la enciclopedia española.",
+	"not_found": "La página \"{name}\" no existe en este idioma.",
+	"available_in": "Esta página está disponible en:",
 	"contributor_create": "Eres un colaborador 😎 Haz clic en Editar para comenzar a editar esta página",
 	"locked": "Completa el capítulo para desbloquear la IA completa",
 	"end_edition": "Fin de la edición",
-	"editing_by_x": "Actualmente editado por {0}"
+	"editing_by_x": "Actualmente editado por {0}",
+	"redirected_from": "Redirigido desde {0}",
+	"aliases": "También conocido como: {0}"
 }

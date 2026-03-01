@@ -13,7 +13,7 @@
 					<div class="delete">
 						Supprimer par mot-clé
 						<input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" v-model="deleteQuery">
-						<v-btn small @click="deleteErrors">Supprimer</v-btn>
+						<v-btn size="small" @click="deleteErrors">Supprimer</v-btn>
 					</div>
 
 					<h2 v-if="errors.length === 0">Aucune erreur !</h2>
@@ -31,11 +31,14 @@
 										<avatar :farmer="error.farmer" />
 									</router-link>
 									<span class="ip" v-if="error.ip">{{ error.ip }}</span>
+								<span v-if="error.user_agent" class="user-agent" :title="error.user_agent">{{ formatUA(error.user_agent) }}</span>
 									<span class="ls" v-if="error.ai_version">LS {{ error.ai_version }}</span>
 									<span class="ls" v-if="error.ai">IA {{ error.ai }}</span>
 									<!-- <a :href="LeekWars.API + 'ai/download/' + error.ai" target="_blank"><v-btn v-if="error.ai" color="primary" small>IA {{ error.ai }}</v-btn></a> -->
-									<a :href="LeekWars.API + 'error/ai-code/' + error.id" target="_blank"><v-btn v-if="error.ai" color="primary" small>IA {{ error.ai }}</v-btn></a>
-									<router-link :to="'/fight/' + error.fight"><v-btn v-if="error.fight" small>Combat {{ error.fight }}</v-btn></router-link>
+									<a :href="LeekWars.API + 'error/ai-code/' + error.id" target="_blank"><v-btn v-if="error.ai" color="primary" size="small">IA {{ error.ai }}</v-btn></a>
+									<router-link :to="'/fight/' + error.fight"><v-btn v-if="error.fight" size="small">Combat {{ error.fight }}</v-btn></router-link>
+									<a v-if="error.issue" :href="'https://github.com/5pilow/leek-wars-server/issues/' + error.issue" target="_blank"><v-btn size="small" color="success">Issue #{{ error.issue }}</v-btn></a>
+									<v-btn v-else size="small" @click="createIssue(error)">Créer issue</v-btn>
 									<v-icon color="error" @click="removeError(error.id)">mdi-delete</v-icon>
 								</div>
 								<code>{{ error.trace.substring(0, 8000) }}</code>
@@ -96,6 +99,21 @@
 			this.$store.commit('remove-error')
 		}
 
+		createIssue(error: any) {
+			LeekWars.post('error/create-issue', { id: error.id }).then((data: any) => {
+				error.issue = data.issue
+			})
+		}
+
+		formatUA(ua: string) {
+			// Extract browser and OS from user agent string
+			const match = ua.match(/(Chrome|Firefox|Safari|Edge|Opera|OPR|SamsungBrowser|UCBrowser)\/[\d.]+/)
+			if (match) {
+				return match[0].replace('OPR', 'Opera')
+			}
+			return ua.substring(0, 30)
+		}
+
 		deleteErrors() {
 			LeekWars.delete('error/delete-query', { query: this.deleteQuery }).then(() => {
 				this.deleteQuery = ''
@@ -132,6 +150,15 @@
 		.ip {
 			font-family: monospace;
 			font-size: 13px;
+		}
+		.user-agent {
+			font-family: monospace;
+			font-size: 11px;
+			color: #666;
+			max-width: 200px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 		.service {
 			font-size: 11px;

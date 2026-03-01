@@ -10,7 +10,8 @@ import { AI } from './ai'
 import { fileSystem } from './filesystem'
 import { Hat } from './hat'
 import { Leek } from './leek'
-import { displayWarningMessage, emitter, vueMain } from './vue'
+import { emitter } from './emitter'
+import { displayWarningMessage } from './vue'
 import { Weapon } from './weapon'
 import { SchemeTemplate } from './scheme'
 import { NotificationBuilder } from '@/model/notification-builder'
@@ -131,7 +132,14 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 		"disconnect"(state: LeekWarsState) {
 			LeekWars.post('farmer/disconnect')
 			store.commit("reset")
-			localStorage.removeItem('editor/tabs')
+			// Supprime le cache des IAs et l'état de l'éditeur (confidentialité + évite les collisions entre comptes)
+			for (const key of Object.keys(localStorage)) {
+				if (key.startsWith('ai/') || key.startsWith('editor/tabs') || key.startsWith('editor/last-code-')
+					|| key.startsWith('editor/scroll/') || key.startsWith('editor/viewstate/')
+					|| key === 'editor/history') {
+					localStorage.removeItem(key)
+				}
+			}
 			localStorage.removeItem('garden/category') // On revient à la catégorie potager par défaut
 			LeekWars.battleRoyale.leave()
 			LeekWars.bossSquads.leaveSquad()
@@ -301,6 +309,9 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 			} else {
 				chat.add(message)
 				emitter.emit('chat', [chatID])
+			}
+			if (data.new && chat.messages.length > Chat.MAX_MESSAGES) {
+				chat.trim(Chat.MAX_MESSAGES)
 			}
 
 			if (chat.type === ChatType.PM) {

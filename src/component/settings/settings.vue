@@ -76,7 +76,7 @@
 						</tr>
 					</table>
 					<div class="center">
-						<v-btn v-if="signupMethod === 1" large color="primary" type="submit">{{ $t('verify') }}</v-btn>
+						<v-btn v-if="signupMethod === 1" size="large" color="primary" type="submit">{{ $t('verify') }}</v-btn>
 						<v-btn v-else color="black" type="submit" class="gh-button"> <img src="/image/github_black.png"> {{ $t('verify_gh') }}</v-btn>
 					</div>
 				</form>
@@ -93,7 +93,7 @@
 				</div>
 			</panel>
 
-			<panel :title="$t('misc_options')" icon="mdi-settings-outline">
+			<panel :title="$t('misc_options')" icon="mdi-cog-outline">
 				<div class="misc-settings">
 					<div class="setting" id="dark-button">
 						<div>{{ $t('theme') }}</div>
@@ -273,7 +273,7 @@
 			{ id: 4, icon: 'mdi-flag', name: 'challenge' },
 			{ id: 5, icon: 'mdi-trophy', name: 'tournament' },
 			{ id: 6, icon: 'mdi-chat', name: 'social' },
-			{ id: 7, icon: 'mdi-android-messages', name: 'private' },
+			{ id: 7, icon: 'mdi-message-text-outline', name: 'private' },
 			{ id: 8, icon: 'mdi-account-multiple', name: 'team' },
 			{ id: 9, icon: 'mdi-gavel', name: 'moderation' }
 		]
@@ -677,6 +677,9 @@
 	}
 	.v-input--switch {
 		margin-left: 8px;
+	}
+	:deep(.v-switch .v-selection-control) {
+		min-height: unset;
 	}
 	.account {
 		text-align: left;

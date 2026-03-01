@@ -7,7 +7,7 @@
 					<div ref="fileButton" class="tab first action" icon="settings">
 						<v-icon>mdi-file-outline</v-icon> {{ $t('file') }}
 					</div>
-					<v-menu v-model="fileMenu" :activator="LeekWars.mobile ? fileMenuActivator : $refs.fileButton" offset-y>
+					<v-menu v-model="fileMenu" :activator="LeekWars.mobile ? undefined : $refs.fileButton" :target="LeekWars.mobile ? fileMenuActivator : undefined" offset-y>
 						<v-list>
 							<v-list-subheader v-if="currentFolder && currentFolder.id > 0" class="menu-title">
 								<v-icon>mdi-folder-outline</v-icon> {{ currentFolder.name }}
@@ -288,15 +288,19 @@
 		history: AI[] = []
 		alreadyOpenedDialog: boolean = false
 		broadcast: BroadcastChannel = new BroadcastChannel('channel')
-		actions_list = [
-			{icon: 'mdi-plus', click: (e: any) => this.add(e)},
-			{icon: 'mdi-cogs', click: () => this.settings() }
-		]
-		actions_content = [
-			{icon: 'mdi-content-save', click: () => this.save()},
-			{icon: 'mdi-delete', click: () => this.startDelete()},
-			{icon: 'mdi-play', click: () => this.startTest()},
-		]
+		get actions_list() {
+			return [
+				{icon: 'mdi-plus', click: (e: any) => this.add(e)},
+				{icon: 'mdi-cogs', click: () => this.settings() }
+			]
+		}
+		get actions_content() {
+			return [
+				{icon: 'mdi-content-save', click: () => this.save()},
+				{icon: 'mdi-delete', click: () => this.startDelete()},
+				{icon: 'mdi-play', click: () => this.startTest()},
+			]
+		}
 		editor1Width: number = 0.5
 		editor2Width: number = 0.5
 		editorTotalWidth: number = 800
@@ -496,13 +500,15 @@
 				// console.log("fileSystem", Object.values(fileSystem.ais).length)
 				if (id > 0 && id in fileSystem.ais) {
 					const ai = fileSystem.ais[id]
-					if (this.currentSide === 1) {
-						this.currentAI1 = id
-					} else {
-						this.currentAI2 = id
-					}
-					nextTick(() => {
-						this.currentEditor = (this.currentSide === 1 ? this.$refs.editor1 : this.$refs.editor2) as AIViewMonaco
+					fileSystem.load(ai).then(() => {
+						if (this.currentSide === 1) {
+							this.currentAI1 = id
+						} else {
+							this.currentAI2 = id
+						}
+						nextTick(() => {
+							this.currentEditor = (this.currentSide === 1 ? this.$refs.editor1 : this.$refs.editor2) as AIViewMonaco
+						})
 					})
 					localStorage.setItem('editor/last-code-' + this.currentSide, '' + id)
 					this.currentType = 'ai'
@@ -553,6 +559,8 @@
 					this.$router.replace('/editor/0') // Go to root folder to be able to create a new AI
 				}
 			} else {
+				this.currentFolder = fileSystem.rootFolder
+				this.currentType = 'folder'
 				LeekWars.splitShowList()
 				LeekWars.setActions(this.actions_list)
 			}
@@ -606,7 +614,7 @@
 			aiEditor.save()
 			aiEditor.serverError = false
 
-			const saveID = aiEditor.ai ? aiEditor.ai.id : 0
+			const saveID = aiEditor.ai.id
 			const content = aiEditor.editor.getValue()
 			aiEditor.ai.code = content
 
@@ -664,7 +672,9 @@
 		}
 
 		startDelete() {
-			(this.$refs.explorerEl as any).deleteDialog = true
+			const explorer = this.$refs.explorerEl as any
+			if (!explorer) return
+			explorer.deleteDialog = true
 		}
 		startTest(editor = this.currentEditor) {
 			if (!editor || !editor.ai) { return }
@@ -682,10 +692,10 @@
 			this.settingsDialog = true
 		}
 		add(event: any) {
-			if (!this.fileMenuActivator) {
+			this.fileMenuActivator = event.currentTarget
+			nextTick(() => {
 				this.fileMenu = true
-				this.fileMenuActivator = event.target
-			}
+			})
 		}
 		@Watch('theme') themeChange() {
 			localStorage.setItem('editor/theme', this.theme)
@@ -873,7 +883,9 @@
 			if (this.splitted) {
 				this.editor1Width = 0.5
 				this.editor2Width = 0.5
-				this.currentAI2 = ai!.id
+				fileSystem.load(ai!).then(() => {
+					this.currentAI2 = ai!.id
+				})
 				this.setSide(2)
 				localStorage.setItem('editor/last-code-2', '' + ai!.id)
 				nextTick(() => {
@@ -890,7 +902,12 @@
 
 		open(ai: number, side: number) {
 			this.setSide(side)
-			side === 1 ? this.currentAI1 = ai : this.currentAI2 = ai
+			const aiObj = fileSystem.ais[ai]
+			if (aiObj) {
+				fileSystem.load(aiObj).then(() => {
+					side === 1 ? this.currentAI1 = ai : this.currentAI2 = ai
+				})
+			}
 			const tabs = (side === 1 ? this.$refs.tabs : this.$refs.tabs2) as any
 			tabs.add(ai)
 			localStorage.setItem('editor/last-code-' + side, '' + ai)
@@ -994,6 +1011,7 @@
 		min-height: 0;
 		flex: 1;
 		display: flex;
+		isolation: isolate;
 	}
 	.popup.input_popup input {
 		width: 90%;

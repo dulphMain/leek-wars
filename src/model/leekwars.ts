@@ -6,7 +6,7 @@ import { CHIP_TEMPLATES, HAT_TEMPLATES, HATS, POMPS, POTIONS, SUMMON_TEMPLATES, 
 import { Socket } from '@/model/socket'
 import { Squares } from '@/model/squares'
 import { store } from '@/model/store'
-import { emitter, vueMain } from '@/model/vue'
+import { emitter, vueMain } from '@/model/emitter'
 import { WeaponTemplate } from '@/model/weapon'
 import router from '@/router'
 
@@ -743,18 +743,23 @@ const LeekWars = reactive({
 	encyclopedia: {} as {[key: string]: {[key: string]: any}},
 	encyclopediaById: {} as {[key: string]: {[key: number]: any}},
 	encyclopediaLoaded: {} as {[key: string]: boolean},
-	loadEncyclopedia: (locale: string) => {
+	encyclopediaPromise: {} as {[key: string]: Promise<void>},
+	loadEncyclopedia: (locale: string): Promise<void> => {
 		// console.log("load encyclopedia", locale)
 		if (!LeekWars.encyclopediaLoaded[locale]) {
 			LeekWars.encyclopediaLoaded[locale] = true
-			LeekWars.get('encyclopedia/get-all-locale/' + locale).then(pages => {
-				LeekWars.encyclopedia[locale] = pages
-				LeekWars.encyclopediaById[locale] = {}
-				for (const page in pages) {
-					LeekWars.encyclopediaById[locale][pages[page].id] = pages[page]
-				}
+			LeekWars.encyclopediaPromise[locale] = new Promise<void>((resolve) => {
+				LeekWars.get('encyclopedia/get-all-locale/' + locale).then(pages => {
+					LeekWars.encyclopedia[locale] = pages
+					LeekWars.encyclopediaById[locale] = {}
+					for (const page in pages) {
+						LeekWars.encyclopediaById[locale][pages[page].id] = pages[page]
+					}
+					resolve()
+				})
 			})
 		}
+		return LeekWars.encyclopediaPromise[locale] || Promise.resolve()
 	},
 	trophyWords: null as any[] | null,
 	loadTrophyWords: async () => {
@@ -1137,6 +1142,14 @@ function lucky(isFake: boolean = false) {
 		const audio = new Audio('/sound/move.mp3')
 		audio.volume = 0.4
 		audio.play()
+		if (document.hidden) {
+			const cancel = () => {
+				audio.pause()
+				audio.currentTime = 0
+				document.removeEventListener('visibilitychange', cancel)
+			}
+			document.addEventListener('visibilitychange', cancel)
+		}
 	}
 }
 
@@ -1163,6 +1176,8 @@ function goToRanking(type: string, order: string, id: number = 0) {
 		url = 'ranking/get-farmer-rank' + active + '/' + id + '/' + order
 	} else if (type === 'team') {
 		url = 'ranking/get-team-rank' + active + '/' + id + '/' + order
+	} else if (type === 'composition') {
+		url = 'ranking/get-composition-rank/' + id + '/' + order
 	}
 	LeekWars.get(url).then(data => {
 		const page = 1 + Math.floor((data.rank - 1) / 50)

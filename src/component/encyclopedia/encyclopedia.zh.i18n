@@ -5,9 +5,12 @@
 	"edited_by_x_the_y": "{farmer} 于 {date} 编辑",
 	"n_views": "{v} 次观看",
 	"n_contributions": "{n} 个贡献",
-	"not_found": "法语百科全书中不存在页面“{name}”。",
+	"not_found": "此语言中不存在页面“{name}”。",
+	"available_in": "此页面可在以下语言中查看：",
 	"contributor_create": "你是一个贡献者😎点击编辑开始编辑这个页面",
 	"locked": "完成章节以解锁完整的 AI",
 	"end_edition": "结束编辑",
-	"editing_by_x": "目前由 {0} 编辑"
+	"editing_by_x": "目前由 {0} 编辑",
+	"redirected_from": "从 {0} 重定向",
+	"aliases": "也称为: {0}"
 }

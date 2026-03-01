@@ -161,6 +161,13 @@
 						item.querySelectorAll('a').forEach(linkify)
 					})
 				})
+				// Most viewed pages
+				md.querySelectorAll('.encyclopedia-most-viewed').forEach((item) => {
+					LeekWars.get<any[]>('encyclopedia/get-most-viewed/' + this.language).then(pages => {
+						item.innerHTML = '<ol>' + pages.map(p => '<li><a href="/encyclopedia/' + this.language + '/' + p.title + '">' + p.title + '</a> — ' + LeekWars.formatNumber(p.views) + ' views</li>').join('') + '</ol>'
+						item.querySelectorAll('a').forEach(linkify)
+					})
+				})
 				// LoS
 				md.querySelectorAll('.encyclopedia-los').forEach((item) => {
 					const app = createApp(LineOfSight)
@@ -361,6 +368,24 @@
 					app.mount(item)
 					this.components.push({ $destroy: () => app.unmount() })
 				})
+				// Aliases - affichage discret
+				md.querySelectorAll('.aliases-display').forEach(el => el.remove())
+				const aliasElements = md.querySelectorAll('.encyclopedia-alias')
+				if (aliasElements.length > 0) {
+					const aliases = Array.from(aliasElements).map(el => el.getAttribute('data-alias')!).filter(Boolean)
+					if (aliases.length > 0) {
+						const container = document.createElement('div')
+						container.className = 'aliases-display'
+						container.textContent = this.$parent!.$parent!.$i18n.t('aliases', [aliases.join(', ')]) as string
+						// Insérer après le premier h1
+						const h1 = md.querySelector('h1')
+						if (h1 && h1.nextSibling) {
+							h1.parentNode!.insertBefore(container, h1.nextSibling)
+						} else {
+							md.prepend(container)
+						}
+					}
+				}
 			})
 		}
 
@@ -375,7 +400,8 @@
 				const text = link.replace(/_/g, ' ').replace(/'/g, '&apos;')
 				return "<a href='/encyclopedia/" + this.language + '/' + (page ? page.title.replace(/ /g, '_') : text) + "' class='" + clazz + "'>" + alias + "</a>"
 			}).replace(/{{(.*?)}}/g, (m, tag) => {
-				tag = tag.trim().toLowerCase()
+				const originalTag = tag.trim()
+				tag = originalTag.toLowerCase()
 				if (tag.startsWith('summary')) {
 					const parts = tag.split(':')
 					const depth = parts.length >= 2 ? parseInt(parts[1] || '3', 10) : 3
@@ -402,6 +428,8 @@
 					return "<div class='encyclopedia-locked-pages'></div>"
 				} else if (tag.startsWith('last-modifications')) {
 					return "<div class='encyclopedia-last-modifications'></div>"
+				} else if (tag.startsWith('most-viewed')) {
+					return "<div class='encyclopedia-most-viewed'></div>"
 				} else if (tag.startsWith('line-of-sight')) {
 					return "<div class='encyclopedia-los'></div>"
 				} else if (tag.startsWith('tutorial-menu')) {
@@ -416,6 +444,12 @@
 						const chapter = parseInt(parts[1])
 						const locked = (store.state.farmer ? store.state.farmer.tutorial_progress : 0) < chapter ? "locked": ""
 						return "<div class='lock " + locked + "'>" + this.$parent!.$parent!.$i18n.t('locked') + "</div>"
+					}
+				} else if (tag.startsWith('alias')) {
+					const parts = originalTag.split(':')
+					if (parts.length > 1) {
+						const alias = parts[1].trim()
+						return "<span class='encyclopedia-alias' data-alias='" + alias.replace(/'/g, '&apos;') + "'></span>"
 					}
 				} else if (tag.startsWith('leeky')) {
 					return "<div class='leeky'></div>"
@@ -691,5 +725,14 @@
 	.md :deep(.lstype) {
 		color: var(--type-color);
 		font-weight: bold;
+	}
+	.md :deep(.encyclopedia-alias) {
+		display: none;
+	}
+	.md :deep(.aliases-display) {
+		font-size: 13px;
+		color: var(--text-color-secondary);
+		font-style: italic;
+		margin-bottom: 10px;
 	}
 </style>

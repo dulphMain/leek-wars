@@ -43,5 +43,16 @@
 	"solo_tournaments_title": "Tournois solo gagnés",
 	"farmer_tournaments_title": "Tournois d'éleveur gagnés",
 	"team_tournaments_title": "Tournois d'équipe gagnés",
-	"tournaments": "Tournois"
+	"tournaments": "Tournois",
+	"chests_title": "Coffres ouverts",
+	"chests": "Coffres",
+	"crashes_title": "Nombre de crashes",
+	"crashes": "Crashes",
+	"boss_killed_title": "Boss tués",
+	"boss_killed": "Boss",
+	"compositions": "Compositions",
+	"composition": "Composition",
+	"turrets_killed": "Tourelles",
+	"turrets_killed_title": "Tourelles détruites",
+	"won": "Victoires"
 }

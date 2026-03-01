@@ -99,8 +99,8 @@
 		</div>
 
 		<panel v-if="fight" :title="$t('main.comments') + ' (' + fight.comments.length + ')'" icon="mdi-comment-multiple-outline">
-			<template #actions class="views-counter">
-				{{ $tc('n_views', fight.views) }}
+			<template #actions>
+				<span class="views-counter">{{ $tc('n_views', fight.views) }}</span>
 			</template>
 			<comments :comments="fight.comments" @comment="comment" />
 		</panel>
@@ -138,7 +138,7 @@
 	import ReportDialog from '@/component/moderation/report-dialog.vue'
 	import { BOSSES } from '@/model/boss'
 	import { defineAsyncComponent, nextTick } from 'vue'
-import { emitter } from '@/model/vue'
+	import { emitter } from '@/model/vue'
 
 	@Options({ name: "fight", components: { 'player': Player, Comments, RichTooltipFarmer, RichTooltipTeam, 'report-dialog': ReportDialog }, i18n: {}, mixins: [...mixins] })
 	export default class FightPage extends Vue {
@@ -156,6 +156,7 @@ import { emitter } from '@/model/vue'
 		reportDialog: boolean = false
 		reasons = [Warning.RUDE_SAY, Warning.INCORRECT_LEEK_NAME, Warning.INCORRECT_FARMER_NAME, Warning.INCORRECT_AVATAR]
 		trophyQueue: any[] = []
+		fightNotificationQueue: any[] = []
 
 		get reportLeeks() {
 			if (!this.fight) { return [] }
@@ -182,6 +183,7 @@ import { emitter } from '@/model/vue'
 			setTimeout(() => this.resize(), 50)
 
 			emitter.on('trophy', this.onTrophy)
+			emitter.on('fight_notification', this.onFightNotification)
 		}
 
 		@Watch('$route.params.id', {immediate: true})
@@ -241,9 +243,13 @@ import { emitter } from '@/model/vue'
 			LeekWars.lightBar = false
 			emitter.off('resize', this.resize)
 			emitter.off('trophy', this.onTrophy)
+			emitter.off('fight_notification', this.onFightNotification)
 
 			// Notifications de trophées restants
 			for (const message of this.trophyQueue) {
+				store.commit('notification', message)
+			}
+			for (const message of this.fightNotificationQueue) {
 				store.commit('notification', message)
 			}
 		}
@@ -271,6 +277,11 @@ import { emitter } from '@/model/vue'
 		// Réception des notifications de trophées pour les mettre en attente
 		onTrophy(trophy: any) {
 			this.trophyQueue.push(trophy)
+		}
+
+		// Réception des notifications pour les mettre en attente
+		onFightNotification(message: any) {
+			this.fightNotificationQueue.push(message)
 		}
 
 		// Le player a joué un trophée, on peut l'afficher

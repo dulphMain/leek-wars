@@ -87,6 +87,7 @@
 	"n_lines": "0 line | 1 line | {n} lines",
 	"n_messages": "{n} messages",
 	"n_teams": "{0} teams",
+	"n_compositions": "{0} compositions",
 	"n_total_chars": "0 total character | 1 total character | {n} total characters",
 	"n_total_lines": "0 total line | 1 total line | {n} total lines",
 	"n_trophies": "{n} trophies",
@@ -262,6 +263,7 @@
 	"scheme": "Diagram",
 	"schemes": "Schematics",
 	"scheme_x": "Diagram: {0}",
+	"craft": "Craft",
 	"edit": "Edit",
 	"console": "LeekScript console",
 	"side": "Visit",
@@ -270,11 +272,12 @@
 	"side_right": "To the right",
 	"n_year": "1 year | {n} years",
 	"n_month": "1 month | {n} months",
-	"n_day": "1 j | {n} j",
+	"n_day": "1 d | {n} d",
 	"n_hour": "1 h | {n} h",
 	"n_minute": "1 min | {n} min",
 	"n_second": "1 s | {n} s",
 	"saving": "Backup...",
 	"server_error": "Server error",
-	"valid_ai": "<b>{0}</b> valid"
+	"valid_ai": "<b>{0}</b> valid",
+	"x_to_y": "{0} to {1}"
 }

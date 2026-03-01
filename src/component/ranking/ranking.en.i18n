@@ -43,5 +43,16 @@
 	"solo_tournaments_title": "Solo Tournaments Won",
 	"farmer_tournaments_title": "Farmer Tournaments Won",
 	"team_tournaments_title": "Team Tournaments Won",
-	"tournaments": "Tournaments"
+	"tournaments": "Tournaments",
+	"chests_title": "Chests opened",
+	"chests": "Chests",
+	"crashes_title": "Number of crashes",
+	"crashes": "Crashes",
+	"boss_killed_title": "Bosses killed",
+	"boss_killed": "Bosses",
+	"compositions": "Compositions",
+	"composition": "Composition",
+	"turrets_killed": "Turrets",
+	"turrets_killed_title": "Turrets destroyed",
+	"won": "Won"
 }

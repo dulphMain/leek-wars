@@ -21,7 +21,7 @@
 							</div>
 						</template>
 						<div v-else>
-							<router-link v-ripple to="/garden/solo" class="tab enabled">
+							<router-link v-ripple to="/garden/solo" class="tab enabled" :class="{'router-link-active': category === 'solo'}">
 								<h2>{{ $t('category_solo_fight') }}</h2>
 								<img class="player" src="/image/player.png">
 								<img class="sword" src="/image/icon/grey/garden.png">
@@ -30,7 +30,7 @@
 
 							<v-tooltip v-if="$store.state.farmer?.br_enabled" :disabled="battleRoyaleEnabled">
 								<template #activator="{ props }">
-									<router-link v-ripple :class="{ enabled: battleRoyaleEnabled }" :event="battleRoyaleEnabled ? 'click' : ''" to="/garden/battle-royale" class="tab">
+									<router-link v-ripple :class="{ enabled: battleRoyaleEnabled, 'router-link-active': category === 'battle-royale' }" :event="battleRoyaleEnabled ? 'click' : ''" to="/garden/battle-royale" class="tab">
 										<div v-bind="props">
 											<h2>{{ $t('category_battle_royale') }}</h2>
 											<span class="player-count">10</span>&nbsp;<img class="player" src="/image/player.png">
@@ -56,7 +56,7 @@
 
 							<v-tooltip :disabled="teamEnabled">
 								<template #activator="{ props }">
-									<router-link v-ripple :class="{ enabled: teamEnabled }" :event="teamEnabled ? 'click' : ''" to="/garden/team" class="tab">
+									<router-link v-ripple :class="{ enabled: teamEnabled, 'router-link-active': category === 'team' }" :event="teamEnabled ? 'click' : ''" to="/garden/team" class="tab">
 										<div v-bind="props">
 											<h2>{{ $t('category_team_fight') }}</h2>
 											<span class="player-count">6</span>&nbsp;<img class="player" src="/image/player.png">
@@ -70,7 +70,7 @@
 
 							<v-tooltip :disabled="bossEnabled">
 								<template #activator="{ props }">
-									<router-link v-ripple :class="{ enabled: bossEnabled }" :event="bossEnabled ? 'click' : ''" to="/garden/boss" class="tab">
+									<router-link v-ripple :class="{ enabled: bossEnabled, 'router-link-active': category === 'boss' }" :event="bossEnabled ? 'click' : ''" to="/garden/boss" class="tab">
 										<div v-bind="props">
 											<h2>{{ $t('category_boss_fight') }}</h2>
 											<span class="player-count">8</span>&nbsp;<img class="player" src="/image/player.png">
@@ -224,28 +224,34 @@
 							<garden-no-fights v-else :canbuy="true" />
 						</div>
 						<div v-else-if="category == 'team'">
-							<div class="info"><v-icon>mdi-arrow-down</v-icon> {{ $t('select_compo') }}</div>
-							<router-link v-for="composition in garden.my_compositions" :key="composition.id" v-ripple :to="'/garden/team/' + composition.id" class="composition-wrapper my-composition">
-								<garden-compo :compo="composition" />
-								<div class="fights">
-									<img class="sword" src="/image/icon/grey/garden.png">{{ composition.fights }}
-								</div>
-							</router-link>
-							<div class="versus">VS</div>
-							<div v-if="selectedComposition">
-								<div class="info"><v-icon>mdi-arrow-down</v-icon> {{ $t('click_opponent') }}</div>
-								<garden-no-fights v-if="selectedComposition.fights === 0" :canbuy="false" />
-								<loader v-else-if="!teamOpponents[selectedComposition.id]" />
-								<div v-else class="opponents">
-									<span v-for="compo in teamOpponents[selectedComposition.id]" :key="compo.id" v-ripple class="composition-wrapper" @click="clickCompositionOpponent(compo)">
-										<garden-compo :compo="compo" />
-									</span>
-									<div v-if="!teamOpponents[selectedComposition.id].length">
-										<img src="/image/notgood.png">
-										<h4>{{ $t('no_opponent_of_your_size') }}</h4>
+							<div v-if="garden.my_compositions.length === 0" class="no-compo">
+								<img src="/image/notgood.png">
+								<h4>{{ $t('no_composition') }}</h4>
+							</div>
+							<template v-else>
+								<div class="info"><v-icon>mdi-arrow-down</v-icon> {{ $t('select_compo') }}</div>
+								<router-link v-for="composition in garden.my_compositions" :key="composition.id" v-ripple :to="'/garden/team/' + composition.id" class="composition-wrapper my-composition">
+									<garden-compo :compo="composition" />
+									<div class="fights">
+										<img class="sword" src="/image/icon/grey/garden.png">{{ composition.fights }}
+									</div>
+								</router-link>
+								<div class="versus">VS</div>
+								<div v-if="selectedComposition">
+									<div class="info"><v-icon>mdi-arrow-down</v-icon> {{ $t('click_opponent') }}</div>
+									<garden-no-fights v-if="selectedComposition.fights === 0" :canbuy="false" />
+									<loader v-else-if="!teamOpponents[selectedComposition.id]" />
+									<div v-else class="opponents">
+										<span v-for="compo in teamOpponents[selectedComposition.id]" :key="compo.id" v-ripple class="composition-wrapper" @click="clickCompositionOpponent(compo)">
+											<garden-compo :compo="compo" />
+										</span>
+										<div v-if="!teamOpponents[selectedComposition.id].length">
+											<img src="/image/notgood.png">
+											<h4>{{ $t('no_opponent_of_your_size') }}</h4>
+										</div>
 									</div>
 								</div>
-							</div>
+							</template>
 						</div>
 						<div v-else-if="category == 'battle-royale'">
 							<div v-if="!LeekWars.battleRoyale.enabled">
@@ -492,16 +498,15 @@ import { emitter } from '@/model/vue'
 				this.$router.replace('/garden/' + this.category + '/' + defaultLeek)
 				return
 			}
-			if (this.category === 'team' && !params.item) {
-				if (!this.garden) {
+			if (this.category === 'team' && !params.item && this.garden) {
+				if (this.garden.my_compositions.length > 0) {
+					let defaultComposition = parseInt(localStorage.getItem('garden/compo') || '0', 10)
+					if (!(defaultComposition in this.compositions_by_id)) {
+						defaultComposition = this.garden.my_compositions[0].id
+					}
+					this.$router.replace('/garden/team/' + defaultComposition)
 					return
 				}
-				let defaultComposition = parseInt(localStorage.getItem('garden/compo') || '0', 10)
-				if (!(defaultComposition in this.compositions_by_id)) {
-					defaultComposition = this.garden.my_compositions.length === 0 ? 0 : this.garden.my_compositions[0].id
-				}
-				this.$router.replace('/garden/team/' + defaultComposition)
-				return
 			}
 			const item = parseInt(params.item, 10)
 
@@ -573,6 +578,7 @@ import { emitter } from '@/model/vue'
 			})
 		}
 		selectComposition(composition: Composition) {
+			if (!composition) { return }
 			this.selectedComposition = composition
 			if (composition.fights === 0 || this.teamOpponents[composition.id]) {
 				return
@@ -788,6 +794,11 @@ import { emitter } from '@/model/vue'
 	.garden-right {
 		vertical-align: top;
 		text-align: center;
+	}
+	.no-compo {
+		padding: 20px;
+		img { margin-bottom: 10px; }
+		h4 { text-align: center; }
 	}
 	.leek, .farmer, .composition-wrapper {
 		display: inline-block;

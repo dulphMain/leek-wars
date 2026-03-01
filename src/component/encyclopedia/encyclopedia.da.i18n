@@ -5,9 +5,12 @@
 	"edited_by_x_the_y": "Redigeret af {farmer} den {date}",
 	"n_views": "{v} visninger",
 	"n_contributions": "{n} bidrag",
-	"not_found": "Siden \"{name}\" findes ikke på den franske encyklopædi.",
+	"not_found": "Siden \"{name}\" findes ikke på dette sprog.",
+	"available_in": "Denne side er tilgængelig på:",
 	"contributor_create": "Du er en bidragyder 😎 Klik på Rediger for at begynde at redigere denne side",
 	"locked": "Fuldfør kapitlet for at låse op for den fulde AI",
 	"end_edition": "Afslut redigering",
-	"editing_by_x": "Bliver i øjeblikket redigeret af {0}"
+	"editing_by_x": "Bliver i øjeblikket redigeret af {0}",
+	"redirected_from": "Omdirigeret fra {0}",
+	"aliases": "Også kendt som: {0}"
 }

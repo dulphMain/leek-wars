@@ -270,11 +270,12 @@
 	"side_right": "Oikealle",
 	"n_year": "1 vuosi | {n} vuotta",
 	"n_month": "1 kuukausi | {n} kuukautta",
-	"n_day": "1 j | {n} j",
+	"n_day": "1 pv | {n} pv",
 	"n_hour": "1 h | {n} h",
 	"n_minute": "1 min | {n} min",
 	"n_second": "1 s | {n} s",
 	"saving": "Varmuuskopiointi...",
 	"server_error": "Palvelimen virhe",
-	"valid_ai": "<b>{0}</b> kelvollinen"
+	"valid_ai": "<b>{0}</b> kelvollinen",
+	"x_to_y": "{0} – {1}"
 }

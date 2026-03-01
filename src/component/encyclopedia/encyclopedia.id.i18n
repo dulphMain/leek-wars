@@ -5,9 +5,12 @@
 	"edited_by_x_the_y": "Diedit oleh {farmer} pada {date}",
 	"n_views": "{v} dilihat",
 	"n_contributions": "{n} kontribusi",
-	"not_found": "Halaman \"{name}\" tidak ada di ensiklopedia Prancis.",
+	"not_found": "Halaman \"{name}\" tidak ada dalam bahasa ini.",
+	"available_in": "Halaman ini tersedia dalam:",
 	"contributor_create": "Anda adalah kontributor 😎 Klik Edit untuk mulai mengedit halaman ini",
 	"locked": "Selesaikan bab ini untuk membuka AI lengkap",
 	"end_edition": "Mengakhiri pengeditan",
-	"editing_by_x": "Saat ini sedang diedit oleh {0}"
+	"editing_by_x": "Saat ini sedang diedit oleh {0}",
+	"redirected_from": "Dialihkan dari {0}",
+	"aliases": "Juga dikenal sebagai: {0}"
 }

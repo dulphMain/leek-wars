@@ -1,11 +1,11 @@
 import { LeekWars } from '@/model/leekwars'
-import { emitter, vueMain } from '@/model/vue'
+import { emitter } from '@/model/emitter'
 import router from '@/router'
 import { ChatMessage } from './chat'
 import { NotificationType } from './notification'
 import { store } from './store'
 import { Leek } from './leek'
-import { analyzer } from '@/component/editor/analyzer'
+const getAnalyzer = () => import('@/component/editor/analyzer').then(m => m.analyzer)
 
 enum SocketMessage {
 	AUTH = 0,
@@ -181,9 +181,21 @@ class Socket {
 				case SocketMessage.NOTIFICATION_RECEIVE : {
 
 					const message = { id: data[0], type: data[1], date: LeekWars.time, parameters: data[2], new: true }
+					
+					const spoilableTypes: number[] = [NotificationType.BATTLE_ROYALE_STARTED, NotificationType.FIGHT_REPORT, NotificationType.FARMER_FIGHT_REPORT, NotificationType.COMPOSITION_FIGHT_REPORT, NotificationType.CHALLENGE, NotificationType.FARMER_CHALLENGE, NotificationType.TOURNAMENT_WINNER, NotificationType.FARMER_TOURNAMENT_WIN, NotificationType.TEAM_TOURNAMENT_WIN]
+
 					// Envoie de la notif sur la page du combat pour la mettre en file d'attente
 					if (message.type === NotificationType.TROPHY_UNLOCKED && router.currentRoute.value.path.startsWith('/fight/' + message.parameters[1])) {
 						emitter.emit('trophy', message)
+					} else if (
+						spoilableTypes.indexOf(message.type) !== -1
+						&& (
+							((message.type === NotificationType.BATTLE_ROYALE_STARTED || message.type === NotificationType.FARMER_CHALLENGE) && router.currentRoute.value.path.startsWith('/fight/' + message.parameters[0]))
+							|| ((message.type === NotificationType.FIGHT_REPORT || message.type === NotificationType.FARMER_FIGHT_REPORT || message.type === NotificationType.COMPOSITION_FIGHT_REPORT || message.type === NotificationType.CHALLENGE) && router.currentRoute.value.path.startsWith('/fight/' + message.parameters[1]))
+							|| ((message.type === NotificationType.TOURNAMENT_WINNER || message.type === NotificationType.FARMER_TOURNAMENT_WIN || message.type === NotificationType.TEAM_TOURNAMENT_WIN) && router.currentRoute.value.path.startsWith('/fight/' + message.parameters[2]))
+						)
+					) {
+						emitter.emit('fight_notification', message)
 					} else {
 						if (message.type === NotificationType.UP_LEVEL) {
 							const leek = parseInt(message.parameters[0], 10)
@@ -335,15 +347,15 @@ class Socket {
 					break
 				}
 				case SocketMessage.EDITOR_ANALYZE: {
-					analyzer.analyzeResult(data)
+					getAnalyzer().then(a => a.analyzeResult(data))
 					break
 				}
 				case SocketMessage.EDITOR_HOVER: {
-					analyzer.hoverResult(data)
+					getAnalyzer().then(a => a.hoverResult(data))
 					break
 				}
 				case SocketMessage.EDITOR_COMPLETE: {
-					analyzer.completeResult({ id: request_id, type: id, data })
+					getAnalyzer().then(a => a.completeResult({ id: request_id, type: id, data }))
 					break
 				}
 				case SocketMessage.ADMIN_ERROR: {

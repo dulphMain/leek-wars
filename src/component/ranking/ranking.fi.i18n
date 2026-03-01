@@ -43,5 +43,13 @@
 	"solo_tournaments_title": "Voitetut sooloturnaukset",
 	"farmer_tournaments_title": "Voitetut kasvattajaturnaukset",
 	"team_tournaments_title": "Voitetut joukkueturnaukset",
-	"tournaments": "Turnaukset"
+	"tournaments": "Turnaukset",
+	"chests_title": "Avatut arkut",
+	"chests": "Arkut",
+	"crashes_title": "Kaatumisten määrä",
+	"crashes": "Kaatumiset",
+	"boss_killed_title": "Possit voitettu",
+	"boss_killed": "Possit",
+	"turrets_killed": "Tornit",
+	"turrets_killed_title": "Torneja tuhottu"
 }

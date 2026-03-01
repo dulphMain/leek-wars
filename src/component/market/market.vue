@@ -125,7 +125,7 @@
 
 								<router-link v-if="selectedItem.trophy" :to="'/trophy/' + selectedItem.trophy.name" class="trophy">
 									<img :src="'/image/trophy/' + selectedItem.trophy.name + '.svg'">
-									<i18n-t keypath="unlocked_with">
+									<i18n-t keypath="unlocked_with" tag="span">
 										<template #trophy><b>{{ $t('trophy.' + selectedItem.trophy.name) }}</b></template>
 									</i18n-t>
 								</router-link>
@@ -272,7 +272,7 @@
 
 				<div v-if="unseenItem.trophy" class="card trophy">
 					<img :src="'/image/trophy/' + unseenItem.trophy.name + '.svg'">
-					<i18n-t keypath="unlocked_with">
+					<i18n-t keypath="unlocked_with" tag="span">
 						<template #trophy><b>{{ $t('trophy.' + unseenItem.trophy.name) }}</b></template>
 					</i18n-t>
 				</div>
@@ -335,7 +335,7 @@
 
 		get max_level() {
 			if (store.state.farmer) {
-				return LeekWars.first(store.state.farmer.leeks)!.level
+				return Math.max(...Object.values(store.state.farmer.leeks).map((l: any) => l.level))
 			}
 			return 0
 		}
