@@ -43,5 +43,13 @@
 	"solo_tournaments_title": "Tornei in solitaria vinti",
 	"farmer_tournaments_title": "Tornei per allevatori vinti",
 	"team_tournaments_title": "Tornei a squadre vinti",
-	"tournaments": "Tornei"
+	"tournaments": "Tornei",
+	"chests_title": "Forzieri aperti",
+	"chests": "Forzieri",
+	"crashes_title": "Numero di crash",
+	"crashes": "Crash",
+	"boss_killed_title": "Boss uccisi",
+	"boss_killed": "Boss",
+	"turrets_killed": "Torrette",
+	"turrets_killed_title": "Torrette distrutte"
 }

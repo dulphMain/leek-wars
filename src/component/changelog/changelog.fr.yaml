@@ -6,7 +6,9 @@
     - Ajout des fonctions setBit et testBit pour lire ou écrire un bit spécifique (merci à Batary).
     - Ajout de la fonction bitLength qui complète leadingZeros pour les BigInteger (merci à Batary).
     - Ajout des constantes d'armes de boss WEAPON_ODACHI, WEAPON_EXCALIBUR et WEAPON_SCYTHE.
+    - Ajout du classement fun des coffres ouverts.
   improved:
+    - "Player : les sons s'arrêtent immédiatement quand on coupe le son, le volume modifie tous les sons en cours, les effets sonores sont accélérés avec la vitesse de lecture, et pause/resume fonctionne aussi sur les bruitages."
     - "Tournois : Tous les joueurs inscrits participent maintenant, répartis équitablement entre plusieurs tournois de 16 à 32 joueurs au lieu d'exclure les joueurs en trop."
     - "Éditeur : amélioration du Ctrl+clic pour aller à la définition d'un symbole (navigation plus fiable et scroll correct)."
     - "LeekScript : le point-virgule après while() dans les boucles do-while est maintenant optionnel."
@@ -18,6 +20,7 @@
     - "Rapport : support du mode sombre pour les graphiques."
     - Migration vers Vue 3.
   fixed:
+    - "Éditeur : correction de la coloration syntaxique des opérateurs \\ et \\= (division entière)."
     - "LeekScript : correction d'un crash lors de la compilation de classes dans certains cas d'include, et meilleure gestion de la casse sur les mots-clés class et include."
     - Correction d'un bug empêchant les combats d'équipe quand l'IA de la tourelle était inexistante.
     - Correction du compteur de notifications non lues qui n'était pas renvoyé à la connexion.
@@ -28,6 +31,7 @@
     - Correction de la progression du combat qui sautait à 99% quand un coffre mourait.
     - "Éditeur : correction d'un bug où les caractères s'inséraient au mauvais endroit après navigation avec les boutons précédent/suivant du navigateur (Firefox)."
     - "Éleveur : correction de la popup qui ne s'affichait pas au survol du parrain."
+    - Correction de nombreuses traductions en italien (merci à Casanova).
     - Correction des mentions disparaissant à la suppression de messages groupés dans le chat.
     - Correction des icônes de potions/apparences non cliquables sur mobile en mode chat-first.
     - Correction des poireaux invisibles dans le tableau de tournoi en mode discret.

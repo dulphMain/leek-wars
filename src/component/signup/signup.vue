@@ -102,8 +102,8 @@
 						</template>
 					</i18n-t>
 					<div class="center">
-						<v-btn v-if="fastRegister" large color="primary" type="submit">{{ $t('play_button') }}</v-btn>
-						<v-btn v-else-if="signupMethod === 1" large color="primary" type="submit">{{ $t('signup') }}</v-btn>
+						<v-btn v-if="fastRegister" size="large" color="primary" type="submit">{{ $t('play_button') }}</v-btn>
+						<v-btn v-else-if="signupMethod === 1" size="large" color="primary" type="submit">{{ $t('signup') }}</v-btn>
 						<v-btn v-else color="black" type="submit" class="gh-button"> <img src="/image/github_black.png"> {{ $t('signup_gh') }}</v-btn>
 					</div>
 				</form>
@@ -167,7 +167,7 @@
 					<div class="image">📦</div>
 					<div>
 						<h2>{{ $t('main.press-kit') }}</h2>
-						<v-btn small>{{ $t('main.press-kit') }}</v-btn>
+						<v-btn size="small">{{ $t('main.press-kit') }}</v-btn>
 					</div>
 				</router-link>
 			</panel> -->
@@ -356,6 +356,7 @@
 	import { LeekWars } from '@/model/leekwars'
 	import { store } from '@/model/store'
 	import { emitter } from '@/model/vue'
+	import { getRedirectAfterLogin } from '@/router'
 	import { defineAsyncComponent } from 'vue'
 	import { Options, Vue, Watch } from 'vue-property-decorator'
 	const SignupCarousel = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/signup/signup-carousel.${locale}.i18n`))
@@ -484,7 +485,7 @@
 				if (this.fastRegister) {
 					store.commit('connect', data)
 					store.commit('connected', '$')
-					this.$router.push('/')
+					this.$router.push(getRedirectAfterLogin())
 				} else if (this.signupMethod === 1) {
 					localStorage.setItem('login-attempt', 'true')
 					this.$router.push('/signup/success/' + this.login)

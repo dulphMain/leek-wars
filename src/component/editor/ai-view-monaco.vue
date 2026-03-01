@@ -111,13 +111,19 @@ export default class AIViewMonaco extends Vue {
 			localStorage.setItem('editor/scroll/' + this.ai.id, '' + e.scrollTop)
 			this.debouncedSaveViewState()
 		})
-		// this.editor.onDidFocusEditorWidget((e) => {
-		// 	// Verify the correct model is active when focusing
-		// 	if (this.ai && this.ai.model && this.editor.getModel() !== this.ai.model) {
-		// 		this.editor.setModel(this.ai.model)
-		// 	}
-		// 	this.$emit('focus')
-		// })
+		// Restore focus after mouse drag-select to prevent first keystroke
+		// from being lost (#817)
+		this.editor.onMouseUp((e) => {
+			if (e.event.rightButton) return
+			requestAnimationFrame(() => {
+				if (!this.editor.hasWidgetFocus()) {
+					this.editor.focus()
+				}
+			})
+		})
+		this.editor.onDidFocusEditorWidget(() => {
+			this.$emit('focus')
+		})
 		this.editor.onKeyDown((e) => {
 			if (e.code === 'Enter') {
 				if (this.console) {
@@ -278,6 +284,8 @@ export default class AIViewMonaco extends Vue {
 				})
 			}
 		})
+
+		this.update()
 	}
 
 	beforeUnmount() {
@@ -310,31 +318,25 @@ export default class AIViewMonaco extends Vue {
 		}
 		this.currentAiId = this.ai.id
 
-		fileSystem.load(this.ai).then((loadedAI) => {
+		const uri = monaco.Uri.parse('file:///' + this.ai.path)
+		const model = monaco.editor.getModel(uri) || monaco.editor.createModel(this.ai.code, 'leekscript', uri)
+		this.ai.model = model
 
-			// Update or create model with real content
-			const uri = monaco.Uri.parse('file:///' + loadedAI.path)
-			let model = monaco.editor.getModel(uri) || monaco.editor.createModel(loadedAI.code, 'leekscript', uri)
-			loadedAI.model = model
+		if (!this.editor) return
+		this.editor.setModel(model)
+		this.currentVersionId = model.getAlternativeVersionId()
 
-			// Ensure we are still on the same AI
-			if (this.ai !== loadedAI) return
+		this.setAnalyzerTimeout()
+		this.editor.focus()
 
-			this.editor.setModel(model)
-			this.currentVersionId = model.getAlternativeVersionId()
-
-			this.setAnalyzerTimeout()
-			this.editor.focus()
-
-			nextTick(() => {
-				if (this.jumpToLine) {
-					nextTick(() => {
-						this.scrollToLine(loadedAI, this.jumpToLine!, this.jumpToColumn!)
-					})
-				} else {
-					this.restoreViewState()
-				}
-			})
+		nextTick(() => {
+			if (this.jumpToLine) {
+				nextTick(() => {
+					this.scrollToLine(this.ai, this.jumpToLine!, this.jumpToColumn!)
+				})
+			} else {
+				this.restoreViewState()
+			}
 		})
 	}
 
@@ -433,7 +435,7 @@ export default class AIViewMonaco extends Vue {
 .ai {
 	min-width: 0;
 	height: 100%;
-	//position: relative;
+	position: relative;
 	& :deep(code) {
 		display: inline-flex !important;
 	}
@@ -464,6 +466,7 @@ export default class AIViewMonaco extends Vue {
 	margin-left: -250px;
 	text-align: center;
 	z-index: 1000;
+	pointer-events: none;
 }
 .compiling {
 	padding: 5px 10px;
@@ -471,6 +474,7 @@ export default class AIViewMonaco extends Vue {
 	background: var(--pure-white);
 	margin: 4px;
 	display: inline-block;
+	pointer-events: auto;
 }
 .compiling .loader {
 	display: inline-block;
@@ -487,6 +491,7 @@ export default class AIViewMonaco extends Vue {
 	padding: 5px 10px;
 	border-radius: 2px;
 	margin: 4px;
+	pointer-events: auto;
 }
 .results {
 	cursor: pointer;

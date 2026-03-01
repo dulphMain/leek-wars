@@ -1,6 +1,5 @@
 import App from '@/component/app/app.vue'
 import Code from '@/component/app/code.vue'
-import Console from '@/component/app/console.vue'
 import Error from '@/component/app/error.vue'
 import LWLoader from '@/component/app/loader.vue'
 import Panel from '@/component/app/panel.vue'
@@ -19,8 +18,8 @@ import { i18n, loadLanguageAsync } from '@/model/i18n'
 import { LeekWars } from '@/model/leekwars'
 import '@/model/serviceworker'
 import { store } from "@/model/store"
-import router from '@/router'
-import { createApp, h, nextTick } from 'vue'
+import router, { getRedirectAfterLogin } from '@/router'
+import { createApp, defineAsyncComponent, h, nextTick } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import { Latex } from './latex'
 import { scroll_to_hash } from '@/router-functions'
@@ -29,9 +28,10 @@ import { createVuetify } from 'vuetify'
 import 'vuetify/styles'
 import '@mdi/font/css/materialdesignicons.css'
 import { formatEmojis } from './emojis'
-import mitt from 'mitt'
-import { Farmer } from './farmer'
+import { emitter, setVueMain } from './emitter'
 import '@/chart'
+
+const Console = defineAsyncComponent(() => import('@/component/app/console.vue'))
 
 const vuetify = createVuetify({
 	theme: {
@@ -85,43 +85,24 @@ function displayWarningMessage() {
 	console.log("")
 }
 
+// Handle Vite CSS/JS preload errors after deployment (stale hashed assets)
+// The guard flag prevents infinite reload loops if the error persists after reload.
+// It is cleared on successful page load so that future deploys can trigger a reload again.
+const PRELOAD_RELOAD_KEY = 'vite-preload-reload'
+window.addEventListener('vite:preloadError', () => {
+	if (!sessionStorage.getItem(PRELOAD_RELOAD_KEY)) {
+		sessionStorage.setItem(PRELOAD_RELOAD_KEY, '1')
+		window.location.reload()
+	}
+})
+// Clear the guard once the page has loaded successfully (assets are fresh)
+window.addEventListener('load', () => {
+	sessionStorage.removeItem(PRELOAD_RELOAD_KEY)
+})
+
 let lastErrorSent = 0
 
 let secondInterval: any = null, minuteInterval: any = null
-
-type Events = {
-	keydown: KeyboardEvent
-	ctrlShiftS: void
-	ctrlS: void
-	ctrlQ: void
-	ctrlF: KeyboardEvent
-	escape: void
-	previous: KeyboardEvent
-	next: KeyboardEvent
-	ctrlP: KeyboardEvent
-	keyup: KeyboardEvent
-	resize: void
-	focus: void
-	htmlclick: void
-	loaded: void
-	connected: Farmer
-	back: void
-	chat: any
-	'chat-history': any
-	wsconnected: void
-	tooltip: { x: number, y: number, content: string }
-	'tooltip-close': void
-	'editor-drag': any
-	'tournament-update': any
-	trophy: any
-	wsmessage: { type: number, data: any, id: number | null },
-	mousemove: any,
-	mouseup: any,
-	jump: { ai: AI, line: number, column: number },
-	navigate: void,
-}
-
-const emitter = mitt<Events>()
 
 const app = createApp({
 	data() {
@@ -229,7 +210,7 @@ const app = createApp({
 			})
 		})
 		emitter.on('connected', () => {
-			LeekWars.socket.connect()
+			LeekWars.socket.reconnect()
 		})
 		
 		window.onbeforeunload = () => {
@@ -254,10 +235,22 @@ const app = createApp({
 
 		if (LeekWars.DEV) return
 
-		// Ignore chunk loading errors (handled by router.onError with page reload)
+		// Ignore chunk loading errors (handled by router.onError / vite:preloadError with page reload)
 		if (err.message?.includes('Failed to fetch dynamically imported module') ||
 			err.message?.includes('Loading chunk') ||
-			err.message?.includes('Loading CSS chunk')) {
+			err.message?.includes('Loading CSS chunk') ||
+			err.message?.includes('Unable to preload CSS')) {
+			return
+		}
+
+		// Ignore async component loader failures (Vue runtime-13) — same root cause as chunk
+		// loading errors (stale cache after deploy, network issues). Reload the page once to
+		// try loading fresh assets, like the vite:preloadError handler does.
+		if (info?.includes?.('runtime-13')) {
+			if (!sessionStorage.getItem(PRELOAD_RELOAD_KEY)) {
+				sessionStorage.setItem(PRELOAD_RELOAD_KEY, '1')
+				window.location.reload()
+			}
 			return
 		}
 
@@ -268,8 +261,9 @@ const app = createApp({
 		const file = document.location.href
 		const stack = err.stack + '\n' + info
 		const locale = i18n.global.locale
+		const user_agent = navigator.userAgent
 
-		LeekWars.post('error/report', { error, stack, file, locale })
+		LeekWars.post('error/report', { error, stack, file, locale, user_agent })
 	}
 })
 
@@ -429,16 +423,17 @@ app.directive('emojis', (el) => {
 	})
 })
 
-const vueMain = app.mount('#app2') as ComponentPublicInstance & {
+const vm = app.mount('#app2') as ComponentPublicInstance & {
 	$once: (event: string, callback: () => void) => void
 	$emit: (event: string, ...args: any[]) => void
 }
+setVueMain(vm)
 
 // Restore saved locale in dev/local mode
 if (LeekWars.DEV || LeekWars.LOCAL) {
 	const savedLocale = localStorage.getItem('locale')
 	if (savedLocale && savedLocale !== i18n.global.locale) {
-		loadLanguageAsync(vueMain, savedLocale)
+		loadLanguageAsync(vm, savedLocale)
 	}
 }
 
@@ -458,15 +453,23 @@ if (window.__FARMER__) {
 	const token = LeekWars.DEV ? localStorage.getItem('token') : '$'
 	if (localStorage.getItem('connected') === 'true') {
 		store.commit('connected', token)
+		const initialPath = window.location.pathname + window.location.search + window.location.hash
 		LeekWars.get('farmer/get-from-token').then(data => {
 			store.commit('connect', {...data, token})
 		}).error(() => {
 			store.commit('disconnect')
-			router.push('/')
+			if (initialPath !== '/') {
+				sessionStorage.setItem('redirect_after_login', initialPath)
+			}
+			router.push('/login')
 		})
 	} else if (localStorage.getItem('login-attempt') === 'true') {
 		LeekWars.get('farmer/get-from-token').then(data => {
 			store.commit('connect', {...data, token})
+			const redirect = getRedirectAfterLogin()
+			if (redirect !== '/') {
+				router.push(redirect)
+			}
 		})
 	}
 }
@@ -481,4 +484,5 @@ app.config.globalProperties.$filters = {
 	duration: LeekWars.formatDuration,
 }
 
-export { vueMain, vuetify, displayWarningMessage, app, emitter, dochash, code }
+export { vueMain } from './emitter'
+export { vuetify, displayWarningMessage, app, emitter, dochash, code }

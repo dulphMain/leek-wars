@@ -43,5 +43,13 @@
 	"solo_tournaments_title": "ソロ・トーナメント優勝",
 	"farmer_tournaments_title": "ブリーダー・トーナメント優勝",
 	"team_tournaments_title": "チームトーナメント優勝",
-	"tournaments": "トーナメント"
+	"tournaments": "トーナメント",
+	"chests_title": "開けた宝箱",
+	"chests": "宝箱",
+	"crashes_title": "クラッシュ回数",
+	"crashes": "クラッシュ",
+	"boss_killed_title": "ボス撃破数",
+	"boss_killed": "ボス",
+	"turrets_killed": "タレット",
+	"turrets_killed_title": "タレット破壊数"
 }

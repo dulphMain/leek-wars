@@ -43,5 +43,13 @@
 	"solo_tournaments_title": "Soloturneringer vunnet",
 	"farmer_tournaments_title": "Oppdretterturneringer vunnet",
 	"team_tournaments_title": "Vunne lagturneringer",
-	"tournaments": "Turneringer"
+	"tournaments": "Turneringer",
+	"chests_title": "Kister åpnet",
+	"chests": "Kister",
+	"crashes_title": "Antall krasjer",
+	"crashes": "Krasjer",
+	"boss_killed_title": "Bosser beseiret",
+	"boss_killed": "Bosser",
+	"turrets_killed": "Tårn",
+	"turrets_killed_title": "Tårn ødelagt"
 }

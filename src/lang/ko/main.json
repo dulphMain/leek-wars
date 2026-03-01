@@ -270,11 +270,12 @@
 	"side_right": "오른쪽으로",
 	"n_year": "1년 | {n}년",
 	"n_month": "1개월 | {n}개월",
-	"n_day": "1 j | {n} j",
+	"n_day": "1일 | {n}일",
 	"n_hour": "1 시간 | {n} 시간",
 	"n_minute": "1분 | {n} 분",
 	"n_second": "1초 | {n}초",
 	"saving": "백업...",
 	"server_error": "서버 오류",
-	"valid_ai": "<b>{0}</b> 유효"
+	"valid_ai": "<b>{0}</b> 유효",
+	"x_to_y": "{0}에서 {1}"
 }

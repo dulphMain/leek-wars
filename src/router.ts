@@ -55,6 +55,7 @@ const Messages = () => import(/* webpackChunkName: "[request]" */ `@/component/m
 const MobileApp = () => import(/* webpackChunkName: "[request]" */ `@/component/mobile-app/mobile-app.${locale}.i18n`)
 const Moderation = () => import(/* webpackChunkName: "[request]" */ `@/component/moderation/moderation.${locale}.i18n`)
 const ModerationThugs = () => import(/* webpackChunkName: "[request]" */ `@/component/moderation/moderation-thugs.${locale}.i18n`)
+const ModerationMuted = () => import('@/component/moderation/moderation-muted.vue')
 const NewLeek = () => import(/* webpackChunkName: "[request]" */ `@/component/new-leek/new-leek.${locale}.i18n`)
 const Notifications = () => import(/* webpackChunkName: "[request]" */ `@/component/notifications/notifications.${locale}.i18n`)
 const PressKit = () => import(/* webpackChunkName: "[request]" */ `@/component/press-kit/press-kit.${locale}.i18n`)
@@ -79,7 +80,7 @@ import type { RouteLocationNormalized, NavigationGuardNext } from 'vue-router'
 import { scroll_to_hash } from './router-functions'
 import AdminComponents from './component/admin/admin-components.vue'
 import { defineAsyncComponent, defineComponent, h } from 'vue'
-import { vueMain } from './model/vue'
+import { vueMain } from './model/emitter'
 
 const Home = defineComponent({
 	components: { signup: Signup, leek: LeekAsync, messages: Messages },
@@ -104,7 +105,8 @@ const Home = defineComponent({
 
 const connected = (to: RouteLocationNormalized, _from: RouteLocationNormalized, next: NavigationGuardNext) => {
 	if (!store.state.connected) {
-		next('/')
+		sessionStorage.setItem('redirect_after_login', to.fullPath)
+		next('/login')
 	} else {
 		next()
 	}
@@ -193,6 +195,7 @@ const routes = [
 	{ path: '/moderation', component: Moderation, meta: {noscroll: true}, beforeEnter: connected },
 	{ path: '/moderation/fault/:id', component: Moderation, meta: {noscroll: true}, beforeEnter: connected },
 	{ path: '/moderation/thugs', component: ModerationThugs, meta: {noscroll: true}, beforeEnter: connected },
+	{ path: '/moderation/muted', component: ModerationMuted, meta: {noscroll: true}, beforeEnter: connected },
 	{ path: '/new-leek', component: NewLeek, beforeEnter: connected },
 	{ path: '/notifications', component: Notifications, beforeEnter: connected },
 	{ path: '/press-kit', component: PressKit },
@@ -279,6 +282,7 @@ router.onError((error, to) => {
 		error.message.includes('Failed to fetch dynamically imported module') ||
 		error.message.includes('Loading chunk') ||
 		error.message.includes('Loading CSS chunk') ||
+		error.message.includes('Unable to preload CSS') ||
 		error.name === 'ChunkLoadError'
 	) {
 		// Prevent infinite reload loop
@@ -306,5 +310,11 @@ router.beforeEach((to: RouteLocationNormalized, _from: RouteLocationNormalized, 
 
 	next()
 })
+
+export function getRedirectAfterLogin(): string {
+	const redirect = sessionStorage.getItem('redirect_after_login')
+	sessionStorage.removeItem('redirect_after_login')
+	return redirect || '/'
+}
 
 export default router

@@ -10,10 +10,10 @@
 							<img width="10" src="/image/selector.png">
 						</div>
 					</template>
-					<v-list :dense="true">
+					<v-list :dense="true" class="mobile-forum-languages">
 						<v-list-item v-for="(language, i) in languages" :key="i" :disabled="forumLanguages[language.code] && activeLanguages.length === 1" @click="setForumLanguage(language)">
 							<template #prepend>
-								<v-checkbox v-model="forumLanguages[language.code]" :disabled="forumLanguages[language.code] && activeLanguages.length === 1" hide-details @click.stop="pickForumLanguage(language)" />
+								<v-checkbox v-model="forumLanguages[language.code]" :disabled="forumLanguages[language.code] && activeLanguages.length === 1" hide-details density="compact" @click.stop="pickForumLanguage(language)" />
 							</template>
 							<div class="language">
 								<flag :code="language.country" :clickable="false" />
@@ -41,6 +41,27 @@
 		<panel class="first">
 			<loader v-if="!categories" />
 			<template v-else>
+				<div v-if="LeekWars.mobile" class="mobile-language-selector">
+					<v-menu offset-y>
+						<template #activator="{ props }">
+							<div class="forum-language" v-bind="props">
+								<flag v-for="l in activeLanguages" :key="l" :code="LeekWars.languages[l].country" :clickable="false" />
+								<img width="10" src="/image/selector.png">
+							</div>
+						</template>
+						<v-list :dense="true" class="mobile-forum-languages">
+							<v-list-item v-for="(language, i) in languages" :key="i" :disabled="forumLanguages[language.code] && activeLanguages.length === 1" @click="setForumLanguage(language)">
+								<template #prepend>
+									<v-checkbox v-model="forumLanguages[language.code]" :disabled="forumLanguages[language.code] && activeLanguages.length === 1" hide-details density="compact" @click.stop="pickForumLanguage(language)" />
+								</template>
+								<div class="language">
+									<flag :code="language.country" :clickable="false" />
+									<span class="name">{{ language.name }}</span>
+								</div>
+							</v-list-item>
+						</v-list>
+					</v-menu>
+				</div>
 				<div v-if="!LeekWars.mobile" class="header category">
 					<div class="seen"></div>
 					<div class="text">{{ $t('category') }}</div>
@@ -55,7 +76,13 @@
 					<div class="text">
 						<template v-if="category.type == 'normal'">
 							<div class="title">{{ $t('forum-category.' + category.name) }}</div>
-							<div class="description">{{ $t('forum-category.' + category.name + '_desc') }}</div>
+							<div class="description">
+								{{ $t('forum-category.' + category.name + '_desc') }}
+								<span v-if="category.total_count" class="resolved-info" :class="resolvedClass(category)">
+									<v-progress-circular :model-value="Math.round(category.resolved_count / category.total_count * 100)" :size="16" :width="2" :color="resolvedColor(category)" />
+									{{ Math.round(category.resolved_count / category.total_count * 100) }}% {{ $t('resolved') }}
+								</span>
+							</div>
 						</template>
 						<div v-else-if="category.type == 'team'">
 							<div class="title">{{ category.name }}</div>
@@ -171,7 +198,6 @@ import { emitter } from '@/model/vue'
 		}
 		setForumLanguage(language: Language) {
 			this.forumLanguages = {[language.code]: true}
-			this.categories = null
 			localStorage.setItem('forum/languages', language.code)
 			LeekWars.get('forum/get-categories/' + language.code).then(data => {
 				this.categories = data.categories
@@ -195,6 +221,14 @@ import { emitter } from '@/model/vue'
 		get activeLanguages() {
 			return Object.entries(this.forumLanguages).filter(e => e[1]).map(e => e[0])
 		}
+		resolvedColor(category: { resolved_count: number, total_count: number }) {
+			const ratio = category.resolved_count / category.total_count
+			return ratio >= 0.8 ? '#4caf50' : ratio >= 0.5 ? '#2196f3' : '#ff9800'
+		}
+		resolvedClass(category: { resolved_count: number, total_count: number }) {
+			const ratio = category.resolved_count / category.total_count
+			return ratio >= 0.8 ? 'high' : ratio >= 0.5 ? 'mid' : 'low'
+		}
 
 		@Watch('notifyNewTopics')
 		updateNotifyNewTopics() {
@@ -215,6 +249,21 @@ import { emitter } from '@/model/vue'
 		img.flag {
 			vertical-align: top;
 			width: 32px;
+		}
+	}
+	.mobile-language-selector {
+		padding: 8px 0;
+		.forum-language {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			cursor: pointer;
+			padding: 8px;
+			border-radius: 4px;
+			border: 1px solid var(--border);
+			img.flag {
+				width: 28px;
+			}
 		}
 	}
 	.search-icon {
@@ -271,6 +320,18 @@ import { emitter } from '@/model/vue'
 	.category .description {
 		color: var(--text-color-secondary);
 		font-size: 14px;
+		display: inline-flex;
+		flex-wrap: wrap;
+		gap: 4px 8px;
+	}
+	.resolved-info {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		vertical-align: bottom;
+		&.high { color: #4caf50; }
+		&.mid { color: #2196f3; }
+		&.low { color: #ff9800; }
 	}
 	.category .mobile-info {
 		margin-top: 5px;
@@ -323,8 +384,9 @@ import { emitter } from '@/model/vue'
 		flex-direction: column;
 	}
 	.flag {
-		width: 28px;
-		margin-left: 6px;
+		max-width: 28px;
+		max-height: 20px;
+		margin-right: 4px;
 	}
 	.language {
 		display: flex;
@@ -332,6 +394,15 @@ import { emitter } from '@/model/vue'
 	}
 	.language .name {
 		padding-left: 8px;
+	}
+</style>
+
+<style lang="scss">
+	.mobile-forum-languages .v-list-item {
+		min-height: 36px;
+	}
+	.mobile-forum-languages .v-checkbox .v-selection-control {
+		margin-right: 10px;
 	}
 </style>
 

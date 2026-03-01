@@ -5,9 +5,12 @@
 	"edited_by_x_the_y": "Redigerad av {farmer} den {date}",
 	"n_views": "{v} visningar",
 	"n_contributions": "{n} bidrag",
-	"not_found": "Sidan \"{name}\" finns inte i det franska uppslagsverket.",
+	"not_found": "Sidan \"{name}\" finns inte på detta språk.",
+	"available_in": "Denna sida finns tillgänglig på:",
 	"contributor_create": "Du är en bidragsgivare 😎 Klicka på Redigera för att börja redigera den här sidan",
 	"locked": "Slutför kapitlet för att låsa upp hela AI",
 	"end_edition": "Avsluta redigering",
-	"editing_by_x": "Redigeras för närvarande av {0}"
+	"editing_by_x": "Redigeras för närvarande av {0}",
+	"redirected_from": "Omdirigerad från {0}",
+	"aliases": "Även känd som: {0}"
 }

@@ -14,7 +14,7 @@
 						<br><br>
 						<v-checkbox v-model="form.keep_connected" :label="$t('keep_connected')" hide-details />
 						<br><br>
-						<div class="center"><v-btn large color="primary" type="submit">{{ $t('connection') }}</v-btn></div>
+						<div class="center"><v-btn size="large" color="primary" type="submit">{{ $t('connection') }}</v-btn></div>
 						<br>
 						<div v-if="error" class="error">
 							<span v-if="error.error">{{ $t('error_' + error.error) }}</span>
@@ -37,6 +37,7 @@
 <script lang="ts">
 	import { mixins } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
+	import { getRedirectAfterLogin } from '@/router'
 	import { Options, Vue, Watch } from 'vue-property-decorator'
 
 	@Options({ name: 'login', i18n: {}, mixins: [...mixins] })
@@ -57,7 +58,7 @@
 				LeekWars.post('farmer/login-comeback', { token }).then(data => {
 					const token = LeekWars.DEV ? data.token : '$'
 					this.$store.commit('connect', {...data, token})
-					this.$router.push('/')
+					this.$router.push(getRedirectAfterLogin())
 				}).error(error => {
 					LeekWars.toast(error.error)
 					this.$router.push('/')
@@ -70,7 +71,7 @@
 			LeekWars.post(url, this.form).then(data => {
 				const token = LeekWars.DEV ? data.token : '$'
 				this.$store.commit('connect', {...data, token})
-				this.$router.push('/')
+				this.$router.push(getRedirectAfterLogin())
 			}).error(error => {
 				this.error = error
 			})

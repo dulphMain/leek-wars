@@ -39,5 +39,13 @@
 	"trophies_title": "अधिकांश ट्राफियां",
 	"statistics": "आंकड़े",
 	"no_results": "कोई परिणाम नहीं",
-	"xp": "एक्सपी"
+	"xp": "एक्सपी",
+	"chests_title": "खोले गए संदूक",
+	"chests": "संदूक",
+	"crashes_title": "क्रैश की संख्या",
+	"crashes": "क्रैश",
+	"boss_killed_title": "बॉस मारे गए",
+	"boss_killed": "बॉस",
+	"turrets_killed": "बुर्ज",
+	"turrets_killed_title": "बुर्ज नष्ट किए"
 }

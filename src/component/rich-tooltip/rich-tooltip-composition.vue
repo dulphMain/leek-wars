@@ -1,5 +1,5 @@
 <template>
-	<v-menu ref="menu" v-model="value" :close-on-content-click="false" offset-overflow :disabled="disabled || id <= 0" :nudge-width="expand_leeks ? 500 : 200" :nudge-top="0" :open-delay="_open_delay" :close-delay="_close_delay" :top="!bottom" :bottom="bottom" :transition="instant ? 'none' : 'my-transition'" :open-on-hover="!locked" offset-y @update:model-value="open($event)">
+	<v-menu ref="menu" v-model="value" :close-on-content-click="false" offset-overflow :disabled="disabled || id <= 0" :nudge-width="expand_leeks ? 500 : 200" :nudge-top="0" :open-delay="_open_delay" :close-delay="_close_delay" :top="!bottom" :bottom="bottom" :transition="instant ? 'none' : 'scale-transition'" :open-on-hover="!locked" offset-y @update:model-value="open($event)">
 		<template #activator="{ props }">
 			<span v-bind="props">
 				<slot></slot>
@@ -103,7 +103,7 @@
 						this.sums[c] = Object.values(this.composition.leeks).reduce((sum: number, leek: any) => sum + leek[c], 0)
 					}
 					if (this.expand_leeks) {
-						(this.$refs.menu as any).onResize()
+						(this.$refs.menu as any)?.updateLocation?.()
 					}
 				})
 			}

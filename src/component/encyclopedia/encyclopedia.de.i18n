@@ -5,9 +5,12 @@
 	"edited_by_x_the_y": "Bearbeitet von {farmer} am {date}",
 	"n_views": "{v} Aufrufe",
 	"n_contributions": "{n} Beiträge",
-	"not_found": "Die Seite „{name}“ existiert nicht in der französischen Enzyklopädie.",
+	"not_found": "Die Seite \u201E{name}\u201C existiert nicht in dieser Sprache.",
+	"available_in": "Diese Seite ist verfügbar in:",
 	"contributor_create": "Sie sind ein Mitwirkender 😎 Klicken Sie auf Bearbeiten, um mit der Bearbeitung dieser Seite zu beginnen",
 	"locked": "Schließen Sie das Kapitel ab, um die vollständige KI freizuschalten",
 	"end_edition": "Beenden der Bearbeitung",
-	"editing_by_x": "Wird derzeit von {0} bearbeitet"
+	"editing_by_x": "Wird derzeit von {0} bearbeitet",
+	"redirected_from": "Weitergeleitet von {0}",
+	"aliases": "Auch bekannt als: {0}"
 }
