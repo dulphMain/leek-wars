@@ -201,7 +201,7 @@
 	"rename": "Rinominare",
 	"challenge": "Sfida",
 	"month_0": "gennaio",
-	"month_1": "fEBBRAIO",
+	"month_1": "febbraio",
 	"month_2": "marzo",
 	"month_3": "aprile",
 	"month_4": "maggio",
@@ -252,7 +252,7 @@
 	"dida_11": "Non esitate a chiedere aiuto in {chat} o {forum}, saremo lieti di aiutarvi.",
 	"dida_12": "Buona fortuna <b>{0}</b>!",
 	"hats": "Cappelli",
-	"10years": "10 anni di Guerre dei Porri!",
+	"10years": "10 anni di Leek Wars!",
 	"all": "Tutti",
 	"components": "Componenti",
 	"fight-packs": "Pacchetti di combattimento",
@@ -270,11 +270,12 @@
 	"side_right": "A destra",
 	"n_year": "1 anno | {n} anni",
 	"n_month": "1 mese | {n} mesi",
-	"n_day": "1 j | {n} j",
+	"n_day": "1 g | {n} g",
 	"n_hour": "1 h | {n} h",
 	"n_minute": "1 min | {n} min",
 	"n_second": "1 s | {n} s",
 	"saving": "Backup...",
 	"server_error": "Errore del server",
-	"valid_ai": "<b>{0}</b> valido"
+	"valid_ai": "<b>{0}</b> valido",
+	"x_to_y": "{0} a {1}"
 }

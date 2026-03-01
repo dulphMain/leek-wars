@@ -43,5 +43,13 @@
 	"solo_tournaments_title": "Vunna soloturneringar",
 	"farmer_tournaments_title": "Vunna uppfödarturneringar",
 	"team_tournaments_title": "Vunna lagturneringar",
-	"tournaments": "Turneringar"
+	"tournaments": "Turneringar",
+	"chests_title": "Öppnade kistor",
+	"chests": "Kistor",
+	"crashes_title": "Antal krascher",
+	"crashes": "Krascher",
+	"boss_killed_title": "Bossar besegrade",
+	"boss_killed": "Bossar",
+	"turrets_killed": "Torn",
+	"turrets_killed_title": "Torn förstörda"
 }

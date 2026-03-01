@@ -68,6 +68,10 @@
 					<div v-if="LeekWars.encyclopedia[this.language] && Object.keys(LeekWars.encyclopedia[this.language]).length" ref="markdown" class="markdown" @scroll="markdownScroll">
 						<!-- {{ parents }} -->
 
+						<div v-if="redirectedFrom" class="redirected-from">
+							{{ $t('redirected_from', [redirectedFrom]) }}
+						</div>
+
 						<markdown :content="content" mode="encyclopedia" :class="{main: page.reference === 1 }" :locale="page.language" />
 
 						<div v-if="page.new && !edition" class="nopage">
@@ -76,6 +80,13 @@
 							<i18n-t keypath="not_found" tag="div" class="message">
 								<template #name>{{ code }}</template>
 							</i18n-t>
+							<div v-if="Object.keys(page.translations).length" class="available-translations">
+								{{ $t('available_in') }}
+								<router-link v-for="(title, lang) in page.translations" :key="lang" :to="'/encyclopedia/' + lang + '/' + title.replace(/ /g, '_')">
+									<flag :code="LeekWars.languages[lang].country" :clickable="false" />
+									{{ LeekWars.languages[lang].name }}
+								</router-link>
+							</div>
 							<br>
 							<div v-if="contributor">{{ $t('contributor_create') }}</div>
 						</div>
@@ -171,6 +182,8 @@
 		initialVersionId: number = 0
 		statsExpanded: boolean = false
 		searchQuery: string = ''
+		redirectedFrom: string | null = null
+		boundBeforeUnload!: () => void
 		actions = [
 			{icon: 'mdi-information-variant', click: () => this.$router.push('/about')},
 			{icon: 'mdi-pencil', click: () => this.editStart()},
@@ -251,6 +264,7 @@
 
 		beforeUnmount() {
 			emitter.off('ctrlS')
+			window.removeEventListener('beforeunload', this.boundBeforeUnload)
 			LeekWars.large = false
 			LeekWars.box = false
 			LeekWars.footer = true
@@ -273,13 +287,16 @@
 			})
 			LeekWars.setActions(this.actions)
 
+			this.boundBeforeUnload = this.onBeforeUnload.bind(this)
+			window.addEventListener('beforeunload', this.boundBeforeUnload)
+
 			const docMessages = await import(/* webpackChunkName: "[request]" */ /* webpackMode: "eager" */ `@/lang/doc.${locale}.lang`)
 			i18n.global.mergeLocaleMessage(locale, { doc: docMessages.default })
 		}
 
 		@Watch('lanuage_and_code', {immediate: true})
-		update() {
-			LeekWars.loadEncyclopedia(this.language)
+		async update() {
+			await LeekWars.loadEncyclopedia(this.language)
 
 			if (this.code === 'Page au hasard') {
 				const pages = Object.values(LeekWars.encyclopedia[this.$i18n.locale])
@@ -287,7 +304,22 @@
 				return
 			}
 
+			// Vérifier si c'est un alias
+			const key = this.code.toLowerCase().replace(/_/g, ' ')
+			const entry = LeekWars.encyclopedia[this.language]?.[key]
+			if (entry?.alias) {
+				this.$router.replace('/encyclopedia/' + this.language + '/' + entry.title.replace(/ /g, '_') + '?from=' + encodeURIComponent(this.code))
+				return
+			}
+
+			this.redirectedFrom = this.$route.query.from as string || null
+
 			LeekWars.get<any>('encyclopedia/get/' + this.language + '/' + this.code).then(page => {
+				// Redirection alias côté serveur (fallback)
+				if (page.redirect) {
+					this.$router.replace('/encyclopedia/' + this.language + '/' + page.redirect.replace(/ /g, '_') + '?from=' + encodeURIComponent(this.code))
+					return
+				}
 				if (this.edition) {
 					// Previous page was in edition
 					this.releasePage()
@@ -300,7 +332,7 @@
 				LeekWars.setTitle(this.title)
 				emitter.emit('loaded')
 			})
-			.error(() => {
+			.error((result: any) => {
 				// Pas de page
 				let fun = null as any
 				let args = ''
@@ -322,7 +354,7 @@
 					id: 0,
 					title: this.code,
 					language: this.language,
-					translations: {},
+					translations: result && result.translations ? result.translations : {},
 					content: fun ?  `# ${this.code}
 > Fonctions
 
@@ -444,6 +476,13 @@ ${ret}
 			LeekWars.post('encyclopedia/end-edition', {page_id: this.page.id})
 		}
 
+		onBeforeUnload() {
+			if (this.edition && this.page && this.page.id !== 0) {
+				const data = JSON.stringify({page_id: this.page.id})
+				navigator.sendBeacon(LeekWars.API + 'encyclopedia/end-edition', new Blob([data], {type: 'application/json'}))
+			}
+		}
+
 		markdownScroll(e: Event) {
 			if (this.scrolling) { this.scrolling = false; return }
 			const markdown = (this.$refs.markdown as HTMLElement)
@@ -524,10 +563,11 @@ h1 {
 	&::after {
 		border-color: transparent transparent transparent #222;
 	}
+	gap: 10px;
 	.book {
 		margin-right: 10px;
-		font-size: 23px;
-		margin-bottom: 5px;
+		font-size: 22px;
+		margin: 6px 0;
 	}
 }
 .page-header .flex {
@@ -618,6 +658,29 @@ h1 {
 		color: #ccc;
 		font-size: 150px;
 	}
+	.available-translations {
+		margin-top: 15px;
+		font-size: 16px;
+		a {
+			display: inline-flex;
+			align-items: center;
+			gap: 5px;
+			margin: 0 8px;
+			color: #5fad1b;
+			font-weight: bold;
+			.flag {
+				max-width: 25px;
+				max-height: 16px;
+			}
+		}
+	}
+}
+.redirected-from {
+	padding: 15px;
+	padding-bottom: 0;
+	font-size: 13px;
+	color: var(--text-color-secondary);
+	font-style: italic;
 }
 .search-icon {
 	cursor: pointer;

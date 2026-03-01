@@ -43,5 +43,13 @@
 	"solo_tournaments_title": "Torneios a solo ganhos",
 	"farmer_tournaments_title": "Torneios de criadores ganhos",
 	"team_tournaments_title": "Torneios de equipas ganhos",
-	"tournaments": "Torneios"
+	"tournaments": "Torneios",
+	"chests_title": "Baús abertos",
+	"chests": "Baús",
+	"crashes_title": "Número de crashes",
+	"crashes": "Crashes",
+	"boss_killed_title": "Chefes derrotados",
+	"boss_killed": "Chefes",
+	"turrets_killed": "Torretas",
+	"turrets_killed_title": "Torretas destruídas"
 }

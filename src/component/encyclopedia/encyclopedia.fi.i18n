@@ -5,9 +5,12 @@
 	"edited_by_x_the_y": "Muokannut {farmer} {date}",
 	"n_views": "{v} näyttökertaa",
 	"n_contributions": "{n} lahjoitusta",
-	"not_found": "Sivua \"{name}\" ei ole ranskalaisessa tietosanakirjassa.",
+	"not_found": "Sivua \"{name}\" ei ole tällä kielellä.",
+	"available_in": "Tämä sivu on saatavilla kielillä:",
 	"contributor_create": "Olet avustaja 😎 Aloita tämän sivun muokkaaminen napsauttamalla Muokkaa",
 	"locked": "Suorita luku avataksesi koko tekoälyn",
 	"end_edition": "Lopeta muokkaus",
-	"editing_by_x": "Tällä hetkellä muokkaa {0}"
+	"editing_by_x": "Tällä hetkellä muokkaa {0}",
+	"redirected_from": "Uudelleenohjattu kohteesta {0}",
+	"aliases": "Tunnetaan myös nimellä: {0}"
 }

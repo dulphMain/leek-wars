@@ -43,5 +43,13 @@
 	"solo_tournaments_title": "Solo toernooien gewonnen",
 	"farmer_tournaments_title": "Fokkertoernooien gewonnen",
 	"team_tournaments_title": "Teamtoernooien gewonnen",
-	"tournaments": "Toernooien"
+	"tournaments": "Toernooien",
+	"chests_title": "Geopende kisten",
+	"chests": "Kisten",
+	"crashes_title": "Aantal crashes",
+	"crashes": "Crashes",
+	"boss_killed_title": "Bazen verslagen",
+	"boss_killed": "Bazen",
+	"turrets_killed": "Geschutstorens",
+	"turrets_killed_title": "Geschutstorens vernietigd"
 }

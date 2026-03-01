@@ -5,9 +5,12 @@
 	"edited_by_x_the_y": "Edytowane przez {farmer} w dniu {date}",
 	"n_views": "{v} wyświetleń",
 	"n_contributions": "{n} wkładów",
-	"not_found": "Strona „{name}” nie istnieje we francuskiej encyklopedii.",
+	"not_found": "Strona „{name}” nie istnieje w tym języku.",
+	"available_in": "Ta strona jest dostępna w:",
 	"contributor_create": "Jesteś współtwórcą 😎 Kliknij Edytuj, aby rozpocząć edycję tej strony",
 	"locked": "Ukończ rozdział, aby odblokować pełną sztuczną inteligencję",
 	"end_edition": "Koniec edycji",
-	"editing_by_x": "Obecnie edytowany przez {0}"
+	"editing_by_x": "Obecnie edytowany przez {0}",
+	"redirected_from": "Przekierowano z {0}",
+	"aliases": "Znane również jako: {0}"
 }

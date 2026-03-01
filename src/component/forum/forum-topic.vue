@@ -16,6 +16,9 @@
 						<a v-if="topic.issue" :href="'https://github.com/leek-wars/leek-wars/issues/' + topic.issue" class="attr issue" target="_blank" rel="noopener">
 							<img src="/image/github_white.png"><span>#{{ topic.issue }}</span>
 						</a>
+						<a v-if="topic.private_issue && $store.state.farmer && $store.state.farmer.admin" :href="'https://github.com/5pilow/leek-wars/issues/' + topic.private_issue" class="attr issue private-issue" target="_blank" rel="noopener">
+							<img src="/image/github_white.png"><span>#{{ topic.private_issue }}</span>
+						</a>
 					</div>
 				</h1>
 				<div v-if="!LeekWars.mobile" class="tabs">
@@ -126,6 +129,10 @@
 										&nbsp;&nbsp;
 										<span class="action resolve" @click="resolve"><v-icon>mdi-check</v-icon> {{ topic.resolved ? $t('unsolved') : $t('solved') }}</span>
 									</template>
+									<template v-if="message.id == -1 && $store.state.farmer && $store.state.farmer.admin && !topic.private_issue && !topic.resolved">
+										&nbsp;&nbsp;
+										<span class="action create-issue" @click="createIssue"><v-icon>{{ creatingIssue ? 'mdi-loading mdi-spin' : 'mdi-source-branch' }}</v-icon> {{ $t('create_issue') }}</span>
+									</template>
 								</div>
 								<div class="spacer"></div>
 								<div class="date">
@@ -172,7 +179,10 @@
 
 				<div v-if="topic && !topic.locked && $store.state.farmer && $store.state.farmer.verified" class="editor">
 					<h4>{{ $t('answer') }}</h4>
-					<textarea v-model="newMessage" class="response card" @keyup="updateDraft"></textarea>
+					<div class="response-wrapper">
+						<textarea ref="responseTextarea" v-model="newMessage" class="response card" @keyup="updateDraft"></textarea>
+						<emoji-picker @pick="addEmojiNewMessage">😀</emoji-picker>
+					</div>
 					<div class="center">
 						<div v-if="page != pages" class="warning"><v-icon>mdi-alert</v-icon> {{ $t('not_last_page') }}</div>
 						<v-btn color="primary" class="send" @click="send"><v-icon>mdi-send-outline</v-icon> {{ $t('send') }}</v-btn>
@@ -254,6 +264,7 @@ import { emitter } from '@/model/vue'
 		topicEditing: boolean = false
 		action = {icon: 'mdi-newspaper-plus', click: () => this.toggleSubscribe()}
 		sendingMessage: boolean = false
+		creatingIssue: boolean = false
 		forumLanguages: string[] = []
 		reportDialog: boolean = false
 		reportFarmer: Farmer | null = null
@@ -311,6 +322,16 @@ import { emitter } from '@/model/vue'
 				if (this.topic.subscribed) { this.action.icon = 'mdi-newspaper-minus' }
 				emitter.emit('loaded')
 				this.newMessage = localStorage.getItem('forum/draft-' + this.topic.id) as string
+			})
+		}
+		createIssue() {
+			if (!this.topic || this.creatingIssue) { return }
+			this.creatingIssue = true
+			LeekWars.post('forum/create-issue', {topic_id: this.topic.id}).then((data: any) => {
+				if (this.topic) {
+					this.topic.private_issue = data.private_issue
+				}
+				this.creatingIssue = false
 			})
 		}
 		resolve() {
@@ -477,6 +498,16 @@ import { emitter } from '@/model/vue'
 		addEmoji(message: ForumMessage, emoji: string, textarea: any) {
 			const index = textarea.selectionStart
 			message.message = message.message.slice(0, index) + emoji + message.message.slice(index, message.message.length)
+		}
+		addEmojiNewMessage(emoji: string) {
+			const textarea = this.$refs.responseTextarea as HTMLTextAreaElement
+			const index = textarea.selectionStart
+			const text = this.newMessage || ''
+			this.newMessage = text.slice(0, index) + emoji + text.slice(index)
+			this.$nextTick(() => {
+				textarea.focus()
+				textarea.selectionStart = textarea.selectionEnd = index + emoji.length
+			})
 		}
 
 		report(message: ForumMessage) {
@@ -731,6 +762,14 @@ import { emitter } from '@/model/vue'
 		margin-left: 10px;
 		margin-right: 10px;
 	}
+	.response-wrapper {
+		position: relative;
+		:deep(.chat-input-emoji) {
+			position: absolute;
+			right: 10px;
+			top: 10px;
+		}
+	}
 	.response {
 		width: 100%;
 		height: 170px;
@@ -771,6 +810,9 @@ import { emitter } from '@/model/vue'
 			height: 20px;
 			margin: 2px;
 			margin-right: 5px;
+		}
+		&.private-issue {
+			background: #6f42c1;
 		}
 	}
 	.votes {
