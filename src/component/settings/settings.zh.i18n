@@ -40,6 +40,7 @@
 	"leek_theme": "白色的大韭菜",
 	"logout": "登出",
 	"new_password": "新密码",
+	"notifs_popups": "通知弹窗",
 	"notifs_results": "战斗结果通知",
 	"old_password": "旧密码",
 	"misc_options": "多种选择",
@@ -66,5 +67,7 @@
 	"light": "克莱尔",
 	"dark": "黑暗",
 	"auto": "汽车",
-	"theme": "主题"
+	"theme": "主题",
+	"modern_theme": "现代主题（测试版）",
+	"xp_theme": "XP 主题"
 }

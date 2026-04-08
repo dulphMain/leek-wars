@@ -44,6 +44,10 @@
 					<v-icon>mdi-pencil-outline</v-icon>
 					{{ $t('main.edit') }}
 				</div>
+				<div v-if="$store.getters.admin && !edition && page.id" class="tab action" @click="deletePage">
+					<v-icon>mdi-delete</v-icon>
+					{{ $t('main.delete') }}
+				</div>
 				<v-menu v-if="page && Object.values(page.translations).length" offset-y>
 					<template #activator="{ props }">
 						<div class="tab" v-bind="props"><v-icon>mdi-translate</v-icon></div>
@@ -93,7 +97,7 @@
 
 						<div v-if="page.creator" class="stats">
 
-							<div class="contributors">
+							<div class="contributors" @click="toggleStats">
 								<v-icon>mdi-account-multiple</v-icon>
 								<div v-html="$tc('n_contributors', page.contributors.length)"></div>
 								<div class="avatars">
@@ -108,8 +112,11 @@
 										<b>{{ $filters.number(page.views) }}</b>
 									</template>
 								</i18n-t>
+								<div v-if="totalReferences > 0" class="references-count">
+									— <b>{{ totalReferences }}</b> {{ $tc('n_references', totalReferences) }}
+								</div>
 								<div class="fill"></div>
-								<v-icon @click="statsExpanded = !statsExpanded">{{ statsExpanded ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+								<v-icon>{{ statsExpanded ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
 							</div>
 
 							<div v-if="statsExpanded" class="expanded-stats">
@@ -142,6 +149,58 @@
 									— {{ $tc('main.n_words', page.content.split(' ').length) }}
 									— {{ $tc('main.n_characters', page.content.length) }}
 								</div>
+							</div>
+
+							<div v-if="statsExpanded && referencedBy && totalReferences > 0" class="references-panel">
+								<div v-if="referencedBy.children.length" class="ref-section">
+									<v-icon>mdi-file-tree</v-icon>
+									<span class="ref-label">{{ $t('child_pages') }} :</span>
+									<template v-for="(child, i) in referencedBy.children" :key="child.id">
+										<router-link :to="'/encyclopedia/' + child.language + '/' + child.title.replace(/ /g, '_')">{{ child.title }}</router-link><span v-if="i < referencedBy.children.length - 1">, </span>
+									</template>
+								</div>
+								<div v-if="referencedBy.translations.length" class="ref-section">
+									<span class="ref-label">{{ $t('referencing_translations') }} :</span>
+									<template v-for="(t, i) in referencedBy.translations" :key="t.id">
+										<router-link :to="'/encyclopedia/' + t.language + '/' + t.title.replace(/ /g, '_')">{{ t.title }}</router-link><span v-if="i < referencedBy.translations.length - 1">, </span>
+									</template>
+								</div>
+								<div v-if="referencedBy.linked_from.length" class="ref-section">
+									<v-icon>mdi-link-variant</v-icon>
+									<span class="ref-label">{{ $t('linked_from') }} :</span>
+									<template v-for="(link, i) in referencedBy.linked_from" :key="link.id">
+										<router-link :to="'/encyclopedia/' + link.language + '/' + link.title.replace(/ /g, '_')">{{ link.title }}</router-link><span v-if="i < referencedBy.linked_from.length - 1">, </span>
+									</template>
+								</div>
+							</div>
+
+							<div v-if="statsExpanded && history" class="history-panel">
+								<div class="history-list">
+									<h4>{{ $t('history') }}</h4>
+									<div v-for="(entry, i) in history" :key="entry.time" class="history-entry" :class="{active: selectedHistoryIndex === i}" @click="selectHistory(i)">
+										<div class="history-info">
+											<rich-tooltip-farmer :id="entry.author" v-slot="{ props }">
+												<router-link :to="'/farmer/' + entry.author" v-bind="props">
+													<avatar :farmer="{id: entry.author, avatar_changed: entry.avatar_changed}" />
+												</router-link>
+											</rich-tooltip-farmer>
+											<div>
+												<rich-tooltip-farmer :id="entry.author" v-slot="{ props }">
+													<router-link :to="'/farmer/' + entry.author" :class="entry.color"><span v-bind="props">{{ entry.author_name }}</span></router-link>
+												</rich-tooltip-farmer>
+												<span class="history-date">{{ $filters.datetime(entry.time) }}</span>
+											</div>
+										</div>
+										<div v-if="i < history.length - 1" class="history-diff-stats">
+											<span class="additions">+{{ entry.additions }}</span>
+											<span class="deletions">-{{ entry.deletions }}</span>
+										</div>
+										<div v-else class="history-diff-stats">
+											<span class="additions">{{ $t('initial') }}</span>
+										</div>
+									</div>
+								</div>
+								<div v-if="selectedHistoryIndex !== null" ref="diffContainer" class="diff-container"></div>
 							</div>
 						</div>
 					</div>
@@ -184,10 +243,11 @@
 		searchQuery: string = ''
 		redirectedFrom: string | null = null
 		boundBeforeUnload!: () => void
-		actions = [
-			{icon: 'mdi-information-variant', click: () => this.$router.push('/about')},
-			{icon: 'mdi-pencil', click: () => this.editStart()},
-		]
+		actions: any[] = []
+		history: any[] | null = null
+		selectedHistoryIndex: number | null = null
+		diffEditor: Monaco.editor.IStandaloneDiffEditor | null = null
+		referencedBy: { children: any[], translations: any[], linked_from: any[] } | null = null
 
 		get language() {
 			return this.$route.params && this.$route.params.lang ? this.$route.params.lang : this.$i18n.locale
@@ -254,6 +314,10 @@
 				}
 			}
 		}
+		get totalReferences() {
+			if (!this.referencedBy) return 0
+			return this.referencedBy.children.length + this.referencedBy.translations.length + this.referencedBy.linked_from.length
+		}
 		get content() {
 			let content = this.page ? this.page.content : ''
 			if (this.function_args) {
@@ -269,6 +333,7 @@
 			LeekWars.box = false
 			LeekWars.footer = true
 
+			this.destroyDiffEditor()
 			if (this.editor) {
 				this.editor.getModel()?.dispose()
 				this.editor.dispose()
@@ -285,6 +350,10 @@
 			emitter.on('ctrlS', () => {
 				this.save()
 			})
+			this.actions = [
+				{icon: 'mdi-information-variant', click: () => this.$router.push('/about')},
+				{icon: 'mdi-pencil', click: () => this.editStart()},
+			]
 			LeekWars.setActions(this.actions)
 
 			this.boundBeforeUnload = this.onBeforeUnload.bind(this)
@@ -313,6 +382,11 @@
 			}
 
 			this.redirectedFrom = this.$route.query.from as string || null
+			this.statsExpanded = false
+			this.history = null
+			this.selectedHistoryIndex = null
+			this.referencedBy = null
+			this.destroyDiffEditor()
 
 			LeekWars.get<any>('encyclopedia/get/' + this.language + '/' + this.code).then(page => {
 				// Redirection alias côté serveur (fallback)
@@ -374,6 +448,7 @@ ${ret}
 		}
 
 		editStart() {
+			if (!this.page) { return }
 			if (this.page.id === 0) { // Nouvelle page pas besoin de prendre un lock
 				this.edition = true
 				LeekWars.large = true
@@ -439,7 +514,7 @@ ${ret}
 						const markdown = this.$refs.markdown as HTMLElement
 						markdown.scrollTop = (markdown.scrollHeight - markdown.clientHeight) * percent
 					})
-					
+
 					this.initialVersionId = this.editor.getModel()!.getAlternativeVersionId()
 					this.modified = false
 				})
@@ -519,13 +594,110 @@ ${ret}
 					this.page.new = false
 					this.page.id = result.id
 				}
-			}).error(error => LeekWars.toast("Sauvegarde échouée : " + error.error))
+			}).error(error => {
+				if (error.error === 'duplicate_reference') {
+					LeekWars.toast("Sauvegarde échouée : la référence est déjà utilisée par la page \"" + error.page + "\" (#" + error.page_id + ")")
+				} else {
+					LeekWars.toast("Sauvegarde échouée : " + error.error)
+				}
+			})
 
 			this.initialVersionId = this.editor!.getModel()!.getAlternativeVersionId()
 			this.modified = false
 			this.page.last_edition_time = Date.now() / 1000
 			this.page.last_editor = store.state.farmer!.id
 			this.page.last_editor_name = store.state.farmer!.name
+		}
+
+		toggleStats() {
+			this.statsExpanded = !this.statsExpanded
+			if (this.statsExpanded) {
+				if (!this.history) this.loadHistory()
+				if (!this.referencedBy) this.loadReferencedBy()
+			}
+		}
+
+		loadHistory() {
+			if (!this.page || this.page.id === 0) return
+			LeekWars.get('encyclopedia/get-history/' + this.page.id).then((history: { content: string, author: number, author_name: string, time: number, additions?: number, deletions?: number }[]) => {
+				for (let i = 0; i < history.length; i++) {
+					if (i < history.length - 1) {
+						const newLines = history[i].content.split('\n')
+						const oldLines = history[i + 1].content.split('\n')
+						let additions = 0
+						let deletions = 0
+						const maxLen = Math.max(newLines.length, oldLines.length)
+						for (let j = 0; j < maxLen; j++) {
+							if (j >= oldLines.length) { additions++; continue }
+							if (j >= newLines.length) { deletions++; continue }
+							if (newLines[j] !== oldLines[j]) { additions++; deletions++ }
+						}
+						history[i].additions = additions
+						history[i].deletions = deletions
+					}
+				}
+				this.history = history
+				if (history.length > 1) {
+					this.selectHistory(0)
+				}
+			})
+		}
+
+		selectHistory(index: number) {
+			if (this.selectedHistoryIndex === index) {
+				this.selectedHistoryIndex = null
+				this.destroyDiffEditor()
+				return
+			}
+			this.selectedHistoryIndex = index
+			nextTick(() => {
+				this.createDiffEditor(index)
+			})
+		}
+
+		createDiffEditor(index: number) {
+			if (!this.history) return
+			this.destroyDiffEditor()
+
+			const container = this.$refs.diffContainer as HTMLElement
+			if (!container) return
+
+			const newContent = this.history[index].content
+			const oldContent = index < this.history.length - 1 ? this.history[index + 1].content : ''
+			const expectedIndex = this.selectedHistoryIndex
+
+			import(/* webpackChunkName: "monaco" */ 'monaco-editor').then((monaco) => {
+				if (this.selectedHistoryIndex !== expectedIndex) return
+				this.diffEditor = markRaw(monaco.editor.createDiffEditor(container, {
+					automaticLayout: true,
+					readOnly: true,
+					renderSideBySide: false,
+					fontSize: 13,
+					lineHeight: 20,
+					minimap: { enabled: false },
+					scrollBeyondLastLine: false,
+					overviewRulerLanes: 0,
+					overviewRulerBorder: false,
+					renderOverviewRuler: false,
+					wordWrap: 'on',
+					hideUnchangedRegions: { enabled: true },
+					theme: LeekWars.darkMode ? 'vs-dark' : 'vs',
+				}))
+				this.diffEditor.setModel({
+					original: markRaw(monaco.editor.createModel(oldContent, 'markdown')),
+					modified: markRaw(monaco.editor.createModel(newContent, 'markdown')),
+				})
+			})
+		}
+
+		destroyDiffEditor() {
+			if (this.diffEditor) {
+				const model = this.diffEditor.getModel()
+				this.diffEditor.dispose()
+				model?.original.dispose()
+				model?.modified.dispose()
+				this.diffEditor = null
+			}
 		}
 
 		comment(comment: Comment) {
@@ -539,6 +711,45 @@ ${ret}
 			} else {
 				this.$router.push('/encyclopedia-search')
 			}
+		}
+
+		loadReferencedBy() {
+			if (!this.page || !this.page.id) return
+			LeekWars.get('encyclopedia/get-referenced-by/' + this.page.id).then((result: any) => {
+				this.referencedBy = result
+			})
+		}
+
+		deletePage() {
+			if (!this.page || !this.page.id) return
+
+			if (this.referencedBy && (this.referencedBy.children.length || this.referencedBy.linked_from.length)) {
+				const children = this.referencedBy.children.length
+				const linked = this.referencedBy.linked_from.length
+				let msg = 'Impossible de supprimer cette page :\n'
+				if (children) msg += `- ${children} page(s) enfant(s)\n`
+				if (linked) msg += `- ${linked} page(s) contenant un lien vers cette page\n`
+				msg += '\nSupprimez ou déplacez ces pages avant.'
+				alert(msg)
+				return
+			}
+
+			if (!window.confirm('Supprimer la page « ' + this.page.title + ' » (#' + this.page.id + ') ?\n\nCette action est irréversible.')) {
+				return
+			}
+
+			LeekWars.delete('encyclopedia/delete', { page_id: this.page.id }).then(() => {
+				LeekWars.toast('Page supprimée !')
+				this.$router.push('/encyclopedia')
+			}).error((error: any) => {
+				if (error.error === 'has_children') {
+					LeekWars.toast('Impossible : ' + error.count + ' page(s) enfant(s)')
+				} else if (error.error === 'has_links') {
+					LeekWars.toast('Impossible : ' + error.count + ' page(s) contenant un lien vers cette page')
+				} else {
+					LeekWars.toast('Erreur : ' + error.error)
+				}
+			})
 		}
 
 		updateOfficial() {
@@ -607,6 +818,9 @@ h1 {
 	padding: 15px;
 	border-top: 1px solid var(--border);
 	color: var(--text-color-secondary);
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
 	a {
 		color: #5fad1b;
 		font-weight: bold;
@@ -615,6 +829,7 @@ h1 {
 		display: flex;
 		align-items: center;
 		margin-bottom: 5px;
+		cursor: pointer;
 		& > * {
 			margin: 0 3px;
 		}
@@ -684,6 +899,98 @@ h1 {
 }
 .search-icon {
 	cursor: pointer;
+}
+.history-panel {
+	display: flex;
+	border-top: 1px solid var(--border);
+	height: 600px;
+}
+.history-list {
+	width: 300px;
+	min-width: 300px;
+	overflow-y: auto;
+	padding: 10px 0;
+	h4 {
+		margin-bottom: 8px;
+	}
+	.history-entry {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 6px 10px;
+		cursor: pointer;
+		&:hover {
+			background: var(--background);
+		}
+		&.active {
+			background: #5fad1b22;
+			border-left: 3px solid #5fad1b;
+			padding-left: 7px;
+		}
+		.history-info {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			.avatar {
+				width: 32px;
+				height: 32px;
+				flex-shrink: 0;
+			}
+			a {
+				font-weight: bold;
+				&.admin { color: #df1500; }
+				&.moderator { color: #ffa900; }
+				&.contributor { color: #009c1d; }
+			}
+			.history-date {
+				color: var(--text-color-secondary);
+				font-size: 12px;
+				display: block;
+			}
+		}
+		.history-diff-stats {
+			font-size: 13px;
+			display: flex;
+			gap: 8px;
+			.additions {
+				color: #4caf50;
+			}
+			.deletions {
+				color: #f44336;
+			}
+		}
+	}
+}
+.diff-container {
+	flex: 1;
+	min-width: 0;
+	border-left: 1px solid var(--border);
+}
+.references-count {
+	margin-left: 10px;
+}
+.references-panel {
+	padding: 10px 0;
+	line-height: 1.6;
+	.ref-section {
+		margin-bottom: 4px;
+		&:last-child {
+			margin-bottom: 0;
+		}
+		.v-icon {
+			font-size: 16px;
+			vertical-align: middle;
+			margin-right: 2px;
+		}
+		.ref-label {
+			color: var(--text-color-secondary);
+			margin-right: 4px;
+		}
+		a {
+			color: var(--link-color);
+			font-weight: 500;
+		}
+	}
 }
 :deep(.md.main h1) {
 	display: none;

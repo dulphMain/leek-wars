@@ -40,6 +40,7 @@
 	"leek_theme": "Grote prei in het wit",
 	"logout": "Uitloggen",
 	"new_password": "Nieuw paswoord",
+	"notifs_popups": "Melding-popups",
 	"notifs_results": "Gevechtsresultaten in meldingen",
 	"old_password": "Oud Wachtwoord",
 	"misc_options": "Diverse opties",
@@ -66,5 +67,7 @@
 	"light": "Clair",
 	"dark": "Donker",
 	"auto": "Auto",
-	"theme": "Thema"
+	"theme": "Thema",
+	"modern_theme": "Modern thema (bèta)",
+	"xp_theme": "XP-thema"
 }

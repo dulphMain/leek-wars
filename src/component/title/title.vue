@@ -1,7 +1,7 @@
 <template lang="html">
 	<span class="title">
 		<span class="quote">«</span>
-		<img v-if="icon" :src="'/image/trophy/' + TROPHIES[icon - 1].code + '.svg'" :class="{notext: !noun && !adjective}">
+		<img v-if="icon && TROPHIES[icon - 1]" :src="'/image/trophy/' + TROPHIES[icon - 1].code + '.svg'" :class="{notext: !noun && !adjective}">
 		<span v-if="$i18n.locale === 'fr'">{{ word1 }} {{ word2 }}</span>
 		<span v-else>{{ word2 }} {{ word1 }}</span>
 		<span class="quote">»</span>
@@ -10,13 +10,13 @@
 
 <script lang="ts">
 	import { i18n } from '@/model/i18n'
-	import { TROPHIES } from '@/model/trophies'
+	import { LeekWars } from '@/model/leekwars'
 	import { Options, Prop, Vue } from 'vue-property-decorator'
 
 	@Options({ name: "lw-title" })
 	export default class LWTitle extends Vue {
 
-		TROPHIES = TROPHIES
+		TROPHIES = LeekWars.trophies
 		@Prop() title!: any
 
 		get icon() {
@@ -34,7 +34,8 @@
 
 		get word1() {
 			if (!this.noun) { return '' }
-			const trophy = TROPHIES[this.noun - 1]
+			const trophy = LeekWars.trophies[this.noun - 1]
+			if (!trophy) return ''
 			const gender_code = this.gender === 1 || ((trophy.noun_gender & 2) !== 0) ? '' : '_f'
 			let word = this.$t('trophy.' + trophy.code + gender_code) as string
 			if (i18n.locale === 'en' && this.adjective && word !== word.toUpperCase()) {
@@ -45,7 +46,7 @@
 
 		get word2() {
 			if (!this.adjective) { return '' }
-			const trophy = TROPHIES[this.adjective - 1]
+			const trophy = LeekWars.trophies[this.adjective - 1]
 			const gender_code = this.gender === 1 || ((trophy.adj_gender & 2) !== 0) ? '' : '_f'
 			let word = this.$t('trophy.' + trophy.code + gender_code) as string
 			if (i18n.locale === 'fr' && this.noun && word !== word.toUpperCase()) {

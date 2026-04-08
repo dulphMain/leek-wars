@@ -125,12 +125,12 @@
 			<panel v-for="category in categories" :key="category.id" :icon="LeekWars.trophyCategoriesIcons[category.id - 1]" :toggle="'trophies/toggle-' + category.id">
 				<template #title>{{ $t('trophy.category_' + category.name) }}</template>
 				<template #actions>
-					<div class="category-bar-wrapper">
-						<div v-if="category.id !== 6" class="stats">{{ $filters.number(points[category.id]) }} / {{ $filters.number(totalPoints[category.id]) }}</div>
+					<div v-if="category.id !== 6" class="category-bar-wrapper">
+						<div class="stats">{{ $filters.number(points[category.id] || 0) }} / {{ $filters.number(totalPoints[category.id] || 0) }}</div>
 						<div class="category-bar">
-							<div :style="{width: (loaded ? Math.floor(100 * progressions[category.id] / totals[category.id]) : 0) + '%'}" class="bar striked"></div>
+							<div :style="{width: (loaded && totals[category.id] ? Math.floor(100 * progressions[category.id] / totals[category.id]) : 0) + '%'}" class="bar striked"></div>
 						</div>
-						<div class="stats">{{ loaded ? Math.floor(100 * progressions[category.id] / totals[category.id]) : 0 }}%</div>
+						<div class="stats">{{ loaded && totals[category.id] ? Math.floor(100 * progressions[category.id] / totals[category.id]) : 0 }}%</div>
 					</div>
 				</template>
 				<template #content>
@@ -199,7 +199,7 @@ import { emitter } from '@/model/vue'
 			return this.$route.params.id || (this.$store.state.farmer ? this.$store.state.farmer.id : null)
 		}
 		get categories() {
-			return this.raw_categories.filter(c => (c.id !== 6 || this.progressions[6] !== 0) && (!this.loaded || !this.trophies[c.id] || this.trophies[c.id].length))
+			return this.raw_categories.filter(c => c.id !== 0 && (c.id !== 6 || this.progressions[6] !== 0) && (!this.loaded || !this.trophies[c.id] || this.trophies[c.id].length))
 		}
 		get trophies() {
 			const result: {[key: number]: any} = {}
@@ -216,7 +216,7 @@ import { emitter } from '@/model/vue'
 			return result
 		}
 		get sorted_trophies() {
-			const result = this.all_trophies.filter((t: any) => (t.category !== 6 || t.unlocked) && (!this.hide_unlocked || !t.unlocked))
+			const result = this.all_trophies.filter((t: any) => t.category !== 0 && (t.category !== 6 || t.unlocked) && (!this.hide_unlocked || !t.unlocked))
 			if (this.sort_by === 'rarity') {
 				result.sort((a: any, b: any) => a.rarity - b.rarity)
 			} else if (this.sort_by === 'points') {
@@ -228,19 +228,19 @@ import { emitter } from '@/model/vue'
 		}
 		get best_trophies() {
 			return this.all_trophies
-				.filter(t => t.unlocked)
+				.filter(t => t.unlocked && t.category !== 0)
 				.sort((a: any, b: any) => b.points - a.points)
 				.slice(0, 7)
 		}
 		get rarest_trophies() {
 			return this.all_trophies
-				.filter(t => t.unlocked)
+				.filter(t => t.unlocked && t.category !== 0)
 				.sort((a: any, b: any) => a.rarity - b.rarity)
 				.slice(0, 7)
 		}
 		get latest_trophies() {
 			return this.all_trophies
-				.filter(t => t.unlocked)
+				.filter(t => t.unlocked && t.category !== 0)
 				.sort((a: any, b: any) => b.date - a.date)
 				.slice(0, 7)
 		}
@@ -288,6 +288,7 @@ import { emitter } from '@/model/vue'
 					delete this.variables['trophy.farmer']
 					const trophy = data.trophies[t]
 					this.all_trophies = data.trophies
+					if (trophy.category === 0) { continue }
 					this.raw_trophies[trophy.category].push(trophy)
 					this.totals[trophy.category]++
 					this.totalPoints[trophy.category] += trophy.points
@@ -369,6 +370,7 @@ import { emitter } from '@/model/vue'
 			.avatar {
 				margin-right: 15px;
 				width: 100px;
+				height: 100px;
 			}
 			.header {
 				display: flex;

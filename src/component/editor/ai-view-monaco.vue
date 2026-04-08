@@ -31,14 +31,13 @@ import DocumentationConstant from '../documentation/documentation-constant.vue'
 import DocumentationFunction from '../documentation/documentation-function.vue'
 import Javadoc from './javadoc.vue'
 import { FUNCTIONS } from '@/model/functions';
-import { CONSTANTS } from '@/model/constants';
 import { createApp, markRaw, nextTick } from 'vue';
 import { create } from 'domain';
 import { i18n } from '@/model/i18n';
 import router from '@/router';
 import Code from '@/component/app/code.vue'
 
-@Options({ name: 'ai-view-monaco', components: {
+@Options({ name: 'ai-view-monaco', emits: ['focus'], components: {
 
 }})
 export default class AIViewMonaco extends Vue {
@@ -74,6 +73,7 @@ export default class AIViewMonaco extends Vue {
 			automaticLayout: true,
 			wordWrap: "on",
 			fontSize: this.fontSize,
+			fontFamily: LeekWars.xpTheme ? "'Perfect DOS VGA 437 Win', monospace" : undefined,
 			lineHeight: this.lineHeight,
 			theme: this.theme,
 			lineNumbers: this.lineNumbers ? 'on' : 'off',
@@ -90,7 +90,8 @@ export default class AIViewMonaco extends Vue {
 			scrollPredominantAxis: this.lineNumbers,
 			minimap: {
 				enabled: this.lineNumbers,
-			}
+			},
+			accessibilitySupport: 'off', // Workaround Firefox : sélection backward + remplacement (#2802)
 		}, {
 			storageService: {
 				get() {},
@@ -195,7 +196,7 @@ export default class AIViewMonaco extends Vue {
 						suggestionWidget.value._details._placeAtAnchor(suggestionWidget.value._details._anchorBox, { width: 500, height: doc.$el.clientHeight + 10 }, true)
 					})
 				}
-				const constant = CONSTANTS.find(c => c.name === docs.innerText)
+				const constant = LeekWars.constants.find(c => c.name === docs.innerText)
 				if (constant) {
 					const doc = createApp(DocumentationConstant, { constant })
 						.mixin({ data() { return { LeekWars } }})
@@ -214,6 +215,7 @@ export default class AIViewMonaco extends Vue {
 				const symbol = fileSystem.symbols[docs.innerText]
 				if (symbol) {
 					const doc = createApp(Javadoc, { javadoc: symbol.javadoc, keyword: symbol })
+						.use(i18n)
 						.directive('code', code)
 						.directive('dochash', dochash)
 						.mount(element)
@@ -231,6 +233,7 @@ export default class AIViewMonaco extends Vue {
 			// console.log("Show hover", hoverController)
 			const widget = hoverController._contentWidget.widget._resizableNode
 			const body = widget.domNode.querySelector('.hover-row-contents')
+			if (!body) return
 			body.querySelectorAll('.lw').forEach((e: any) => {
 				e.remove()
 			})
@@ -256,7 +259,7 @@ export default class AIViewMonaco extends Vue {
 					hoverController._contentWidget.widget._resize({ width: 500, height: doc.$el.clientHeight + 40 })
 				})
 			}
-			const constant = CONSTANTS.find(c => c.name === firstRow.innerText)
+			const constant = LeekWars.constants.find(c => c.name === firstRow.innerText)
 			if (constant) {
 				firstRow.style.display = 'none'
 				const doc = createApp(DocumentationConstant, { constant })
@@ -276,6 +279,7 @@ export default class AIViewMonaco extends Vue {
 			if (symbol) {
 				firstRow.style.display = 'none'
 				const doc = createApp(Javadoc, { javadoc: symbol.javadoc, keyword: symbol })
+					.use(i18n)
 					.directive('code', code)
 					.directive('dochash', dochash)
 					.mount(element)
@@ -360,33 +364,39 @@ export default class AIViewMonaco extends Vue {
 	setAnalyzerTimeout() {
 		clearTimeout(this.analyzerTimeout)
 		this.analyzerTimeout = setTimeout(() => {
+			const ai = this.ai  // Capture before any async/navigation
 
 			this.analyzing = true
-			this.ai.code = this.editor.getValue()
-			this.ai.analyze()
+			ai.code = this.editor.getValue()
+			ai.analyze()
 
-			// DISABLE AUTO ANALYZE
-			// if (true) return;
+			// Scan TODOs immediately (client-side, no server needed)
+			analyzer.updateTodos(ai)
 
-			analyzer.analyze(this.ai, this.ai.code).then((result) => {
+			analyzer.analyze(ai, ai.code).then((result) => {
 				// console.log("analyze", result)
 				this.analyzing = false
+				if (!result) return
 
 				for (const entrypoint in result) {
 					const entrypoint_id = parseInt(entrypoint, 10)
-					const ai = fileSystem.ais[entrypoint_id]
+					const entrypointAi = fileSystem.ais[entrypoint_id]
+					if (!entrypointAi) continue
 
 					// Valid?
 					let valid = true
 					for (const problem of result[entrypoint]) {
 						if (problem[0] === 0) { valid = false; break }
 					}
-					ai.valid = valid
-					analyzer.handleProblems(ai, result[entrypoint])
+					entrypointAi.valid = valid
+					analyzer.handleProblems(entrypointAi, result[entrypoint])
 				}
+				analyzer.updateTodos(ai)
 				analyzer.updateCount()
+			}).catch(() => {
+				this.analyzing = false
 			})
-		}, 1000)
+		}, 500)
 	}
 
 	public save() {

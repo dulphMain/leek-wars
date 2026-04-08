@@ -8,8 +8,8 @@
 			<div class="actions">
 				<slot name="actions"></slot>
 				<div v-if="toggle" class="button text expand" @click="expanded = !expanded">
-					<v-icon v-if="expanded">mdi-chevron-up</v-icon>
-					<v-icon v-else>mdi-chevron-down</v-icon>
+					<v-icon v-if="expanded">{{ toggleInvert ? 'mdi-chevron-down' : 'mdi-chevron-up' }}</v-icon>
+					<v-icon v-else>{{ toggleInvert ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
 				</div>
 			</div>
 		</div>
@@ -25,11 +25,12 @@
 <script lang="ts">
 	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
 
-	@Options({ name: 'panel' })
+	@Options({ name: 'panel', emits: ['update:expanded'] })
 	export default class Panel extends Vue {
 		@Prop() icon!: string
 		@Prop() title!: string
 		@Prop() toggle!: string
+		@Prop({ default: false }) toggleInvert!: boolean
 		expanded: boolean = true
 
 		get hasTitle() {
@@ -45,6 +46,7 @@
 		update() {
 			if (this.toggle) {
 				localStorage.setItem(this.toggle, '' + this.expanded)
+				this.$emit('update:expanded', this.expanded)
 			}
 		}
 	}
@@ -85,7 +87,7 @@
 		}
 		h2 {
 			color: #eee;
-			font-size: 18px;
+			font-size: 17px;
 			display: inline-flex;
 			align-items: center;
 			height: 36px;
@@ -114,7 +116,7 @@
 	.panel.first > .header {
 		border-top-left-radius: 0px;
 	}
-	
+
 	.panel.first > .header h2 {
 		border-top-left-radius: 0px;
 	}

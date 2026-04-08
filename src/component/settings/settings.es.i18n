@@ -40,6 +40,7 @@
 	"leek_theme": "Puerros grandes en blanco",
 	"logout": "Cerrar sesión",
 	"new_password": "Nueva contraseña",
+	"notifs_popups": "Popups de notificaciones",
 	"notifs_results": "Resultados de batalla en notificaciones",
 	"old_password": "Antigua contraseña",
 	"misc_options": "Varias opciones",
@@ -63,8 +64,10 @@
 	"verify_pro5": "Batallas reales",
 	"Vérifier": "Verificar Cuenta",
 	"allow_github": "Permitir la conexión a través de GitHub",
-	"light": "Clair",
+	"light": "Claro",
 	"dark": "Oscuro",
 	"auto": "Auto",
-	"theme": "Tema"
+	"theme": "Tema",
+	"modern_theme": "Tema moderno (beta)",
+	"xp_theme": "Tema XP"
 }

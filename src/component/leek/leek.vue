@@ -105,12 +105,7 @@
 				</v-tooltip>
 
 				<div class="talent-wrapper">
-					<v-tooltip>
-						<template #activator="{ props }">
-							<talent :id="leek ? leek.id : 0" :talent="leek ? leek.talent : '...'" category="leek" v-bind="props" />
-						</template>
-						{{ $t('talent') }}
-					</v-tooltip>
+					<talent :id="leek ? leek.id : 0" :talent="leek ? leek.talent : '...'" :max_talent="leek?.max_talent" :label="$t('talent')" category="leek" />
 					<v-tooltip v-if="leek">
 						<template #activator="{ props }">
 							<div class="talent-more" v-bind="props">({{ leek.talent_more >= 0 ? '+' + leek.talent_more : leek.talent_more }})</div>
@@ -166,7 +161,7 @@
 							<span class="dida-element">
 								<v-btn v-if="(leek.capital > 0 || LeekWars.didactitial_step === 1) && $store.state.farmer.equipment_enabled" color="primary" @click="capitalDialog = true" :class="{bouncing: !capitalDialog && LeekWars.didactitial_step === 1}">{{ $t('main.n_capital', [leek.capital]) }}</v-btn>
 								<span v-if="LeekWars.didactitial_step === 1" class="dida-hint">
-									<i18n-t v-if="LeekWars.didactitial_step === 1" class="bubble" keypath="main.dida_2">
+									<i18n-t v-if="LeekWars.didactitial_step === 1" tag="div" class="bubble" keypath="main.dida_2">
 										<template #life><img height=18 src="/image/charac/life.png"></template>
 										<template #strength><img height=18 src="/image/charac/strength.png"></template>
 									</i18n-t>
@@ -327,19 +322,15 @@
 						{{ $t('rename_leek') }}
 					</div>
 				</template>
-				<v-tooltip v-if="leek && my_leek && leek.level >= 20 && $store.state.farmer?.br_enabled" @update:model-value="loadBRRange">
+				<v-tooltip v-if="leek && my_leek && leek.level >= 20 && $store.state.farmer?.br_enabled">
 					<template #activator="{ props }">
-						<div class="tab" @click="registerAutoBr" v-bind="props">
+						<div class="tab" @click="registerAutoArena" v-bind="props">
 							<v-icon>mdi-trophy</v-icon>
-							<span v-if="!leek.auto_br" class="register">{{ $t('register_to_br') }}</span>
+							<span v-if="!leek.auto_br" class="register">{{ $t('register_to_arena') }}</span>
 							<span v-else class="unregister">{{ $t('unregister') }}</span>
 						</div>
 					</template>
-					{{ $t('br_time') }}
-					<i18n-t v-if="brRange" tag="div" keypath="main.level_x_to_y">
-						<template #min><b>{{ brRange.min }}</b></template>
-						<template #max><b>{{ brRange.max }}</b></template>
-					</i18n-t>
+					{{ $t('arena_time') }}
 				</v-tooltip>
 				<template v-if="leek && leek.level > 1 && $store.state.connected">
 					<v-tooltip>
@@ -743,6 +734,7 @@
 <script lang="ts">
 	import { locale } from '@/locale'
 	import { AI } from '@/model/ai'
+	import { Arena } from '@/model/arena'
 	import { Chip } from '@/model/chip'
 	import { Options } from '@/model/component'
 	import { Hat } from '@/model/hat'
@@ -807,7 +799,7 @@
 		draggedWeaponLocation: string | null = null
 		xp_bar: number = 0
 		renameDialog: boolean = false
-		rename_price_habs: number = 2000000
+		rename_price_habs: number = 10000000
 		rename_price_crystals: number = 200
 		renameName: string = ''
 		renameSuccess: boolean = false
@@ -835,8 +827,7 @@
 		skinPotionDialog: boolean = false
 		tournamentRangeLoading: boolean = false
 		tournamentRange: any = null
-		brRangeLoading: boolean = false
-		brRange: any = null
+		// brRange removed - arenas no longer have level ranges
 		request: any = null
 		MAX_COMPONENTS = 8
 
@@ -965,8 +956,6 @@
 			this.leek = null
 			this.tournamentRange = null
 			this.tournamentRangeLoading = false
-			this.brRange = null
-			this.brRangeLoading = false
 			this.error = false
 			if (!this.id) { return }
 			const method = this.my_leek ? 'leek/get-private/' + this.id : 'leek/get/' + this.id
@@ -1071,7 +1060,7 @@
 			}
 		}
 
-		registerAutoBr() {
+		registerAutoArena() {
 			if (this.leek) {
 				if (this.leek.auto_br) {
 					this.leek.auto_br = false
@@ -1511,11 +1500,6 @@
 			LeekWars.get('tournament/range-leek/' + this.leek.level).then(d => this.tournamentRange = d)
 		}
 
-		loadBRRange() {
-			if (!this.leek || this.brRange || this.brRangeLoading) { return }
-			this.brRangeLoading = true
-			LeekWars.get('tournament/range-br/' + this.leek.level).then(d => this.brRange = d)
-		}
 
 		copyAsTest() {
 			if (!this.leek) { return }
@@ -1527,7 +1511,8 @@
 					name: this.leek.name,
 					level: this.leek.level,
 					weapons: this.leek.weapons.map(w => w.template),
-					chips: this.leek.chips.map(c => c.template)
+					chips: this.leek.chips.map(c => c.template),
+					skin: this.leek.skin
 				})
 				for (const charac of LeekWars.characteristics) {
 					(newLeek as any)[charac] = (this.leek as any)['total_' + charac]

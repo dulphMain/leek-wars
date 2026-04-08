@@ -5,5 +5,11 @@
 	"name": "Nome",
 	"level": "Nível",
 	"date": "Data",
-	"rarity": "Escassez"
+	"rarity": "Raridade",
+	"type": "Tipo",
+	"no_group": "Sem grupo",
+	"size": "Tamanho",
+	"size_small": "Pequeno",
+	"size_normal": "Normal",
+	"size_large": "Grande"
 }

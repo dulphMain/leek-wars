@@ -1,5 +1,5 @@
 import { FUNCTIONS } from '@/model/functions'
-import { CONSTANTS } from '@/model/constants'
+import { LeekWars } from '@/model/leekwars'
 
 export default {
 
@@ -7,11 +7,11 @@ export default {
 	tokenPostfix: '.js',
 
 	keywords: [
-		'break', 'class', 'continue',
-		'constructor', 'do', 'else',
+		'break', 'case', 'class', 'continue',
+		'constructor', 'default', 'do', 'else',
 		'extends', 'for', 'function',
 		'if', 'in', 'new',
-		'return', 'super', 'this',
+		'return', 'super', 'switch', 'this',
 		'var', 'void', 'while',
 		'private', 'public', 'protected', 'static',
 		'not', 'global', 'and', 'or', 'xor', 'instanceof',
@@ -22,7 +22,7 @@ export default {
 		'true', 'false', 'null', 'NaN', 'Infinity'
 	],
 
-	lsConstants: CONSTANTS.map(c => c.name),
+	lsConstants: LeekWars.constants.map(c => c.name),
 	lsFunctions: FUNCTIONS.filter(f => !f.deprecated).map(f => f.name),
 	lsFunctionsDeprecated: FUNCTIONS.filter(f => f.deprecated).map(f => f.name),
 

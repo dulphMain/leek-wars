@@ -100,5 +100,21 @@
 	"title_37": "{0} memberimu {1} jilbab",
 	"message_37": "Lihat pasar",
 	"title_38": "{0} memberimu {1} perkelahian",
-	"message_38": "Pergi ke kebun sayur"
+	"message_38": "Pergi ke kebun sayur",
+	"title_39": "{0} memberi suara positif pada pesan Anda di {1}",
+	"message_39": "Lihat pesan",
+	"title_40": "{0} memberi suara negatif pada pesan Anda di {1}",
+	"message_40": "Lihat pesan",
+	"title_41": "Tim {0} mengundang Anda untuk bergabung!",
+	"message_41": "Lihat halaman tim",
+	"title_42": "{0} menerima undangan Anda!",
+	"message_42": "Lihat halaman tim",
+	"title_43": "{0} berpartisipasi dalam Battle Royale!",
+	"message_43": "Lihat pertarungannya",
+	"title_44": "{0} berpartisipasi dalam Perang!",
+	"message_44": "Lihat Perang",
+	"title_45": "{0} berpartisipasi dalam Perburuan Peti!",
+	"message_45": "Lihat Perburuan Peti",
+	"title_46": "{0} berpartisipasi dalam pertarungan Kolosus!",
+	"message_46": "Lihat pertarungan Kolosus"
 }

@@ -5,7 +5,9 @@
 				<avatar :farmer="message.farmer" />
 			</rich-tooltip-farmer>
 		</router-link>
-		<img v-else class="avatar" src="/image/favicon.png">
+		<div v-else class="avatar-wrapper">
+			<img class="avatar" src="/image/favicon.png">
+		</div>
 		<div class="bubble" :class="{large: large}">
 
 			<router-link v-if="message.farmer.id !== 0" :to="'/farmer/' + message.farmer.id" class="author">
@@ -38,7 +40,7 @@
 			</div>
 		</div>
 
-		<div v-if="$store.state.farmer.verified" v-ripple class="add" @click="$emit('emoji', $event)">
+		<div v-if="$store.state.farmer?.verified" v-ripple class="add" @click="$emit('emoji', $event)">
 			<v-icon>mdi-emoticon-outline</v-icon> +
 		</div>
 	</div>
@@ -52,7 +54,7 @@
 	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 	import ChatMessageText from './chat-message-text.vue'
 
-	@Options({ name: 'ChatMessage', emits: ['scroll'], components: { RichTooltipFarmer, ChatMessageText } })
+	@Options({ name: 'ChatMessage', emits: ['scroll', 'emoji'], components: { RichTooltipFarmer, ChatMessageText } })
 	export default class ChatMessageComponent extends Vue {
 
 		@Prop({ required: true }) message!: ChatMessage

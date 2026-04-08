@@ -3,7 +3,7 @@
 		<div class="header-left">
 			<router-link to="/">
 				<div class="logo-wrapper">
-					<img class="logo" src="/image/leekwars.svg">
+					<img class="logo" :src="LeekWars.xpTheme ? '/image/xp_logo.png' : '/image/leekwars.svg'">
 					<span v-if="LeekWars.LOCAL" class="local-label">local</span>
 					<span v-else-if="LeekWars.DEV" class="dev-label">dev</span>
 					<span v-if="env.BETA" class="beta-label">Bêta</span>
@@ -94,7 +94,21 @@
 					</router-link>
 				</div>
 				<div class="button-wrapper">
-					<router-link to="/garden">
+					<v-tooltip v-if="$store.state.farmer?.bought_fights || $store.state.farmer?.team_fights" bottom>
+						<template #activator="{ props }">
+							<router-link to="/garden" v-bind="props">
+								<div class="header-button fights-button">
+									<span class="farmer-fights text">{{ $filters.number($store.state.farmer.fights) }}</span>
+									<span v-if="$store.state.farmer?.team_fights" class="farmer-fights text">+ {{ $filters.number($store.state.farmer.team_fights) }}</span>
+									<img src="/image/icon/garden.png">
+								</div>
+							</router-link>
+						</template>
+						{{ $t('main.free_fights') }} : {{ $filters.number($store.state.farmer.fights - $store.state.farmer.bought_fights) }}<br>
+						{{ $t('main.paid_fights') }} : {{ $filters.number($store.state.farmer.bought_fights) }}<template v-if="$store.state.farmer.team_fights"><br>
+						{{ $t('main.team') }} : {{ $filters.number($store.state.farmer.team_fights) }}</template>
+					</v-tooltip>
+					<router-link v-else to="/garden">
 						<div class="header-button fights-button">
 							<span v-if="$store.state.farmer" class="farmer-fights text">{{ $filters.number($store.state.farmer.fights) }}</span>
 							<span v-if="$store.state.farmer?.team_fights" class="farmer-fights text">+ {{ $filters.number($store.state.farmer.team_fights) }}</span>
@@ -150,6 +164,14 @@
 							<avatar :farmer="$store.state.farmer" />
 						</div>
 					</router-link>
+					<v-menu v-model="accountMenu" :width="300" :close-on-content-click="false" location="bottom end" scrim>
+						<template #activator="{ props }">
+							<div v-bind="props" class="header-button merge-left">
+								<v-icon>mdi-chevron-down</v-icon>
+							</div>
+						</template>
+						<account-switcher @close="accountMenu = false" />
+					</v-menu>
 				</div>
 			</div>
 		</div>
@@ -162,9 +184,11 @@
 	import { defineAsyncComponent } from 'vue'
 	import { Options, Vue } from 'vue-property-decorator'
 	const ConversationElement = defineAsyncComponent(() => import('@/component/messages/conversation.vue'))
+	const AccountSwitcher = defineAsyncComponent(() => import('@/component/app/account-switcher.vue'))
 
-	@Options({ name: 'lw-header', components: { 'conversation': ConversationElement } })
+	@Options({ name: 'lw-header', components: { 'conversation': ConversationElement, 'account-switcher': AccountSwitcher } })
 	export default class Header extends Vue {
+		accountMenu = false
 
 		readNotifications() {
 			if (this.$store.state.unreadNotifications) {
@@ -188,7 +212,7 @@
 		height: 42px;
 		width: 42px;
 		margin-left: 8px;
-		margin-right: -4px;
+		margin-right: 0;
 	}
 	.header {
 		display: flex;
@@ -221,6 +245,7 @@
 	}
 	.header .button-wrapper {
 		flex-grow: 1;
+		white-space: nowrap;
 	}
 	.header .header-signin {
 		padding-bottom: 5px;
@@ -247,10 +272,15 @@
 			color: #eee;
 			font-size: 26px;
 		}
+		&.merge-left {
+			margin-left: 0;
+			&:before {
+				display: none;
+			}
+		}
 	}
 	.header-button i {
 		vertical-align: text-bottom;
-		padding-right: 3px;
 	}
 	.header .button-wrapper:first-child .header-button {
 		margin-left: 0;
@@ -339,6 +369,8 @@
 	}
 	.dialog {
 		background: var(--background);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+		border-radius: 4px;
 	}
 	.dialog-items {
 		width: 400px;
@@ -407,6 +439,7 @@
 	}
 	.beta {
 		background: white;
+		color: #333;
 		padding: 2px 4px;
 		border: 1px solid #aaa;
 		border-radius: 4px;

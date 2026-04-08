@@ -1,5 +1,5 @@
 <template>
-	<div id="app" :class="{ connected: $store.state.connected, app: LeekWars.mobile, 'social-collapsed': LeekWars.socialCollapsed, 'menu-expanded': LeekWars.menuExpanded, sfw: LeekWars.sfw, dark: LeekWars.darkMode, 'menu-collapsed': !LeekWars.mobile && LeekWars.menuCollapsed, beta: env.BETA, lightbar: LeekWars.lightBar }" data-app="true" @mousemove="mousemove">
+	<div id="app" :class="{ connected: $store.state.connected, app: LeekWars.mobile, 'social-collapsed': LeekWars.socialCollapsed, 'menu-expanded': LeekWars.menuExpanded, sfw: LeekWars.sfw, xp: LeekWars.xpTheme, dark: LeekWars.darkMode, 'menu-collapsed': !LeekWars.mobile && LeekWars.menuCollapsed, beta: env.BETA, lightbar: LeekWars.lightBar }" data-app="true" @mousemove="mousemove">
 				<div :class="{visible: LeekWars.dark > 0}" :style="{opacity: LeekWars.dark}" class="dark-shadow" @click="darkClick"></div>
 
 				<div class="requests">{{ LeekWars.requests }} <v-btn size="x-small" @click="LeekWars.requests = 0">reset</v-btn></div>
@@ -143,7 +143,26 @@
 					</div>
 				</popup>
 				-->
-				<v-dialog v-if="docEverywhere" v-model="docEverywhereModel" content-class="doc" :max-width="1400">
+				<popup v-model="aprilFoolsDialog" :width="500">
+					<template #title><v-icon>mdi-shimmer</v-icon> {{ $t('main.april_fools_title') }}</template>
+					<div class="april-fools">
+						<div>{{ $t('main.april_fools_message') }}</div>
+						<div class="actions">
+							<v-btn @click="aprilFoolsAccept">{{ $t('main.april_fools_yes') }}</v-btn>
+							<v-btn variant="text" @click="aprilFoolsDialog = false">{{ $t('main.april_fools_no') }}</v-btn>
+						</div>
+					</div>
+				</popup>
+
+				<popup v-model="loggedOutOtherTab" :width="500">
+				<template #title>
+					<v-icon>mdi-logout</v-icon>
+					{{ $t('main.disconnected') }}
+				</template>
+				<div>{{ $t('main.logged_out_other_tab') }}</div>
+			</popup>
+
+			<v-dialog v-if="docEverywhere" v-model="docEverywhereModel" content-class="doc" :max-width="1400">
 					<documentation ref="doc" :popup="true" />
 				</v-dialog>
 			</div>
@@ -160,6 +179,7 @@
 	const Squares = defineAsyncComponent(() => import('@/component/app/squares.vue'))
 	const ChangelogVersion = defineAsyncComponent(() => import('@/component/changelog/changelog-version.vue'))
 	import { locale } from '@/locale'
+	import { i18n } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
 	import { SocketMessage } from '@/model/socket'
 	import { Options, Vue, Watch } from 'vue-property-decorator'
@@ -188,6 +208,8 @@
 		mouseY = 0
 		cloverSpeed = 200
 		verifyMessage = true
+		loggedOutOtherTab = false
+		aprilFoolsDialog = false
 
 		@Watch('LeekWars.darkMode', {immediate: true})
 		updateDarkMode() {
@@ -206,10 +228,14 @@
 						this.$store.commit('didactitiel-seen')
 					})
 				}
+				if (localStorage.getItem('changelog_version') !== LeekWars.normal_version) {
+					this.changelogShow()
+				}
+				if (LeekWars.aprilFools && !localStorage.getItem('april-fools-2026')) {
+					localStorage.setItem('april-fools-2026', 'true')
+					this.aprilFoolsDialog = true
+				}
 			})
-			if (this.$store.state.connected && localStorage.getItem('changelog_version') !== LeekWars.normal_version) {
-				this.changelogShow()
-			}
 			emitter.on('keyup', (event: KeyboardEvent) => {
 				if (event.keyCode === 72 && event.altKey && event.ctrlKey) {
 					this.docEverywhere = true
@@ -240,10 +266,30 @@
 				this.docEverywhereModel = false
 			})
 
+			window.addEventListener('storage', (e: StorageEvent) => {
+				if (e.key === 'logout' && e.newValue !== null && this.$store.state.connected) {
+					this.$store.commit('reset')
+					LeekWars.socket.disconnect()
+					this.$router.push('/')
+					nextTick(() => {
+						this.loggedOutOtherTab = true
+					})
+				}
+				if (e.key === 'connected' && e.newValue === 'true' && !this.$store.state.connected) {
+					window.location.reload()
+				}
+			})
+
 			// if (this.$store.state.connected && !localStorage.getItem('annonce/boss-poll')) {
 			// 	this.annonce = true
 			// 	localStorage.setItem('annonce/boss-poll', 'true')
 			// }
+
+			const toast = new URLSearchParams(window.location.search).get('toast')
+			if (toast) {
+				LeekWars.toast((i18n as any).t('main.account_' + toast))
+				history.replaceState(null, '', window.location.pathname)
+			}
 		}
 		changelogShow() {
 			LeekWars.get('changelog/get-last/' + this.$i18n.locale).then(data => {
@@ -252,6 +298,13 @@
 				localStorage.setItem('changelog_version', LeekWars.normal_version)
 				localStorage.setItem('changelog_forum_topic', data.changelog.forum_topic)
 			})
+		}
+		aprilFoolsAccept() {
+			this.aprilFoolsDialog = false
+			LeekWars.themeSetting = 'xp'
+			localStorage.setItem('theme', 'xp')
+			LeekWars.xpTheme = true
+			LeekWars.darkMode = false
 		}
 		darkClick() {
 			LeekWars.menuExpanded = false
@@ -567,6 +620,12 @@
 		.big-leeks {
 			display: none;
 		}
+	}
+	.april-fools .actions {
+		display: flex;
+		gap: 10px;
+		justify-content: center;
+		margin-top: 15px;
 	}
 	.annonce {
 		.avatar {

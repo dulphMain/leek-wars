@@ -7,20 +7,36 @@ class ForumCategory {
 	public topics!: ForumTopic[] | null
 }
 
+enum ForumTopicStatus {
+	OPEN = 0,
+	RESOLVED = 1,
+	NOT_REPRODUCED = 2,
+	NOT_PLANNED = 3,
+	NOT_A_BUG = 4,
+	OBSOLETE = 5,
+}
+
 class ForumTopic {
 	public id!: number
 	public name!: string
 	public messages!: ForumMessage[] | null
-	public resolved!: boolean
+	public status!: ForumTopicStatus
 	public locked!: boolean
 	public pinned!: boolean
 	public subscribed!: boolean
+	public acknowledged!: boolean
 	public issue!: number
 	public private_issue!: number
+	public release!: number | null
+	public hidden!: boolean | null
+	public priority!: number
+	public views!: number
+	public last_message_date!: number
 }
 
 class ForumMessage {
 	public id!: number
+	public date!: number
 	public message!: string
 	public html!: string | null
 	public votes_up!: number
@@ -32,4 +48,4 @@ class ForumMessage {
 	public writer!: Farmer
 }
 
-export { ForumCategory, ForumTopic, ForumMessage }
+export { ForumCategory, ForumTopic, ForumMessage, ForumTopicStatus }

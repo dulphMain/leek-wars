@@ -5,5 +5,11 @@
 	"name": "이름",
 	"level": "수준",
 	"date": "날짜",
-	"rarity": "부족"
+	"rarity": "부족",
+	"type": "유형",
+	"no_group": "그룹 없음",
+	"size": "크기",
+	"size_small": "작게",
+	"size_normal": "보통",
+	"size_large": "크게"
 }

@@ -5,7 +5,7 @@
 		</div>
 		<panel class="first">
 			<template #content>
-				<div class="admin">
+				<div class="admin-grid">
 					<router-link to="/admin/servers">
 						<div v-ripple class="section card">
 							<v-icon>mdi-server</v-icon>
@@ -18,12 +18,26 @@
 							<h2 v-if="$store.state.farmer">Erreurs ({{ $store.state.farmer.errors }})</h2>
 						</div>
 					</router-link>
-					<a href="/memcached.php" target="_blank" rel="noopener">
+					<a href="/apcu.php" target="_blank" rel="noopener">
 						<div v-ripple class="section card">
 							<v-icon>mdi-memory</v-icon>
-							<h2>Memcached <v-icon>mdi-open-in-new</v-icon></h2>
+							<h2>APCu <v-icon>mdi-open-in-new</v-icon></h2>
 						</div>
 					</a>
+					<a href="https://rediscommander.leekwars.com" target="_blank" rel="noopener">
+						<div v-ripple class="section card">
+							<v-icon>mdi-memory</v-icon>
+							<h2>Redis <v-icon>mdi-open-in-new</v-icon></h2>
+						</div>
+					</a>
+					<div v-ripple class="section card" @click="refreshGameData">
+						<v-icon>mdi-database-refresh</v-icon>
+						<h2>Refresh game data</h2>
+					</div>
+					<div v-ripple class="section card" @click="refreshEncycloLinks">
+						<v-icon>{{ encycloLinksLoading ? 'mdi-loading mdi-spin' : 'mdi-book-sync' }}</v-icon>
+						<h2>Refresh encyclo links</h2>
+					</div>
 					<router-link to="/admin/services">
 						<div v-ripple class="section card">
 							<v-icon>mdi-api</v-icon>
@@ -84,6 +98,12 @@
 							<h2>Schémas</h2>
 						</div>
 					</router-link>
+					<router-link to="/admin/tournaments">
+						<div v-ripple class="section card">
+							<v-icon>mdi-sword-cross</v-icon>
+							<h2>Tournois & BR</h2>
+						</div>
+					</router-link>
 					<router-link to="/admin/newsletters">
 						<div v-ripple class="section card">
 							<v-icon>mdi-email-newsletter</v-icon>
@@ -94,6 +114,18 @@
 						<div v-ripple class="section card">
 							<v-icon>mdi-email-outline</v-icon>
 							<h2>Webmail <v-icon>mdi-open-in-new</v-icon></h2>
+						</div>
+					</a>
+					<a target="_blank" rel="noopener" href="https://grafana.leekwars.com/d/JfN9Xkh4z/leek-wars?orgId=1&amp;from=now-24h&amp;to=now&amp;timezone=browser&amp;refresh=5s">
+						<div v-ripple class="section card">
+							<v-icon>mdi-chart-line</v-icon>
+							<h2>Grafana <v-icon>mdi-open-in-new</v-icon></h2>
+						</div>
+					</a>
+					<a target="_blank" rel="noopener" href="https://umami.leekwars.com/websites/493ffc4a-c7bd-45b1-b2f2-d61af7310749">
+						<div v-ripple class="section card">
+							<v-icon>mdi-chart-bar</v-icon>
+							<h2>Umami <v-icon>mdi-open-in-new</v-icon></h2>
 						</div>
 					</a>
 					<a target="_blank" rel="noopener" href="https://www.paypal.com/webapps/business/">
@@ -113,22 +145,24 @@
 		</panel>
 		<panel class="last">
 			<template #content>
-				<div class="admin">
-					<v-btn @click="square">Square notif image</v-btn>
-					<v-btn @click="squareIcon">Square notif icon</v-btn>
-					<v-btn @click="squareTrophy">Square notif trophy</v-btn>
-					<v-btn @click="squareTournament">Notif tournament</v-btn>
-					<v-btn @click="squareMP">Square MP</v-btn>
-					<v-btn @click="show_didactitiel">Didactitiel</v-btn>
-					<v-btn @click="showLevelDialog(2)">Level Dialog 2</v-btn>
-					<v-btn @click="showLevelDialog(20)">Level Dialog 20</v-btn>
-					<v-btn @click="showLevelDialog(50)">Level Dialog 50</v-btn>
-					<v-btn @click="showLevelDialog(97)">Level Dialog 97</v-btn>
-					<v-btn @click="showLevelDialog(200)">Level Dialog 200</v-btn>
-					<v-btn @click="showLevelDialog(211)">Level Dialog 211</v-btn>
-					<v-btn @click="showLevelDialog(301)">Level Dialog 301</v-btn>
-					<v-btn @click="sendError()">Send JS error</v-btn>
-					<v-btn @click="testPush()">Test push notif</v-btn>
+				<div class="admin-grid">
+					<v-btn prepend-icon="mdi-image" @click="square">Square notif image</v-btn>
+					<v-btn prepend-icon="mdi-star" @click="squareIcon">Square notif icon</v-btn>
+					<v-btn prepend-icon="mdi-trophy" @click="squareTrophy">Square notif trophy</v-btn>
+					<v-btn prepend-icon="mdi-sword-cross" @click="squareTournament">Notif tournament</v-btn>
+					<v-btn prepend-icon="mdi-message" @click="squareMP">Square MP</v-btn>
+					<v-btn prepend-icon="mdi-school" @click="show_didactitiel">Didactitiel</v-btn>
+					<v-btn prepend-icon="mdi-arrow-up-bold" @click="showLevelDialog(2)">Level 2</v-btn>
+					<v-btn prepend-icon="mdi-arrow-up-bold" @click="showLevelDialog(20)">Level 20</v-btn>
+					<v-btn prepend-icon="mdi-arrow-up-bold" @click="showLevelDialog(50)">Level 50</v-btn>
+					<v-btn prepend-icon="mdi-arrow-up-bold" @click="showLevelDialog(97)">Level 97</v-btn>
+					<v-btn prepend-icon="mdi-arrow-up-bold" @click="showLevelDialog(200)">Level 200</v-btn>
+					<v-btn prepend-icon="mdi-arrow-up-bold" @click="showLevelDialog(211)">Level 211</v-btn>
+					<v-btn prepend-icon="mdi-arrow-up-bold" @click="showLevelDialog(301)">Level 301</v-btn>
+					<v-btn prepend-icon="mdi-bug" @click="sendError()">Send JS error</v-btn>
+					<v-btn prepend-icon="mdi-bell-ring" @click="testPush()">Test push notif</v-btn>
+					<v-btn prepend-icon="mdi-email-fast" @click="testMailSend()">Test email</v-btn>
+					<v-btn prepend-icon="mdi-sword-cross" @click="arenaRegisterRandom()">Random en Arène</v-btn>
 				</div>
 			</template>
 		</panel>
@@ -144,7 +178,6 @@
 	import { i18n } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
 	import { NotificationBuilder } from '@/model/notification-builder'
-	import { TROPHIES } from '@/model/trophies'
 	import { defineAsyncComponent, nextTick } from 'vue'
 	import { Options, Vue } from 'vue-property-decorator'
 	const Didactitiel = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/didactitiel/didactitiel.${locale}.i18n`))
@@ -157,10 +190,19 @@
 		leek: any = null
 		levelPopup: boolean = false
 		levelPopupData: any = null
+		encycloLinksLoading: boolean = false
 
 		created() {
 			if (!this.$store.getters.admin) this.$router.replace('/')
 			LeekWars.setTitle('Admin')
+		}
+
+		refreshGameData() {
+			LeekWars.post('data/refresh').then(() => {
+				LeekWars.toast("Game data refreshed!")
+			}).error(() => {
+				LeekWars.toast("Failed to refresh game data")
+			})
 		}
 
 		square() {
@@ -177,7 +219,7 @@
 		}
 
 		squareTrophy() {
-			const trophy = TROPHIES[Math.random() * TROPHIES.length | 0]
+			const trophy = LeekWars.trophies[Math.random() * LeekWars.trophies.length | 0]
 			const data = { date: 1482046364, id: 32098724, parameters: [trophy.id], read: true, type: 11 }
 			const notification = NotificationBuilder.build(data)
 			LeekWars.squares.addFromNotification(notification)
@@ -234,10 +276,40 @@
 			})
 		}
 
+		testMailSend() {
+			LeekWars.post('notification/test-mail-send').then((data: any) => {
+				LeekWars.toast("Email envoyé à " + data.email)
+			}).error((error: any) => {
+				LeekWars.toast("Erreur : " + error.error)
+			})
+		}
+
+		arenaRegisterRandom() {
+			LeekWars.post('admin/arena-register-random').then((data: any) => {
+				const modes = ['BR', 'Guerre', 'Chasse', 'Colosse']
+				const pref = data.preference === -1 ? 'Aucune' : modes[data.preference]
+				LeekWars.toast(`${data.farmer} / ${data.leek} inscrit (pref: ${pref})`)
+			}).error((error: any) => {
+				LeekWars.toast("Erreur : " + error.error)
+			})
+		}
+
+		refreshEncycloLinks() {
+			if (this.encycloLinksLoading) return
+			this.encycloLinksLoading = true
+			LeekWars.post('encyclopedia/refresh-links').then((data: any) => {
+				this.encycloLinksLoading = false
+				LeekWars.toast("Links refreshed: " + data.updated + " pages updated")
+			}).error((error: any) => {
+				this.encycloLinksLoading = false
+				LeekWars.toast("Erreur : " + error.error)
+			})
+		}
+
 		sendError() {
 			const err = new Error()
 			const info = "test"
-			
+
 			const error = err.name + ": " + err.message
 			const file = document.location.href
 			const stack = err.stack + '\n' + info
@@ -249,34 +321,38 @@
 </script>
 
 <style lang="scss" scoped>
-	.admin {
+	.admin-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-		grid-gap: 10px;
+		@media (max-width: 599px) {
+			grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+		}
+		grid-gap: 8px;
 		padding: 10px;
 	}
 	.section {
-		padding: 10px 5px;
+		padding: 8px 5px;
 		text-align: center;
 		height: 100%;
+		cursor: pointer;
 		& > .v-icon {
-			font-size: 80px;
-			margin: 10px 0;
+			font-size: 50px;
+			margin: 6px 0;
 		}
 		h2 {
-			font-size: 16px;
+			font-size: 14px;
 			margin: 0;
 			display: flex;
 			justify-content: center;
 			align-items: flex-end;
 			i {
 				margin-left: 5px;
-				font-size: 20px;
+				font-size: 16px;
 			}
 		}
 	}
 	.section img {
-		margin: 10px 0;
-		max-height: 70px;
+		margin: 6px 0;
+		max-height: 45px;
 	}
 </style>

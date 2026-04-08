@@ -11,16 +11,23 @@ import { fileSystem } from './filesystem'
 import { Hat } from './hat'
 import { Leek } from './leek'
 import { emitter } from './emitter'
-import { displayWarningMessage } from './vue'
+import { displayWarningMessage } from './emitter'
 import { Weapon } from './weapon'
 import { SchemeTemplate } from './scheme'
 import { NotificationBuilder } from '@/model/notification-builder'
-import { TROPHIES } from './trophies'
+
+export interface AccountInfo {
+	id: number
+	name: string
+	avatar_changed: number
+	connected: boolean
+}
 
 class LeekWarsState {
 	public token: string | null = null
 	public connected: boolean = false
 	public farmer: Farmer | null = null
+	public accounts: AccountInfo[] = []
 	public chat: {[key: string]: Chat} = {}
 	public wsconnected: boolean = false
 	public wsdisconnected: boolean = false
@@ -35,6 +42,8 @@ class LeekWarsState {
 	public habs_timer: any = null
 	public crystals_timer: any = null
 	public farmer_by_name: {[key: string]: Farmer} = {}
+	public arenaCount: number = 0
+	public arenaCountdown: number = -1
 }
 
 function updateTitle(state: LeekWarsState) {
@@ -74,6 +83,11 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 								return resource.quantity >= item[1]
 							}
 						}
+						for (const resource of state.farmer.weapons) {
+							if (resource.template === item[0]) {
+								return resource.quantity >= item[1]
+							}
+						}
 					}
 				}
 				return false
@@ -93,11 +107,26 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 				unread: number,
 				notifications: Notification[],
 				conversations: any[],
-				chats: {id: number, read: boolean}[],
-				token: string
+				chats: {id: number, read: boolean, notifications: boolean}[],
+				token: string,
+				accounts?: AccountInfo[]
 			}) {
+			LeekWars.arena.reset()
+			LeekWars.bossSquads.leaveSquad()
 			store.commit("reset")
 			state.farmer = data.farmer
+			// Fusionner les comptes du serveur avec les comptes déconnectés en localStorage
+			const serverAccounts: AccountInfo[] = data.accounts || []
+			let savedAccounts: AccountInfo[] = []
+			try { savedAccounts = JSON.parse(localStorage.getItem('accounts') || '[]') } catch { /* ignore corrupt localStorage */ }
+			const merged = [...serverAccounts]
+			for (const saved of savedAccounts) {
+				if (!merged.find(a => a.id === saved.id)) {
+					merged.push({ ...saved, connected: false })
+				}
+			}
+			state.accounts = merged
+			localStorage.setItem('accounts', JSON.stringify(merged))
 			for (const id in state.farmer.leeks) {
 				state.farmer.leeks[id].country = state.farmer.country
 			}
@@ -131,6 +160,7 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 
 		"disconnect"(state: LeekWarsState) {
 			LeekWars.post('farmer/disconnect')
+			localStorage.setItem('logout', '' + Date.now())
 			store.commit("reset")
 			// Supprime le cache des IAs et l'état de l'éditeur (confidentialité + évite les collisions entre comptes)
 			for (const key of Object.keys(localStorage)) {
@@ -141,11 +171,16 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 				}
 			}
 			localStorage.removeItem('garden/category') // On revient à la catégorie potager par défaut
-			LeekWars.battleRoyale.leave()
+			LeekWars.arena.reset()
 			LeekWars.bossSquads.leaveSquad()
 			LeekWars.socket.disconnect()
 			console.clear()
 			displayWarningMessage()
+		},
+
+		"update-accounts"(state: LeekWarsState, accounts: AccountInfo[]) {
+			state.accounts = accounts
+			localStorage.setItem('accounts', JSON.stringify(accounts))
 		},
 
 		"reset"(state: LeekWarsState) {
@@ -153,8 +188,10 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 			localStorage.removeItem('connected')
 			localStorage.removeItem('login-attempt')
 			localStorage.removeItem('token')
+			localStorage.removeItem('accounts')
 			state.token = null
 			state.farmer = null
+			state.accounts = []
 			window.__FARMER__ = null
 			LeekWars.setTitleCounter(0)
 			state.notifications = []
@@ -189,14 +226,13 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 		},
 
 		'register-chat'(state: LeekWarsState, data: {id: number, name: string, notifications: boolean}) {
-			// console.log("register-chat", data.id)
 			LeekWars.socket.enableChannel(data.id)
 			if (!state.chat[data.id]) {
 				const teamChat = state.farmer && state.farmer.team ? state.farmer.team.chat : null
 				const groupChat = state.farmer && state.farmer.group ? state.farmer.group.chat : null
 				const type = LeekWars.isPublicChat(data.id) ? ChatType.GLOBAL : (data.id === teamChat ? ChatType.TEAM : (data.id === groupChat ? ChatType.GROUP : ChatType.PM))
 				const name = type === ChatType.GLOBAL ? LeekWars.publicChats[data.id].name : (type === ChatType.TEAM ? state.farmer!.team!.name : (type === ChatType.GROUP ? state.farmer!.group!.name : data.name))
-				const chat = new Chat(data.id, type, name, data.notifications)
+				const chat = new Chat(data.id, type, name, data.notifications !== undefined ? data.notifications : true)
 				state.chat[data.id] = chat
 			}
 		},
@@ -390,7 +426,14 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 		},
 
 		'update-fights'(state: LeekWarsState, fights: number) {
-			if (state.farmer) { state.farmer.fights += fights }
+			if (state.farmer) {
+				state.farmer.fights += fights
+				state.farmer.bought_fights = Math.min(state.farmer.bought_fights, state.farmer.fights)
+			}
+		},
+
+		'update-bought-fights'(state: LeekWarsState, fights: number) {
+			if (state.farmer) { state.farmer.bought_fights += fights }
 		},
 
 		'update-team-fights'(state: LeekWarsState, fights: number) {
@@ -480,26 +523,32 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 		},
 
 		notification(state: LeekWarsState, data: { id: number, type: number, date: number, parameters: any[], new: boolean }) {
-
-			if (data.new) {
-				// Received a new trophy, invalidate farmer trophies, add to rewards
-				if (state.farmer && data.type === NotificationType.TROPHY_UNLOCKED) {
-					delete state.farmer.trophies_list
-					const trophy = parseInt(data.parameters[0], 10)
-					state.farmer!.rewards.push({
-						trophy,
-						habs: TROPHIES[trophy - 1].habs
-					})
+			try {
+				if (data.new) {
+					// Received a new trophy, invalidate farmer trophies, add to rewards
+					if (state.farmer && data.type === NotificationType.TROPHY_UNLOCKED) {
+						delete state.farmer.trophies_list
+						const trophy = parseInt(data.parameters[0], 10)
+						const trophyTemplate = LeekWars.trophies[trophy - 1]
+						if (trophyTemplate) {
+							state.farmer!.rewards.push({
+								trophy,
+								habs: trophyTemplate.habs
+							})
+						}
+					}
 				}
-			}
 
-			const notification = NotificationBuilder.build(data)
-			state.notifications.unshift(notification)
+				const notification = NotificationBuilder.build(data)
+				state.notifications.unshift(notification)
 
-			if (data.new) {
-				state.unreadNotifications = state.notifications.reduce((sum, n) => sum + (n.read ? 0 : 1), 0)
-				updateTitle(state)
-				LeekWars.squares.addFromNotification(notification)
+				if (data.new) {
+					state.unreadNotifications = state.notifications.reduce((sum, n) => sum + (n.read ? 0 : 1), 0)
+					updateTitle(state)
+					LeekWars.squares.addFromNotification(notification)
+				}
+			} catch (e) {
+				console.warn("Failed to build notification", data, e)
 			}
 		},
 
@@ -969,7 +1018,13 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 			if (state.farmer) {
 				state.farmer.tutorial_progress = progress
 			}
-		}
+		},
+
+		'arena-counts'(state: LeekWarsState, data: [number, number]) {
+			const [count, countdown] = data
+			state.arenaCount = count
+			state.arenaCountdown = countdown
+		},
 	},
 })
 export { store }

@@ -123,6 +123,7 @@
 	"type_57_fixed": "Leczy przez <b>{0}</b>",
 	"type_58": "Leczy od <b>{0}</b> do <b>{1}</b> za każde wykonane trafienie krytyczne",
 	"type_59_fixed": "Dodaj stan <b>{0}</b>",
+	"type_61_fixed": "Leczy z sumy poprzedniego efektu",
 	"effect_type_1": "Ataki",
 	"effect_type_2": "Opieka",
 	"effect_type_3": "Bibliografia",
@@ -148,5 +149,6 @@
 	"enemies": "Wszyscy wrogowie",
 	"state_11": "Statyczny",
 	"n_uses": "<b>1</b> użycie | <b>{n}</b> użyć",
-	"max_uses": "maksymalne {uses} na rundę"
+	"max_uses": "maksymalne {uses} na rundę",
+	"usage_stats": "~{0} użyć/walkę (jeden tydzień)"
 }

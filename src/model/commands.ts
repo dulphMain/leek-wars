@@ -1,6 +1,5 @@
 import { LeekWars } from "@/model/leekwars"
 import { CHIPS } from "./chips"
-import { CONSTANTS } from "./constants"
 import { FUNCTIONS } from "./functions"
 
 // URLs for /encyclo and /doc
@@ -22,6 +21,26 @@ class Command {
 
 const COMMANDS = [
 	{
+		name: "arena",
+		description: "Inviter à rejoindre l'arène",
+		regex: /(^| )\/arena(?=$|\s)/gi,
+		replacement: (_: string, space: string) => space + '<span class="br-invite"></span>'
+	}, {
+		name: "arena!",
+		description: "Inviter à rejoindre l'arène, de manière appuyée",
+		regex: /(^| )\/arena!(?=$|\s)/gi,
+		replacement: (_: string, space: string) => space + '<span class="br-invite" data-label="À L\'ARÈÈÈÈNE !"></span>'
+	}, {
+		name: "br",
+		description: "Inviter à rejoindre l'arène",
+		regex: /(^| )\/br(?::(\d+))?(?=$|\s)/gi,
+		replacement: (_: string, space: string, level: string) => space + '<span class="br-invite" data-level="' + (level || '') + '"></span>'
+	}, {
+		name: "br!",
+		description: "Inviter à rejoindre l'arène, de manière appuyée",
+		regex: /(^| )\/br!(?::(\d+))?(?=$|\s)/gi,
+		replacement: (_: string, space: string, level: string) => space + '<span class="br-invite" data-level="' + (level || '') + '" data-label="LA BAGAAAAARRE !"></span>'
+	}, {
 		name: "doc",
 		description: "Lien vers la documentation",
 		regex: /(?:^|(\s))\/doc(?::([^\s#]+))?(?=\s|$)/gi,
@@ -193,7 +212,7 @@ const Commands = {
 				doneFunc[name] = true
 			}
 		}
-		for (const constant of CONSTANTS) {
+		for (const constant of LeekWars.constants) {
 			docCommand.options.push({name: constant.name, nameLower: constant.name.toLowerCase(), description: "Ajoute un lien vers la constante \"" + constant.name + "\" de la documentation au message"})
 		}
 	},

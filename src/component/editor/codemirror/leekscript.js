@@ -3,7 +3,7 @@
 
 import CodeMirror from 'codemirror'
 import { FUNCTIONS } from '@/model/functions'
-import { CONSTANTS } from '@/model/constants'
+import { LeekWars } from '@/model/leekwars'
 
   CodeMirror.defineMode("leekscript", function(config, parserConfig) {
 
@@ -36,7 +36,7 @@ import { CONSTANTS } from '@/model/constants'
         "var": kw("var"), "global": kw("global"),
         "function": kw("function"),
         "for": kw("for"),
-        // "switch": kw("switch"), "case": kw("case"), "default": kw("default"), "typeof": operator, "undefined": atom,
+        "switch": kw("switch"), "case": kw("case"), "default": kw("default"), // "typeof": operator, "undefined": atom,
         "in": operator, "instanceof": operator, "and": operator, "or": operator, "xor": operator, "not": operator,
         "true": atom, "false": atom, "null": atom, "NaN": atom, "Infinity": atom,
         "this": kw("this"), "class": kw("class"), "super": kw("atom"),
@@ -48,7 +48,7 @@ import { CONSTANTS } from '@/model/constants'
         // "int": X, "real": X, "bool": X, "string": X, "any": X, "array": X, "map": X, "number": X,
         // "synchronized": X, "throws": X, "transient": X, "void": X, "volatile": X, "yield": X
       };
-        for (const constant of CONSTANTS) {
+        for (const constant of LeekWars.constants) {
             k[constant.name] = {type: "variable", style: "lsconst"}
         }
         for (const fun of FUNCTIONS) {

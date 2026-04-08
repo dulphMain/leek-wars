@@ -27,10 +27,16 @@ Les changelogs sont dans `src/component/changelog/` au format YAML.
 ```
 
 ### Règles
-- Toujours mettre à jour **FR et EN** ensemble
+- Toujours mettre à jour **FR, EN et IT** ensemble
 - Les images sont référencées avec `#img_<version>_<nom>`
 - La version en cours de développement a le titre "WIP"
 - Créditer les contributeurs avec "(merci à <pseudo>)"
+
+## Terminologie du jeu
+- **Potager** (pas "Jardin") : page de matchmaking et lancement de combat.
+- **Habs** (pas "HABs" ni "HAB") : monnaie du jeu, H majuscule, reste en minuscule.
+- **Séquelle** (pas "rémanent" ni "poison") : type de dégâts "aftereffect" en anglais. Utiliser les noms des fichiers de traduction (`src/lang/*/effect.json`).
+- **Noms d'armes/puces** : toujours utiliser les noms officiels des fichiers de traduction (`src/lang/*/weapon.json`, `src/lang/*/chip.json`), pas d'approximation.
 
 ## Éditeur Monaco
 

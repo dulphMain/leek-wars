@@ -5,5 +5,11 @@
 	"name": "Nimi",
 	"level": "Taso",
 	"date": "Päivämäärä",
-	"rarity": "Niukkuus"
+	"rarity": "Harvinaisuus",
+	"type": "Tyyppi",
+	"no_group": "Ei ryhmää",
+	"size": "Koko",
+	"size_small": "Pieni",
+	"size_normal": "Normaali",
+	"size_large": "Suuri"
 }

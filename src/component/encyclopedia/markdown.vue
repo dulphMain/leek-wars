@@ -103,7 +103,8 @@
 
 				const linkify = (a: HTMLAnchorElement) => {
 					a.onclick = (e: Event) => {
-						let link = a.getAttribute('href')!
+						let link = a.getAttribute('href')
+						if (!link) return
 						if (link.startsWith('/') || link.startsWith(document.location.origin) || link.startsWith('https://leekwars.com/')) {
 							if (link.startsWith('/encyclopedia/')) {
 								link = link.replace(/ /g, '_')
@@ -120,8 +121,9 @@
 				// Armes
 				md.querySelectorAll('.encyclopedia-weapon').forEach((item) => {
 					const weapon = LeekWars.weaponByName[item.getAttribute('weapon')!]
-					if (weapon) {
-						const app = createApp(ItemPreview, { item: LeekWars.items[weapon.item] })
+					const weaponItem = weapon ? LeekWars.items[weapon.item] : null
+					if (weaponItem) {
+						const app = createApp(ItemPreview, { item: weaponItem })
 						app.use(vuetify).use(i18n).use(store)
 						app.mount(item)
 						this.components.push({ $destroy: () => app.unmount() })
@@ -130,8 +132,9 @@
 				// Puces
 				md.querySelectorAll('.encyclopedia-chip').forEach((item) => {
 					const chip = CHIP_BY_NAME[item.getAttribute('chip')!]
-					if (chip) {
-						const app = createApp(ItemPreview, { item: LeekWars.items[chip.id] })
+					const chipItem = chip ? LeekWars.items[chip.id] : null
+					if (chipItem) {
+						const app = createApp(ItemPreview, { item: chipItem })
 						app.use(vuetify).use(i18n).use(store)
 						app.mount(item)
 						this.components.push({ $destroy: () => app.unmount() })
@@ -140,8 +143,9 @@
 				// Potions
 				md.querySelectorAll('.encyclopedia-potion').forEach((item) => {
 					const potion = LeekWars.potionByName[item.getAttribute('potion')!]
-					if (potion) {
-						const app = createApp(ItemPreview, { item: LeekWars.items[potion.id] })
+					const potionItem = potion ? LeekWars.items[potion.id] : null
+					if (potionItem) {
+						const app = createApp(ItemPreview, { item: potionItem })
 						app.use(vuetify).use(i18n).use(store)
 						app.mount(item)
 						this.components.push({ $destroy: () => app.unmount() })
@@ -530,11 +534,8 @@
 		max-width: 100%;
 	}
 	.md :deep(a) {
-		color: #0645ad;
+		color: var(--link-color);
 		font-weight: 500;
-	}
-	body.dark .md :deep(a) {
-		color: #4bbaff;
 	}
 	.md :deep(a.new) {
 		color: #ba0000;

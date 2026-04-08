@@ -68,6 +68,7 @@
 					<v-icon>mdi-email-outline</v-icon>
 				</a>
 			</div>
+			<v-icon class="theme-toggle" @click="toggleTheme">{{ LeekWars.darkMode ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
 		</div>
 		<div class="column">
 			<h4>{{ $t('main.legal') }}</h4>
@@ -108,6 +109,16 @@
 			// LeekWars.didactitial = true
 		}
 
+		toggleTheme() {
+			if (LeekWars.darkMode) {
+				LeekWars.themeSetting = 'light'
+			} else {
+				LeekWars.themeSetting = 'dark'
+			}
+			localStorage.setItem('theme', LeekWars.themeSetting)
+			LeekWars.darkMode = LeekWars.themeSetting === 'dark'
+		}
+
 		throwCookies() {
 			for (let i = 0; i < 10; ++i) {
 				this.cookies.push([-50 + Math.random() * (window.innerWidth + 100), -100 - Math.random() * 100, 20 + Math.random() * 60, Math.random() * 360])
@@ -135,9 +146,20 @@
 			transition: color 0.15s ease;
 			.v-icon {
 				font-size: 16px;
-				// transition: none;
 				vertical-align: top;
 			}
+		}
+		#app.xp & {
+			color: #222;
+		}
+		#app.xp & a, #app.xp & .item, #app.xp & .v-icon {
+			color: #222;
+			&:hover {
+				color: #316ac5;
+			}
+		}
+		#app.xp & h4 {
+			color: #222;
 		}
 		h4.version {
 			color: #999;
@@ -226,6 +248,14 @@
 		gap: 10px;
 		a .v-icon {
 			font-size: 20px;
+		}
+	}
+	.theme-toggle {
+		margin-top: 12px;
+		cursor: pointer;
+		font-size: 20px;
+		&:hover {
+			color: #5fad1b !important;
 		}
 	}
 </style>

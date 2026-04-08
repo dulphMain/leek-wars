@@ -109,6 +109,10 @@
 						<div>{{ $t('activate_discrete_mode') }}</div>
 						<div><v-switch v-model="sfwMode" hide-details /></div>
 					</div>
+					<div class="setting" id="notifs-popups-button">
+						<div>{{ $t('notifs_popups') }}</div>
+						<div><v-switch v-model="notifsPopups" hide-details /></div>
+					</div>
 					<div class="setting" id="notifs-results-button">
 						<div>{{ $t('notifs_results') }}</div>
 						<div><v-switch v-model="notifsResults" hide-details /></div>
@@ -120,6 +124,10 @@
 					<div class="setting" v-if="!LeekWars.mobile">
 						<div>{{ $t('leek_theme') }}</div>
 						<div><v-switch v-model="LeekWars.leekTheme" hide-details /></div>
+					</div>
+					<div class="setting">
+						<div>{{ $t('modern_theme') }}</div>
+						<div><v-switch v-model="modernTheme" hide-details /></div>
 					</div>
 				</div>
 			</panel>
@@ -280,8 +288,10 @@
 
 		settings: any = null
 		sfwMode: boolean = localStorage.getItem('sfw') === 'true'
+		notifsPopups: boolean = localStorage.getItem('options/notifs-popups') !== 'false'
 		notifsResults: boolean = localStorage.getItem('options/notifs-results') === 'true'
 		chatFirst: boolean = localStorage.getItem('options/chat-first') === 'true'
+		modernTheme: boolean = localStorage.getItem('theme') === 'xp'
 		pushNotifications: boolean = localStorage.getItem('options/push-notifs') === 'true'
 		deleteDialog: boolean = false
 		deleteConfirmDialog: boolean = false
@@ -382,7 +392,32 @@
 		@Watch('LeekWars.themeSetting')
 		updateTheme() {
 			localStorage.setItem('theme', '' + LeekWars.themeSetting)
-			LeekWars.darkMode = LeekWars.themeSetting !== 'auto' ? LeekWars.themeSetting === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
+			LeekWars.xpTheme = LeekWars.themeSetting === 'xp'
+			this.modernTheme = LeekWars.themeSetting === 'xp'
+			localStorage.setItem('xp-theme', '' + LeekWars.xpTheme)
+			if (LeekWars.themeSetting === 'xp') {
+				LeekWars.darkMode = false
+				if (LeekWars.aprilFools) {
+					LeekWars.post('trophy/unlock', {trophy_id: 280})
+				}
+			} else {
+				LeekWars.darkMode = LeekWars.themeSetting !== 'auto' ? LeekWars.themeSetting === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
+			}
+		}
+
+		@Watch('modernTheme')
+		updateModernTheme() {
+			if (this.modernTheme) {
+				LeekWars.themeSetting = 'xp'
+			} else {
+				LeekWars.themeSetting = 'auto'
+			}
+		}
+
+		@Watch('notifsPopups')
+		updateNotifsPopups() {
+			localStorage.setItem('options/notifs-popups', '' + this.notifsPopups)
+			LeekWars.notifsPopups = this.notifsPopups
 		}
 
 		@Watch('notifsResults')
@@ -468,6 +503,7 @@
 		updateLeekTheme() {
 			localStorage.setItem('leek-theme', '' + LeekWars.leekTheme)
 		}
+
 
 		submit(e: Event) {
 			e.preventDefault()

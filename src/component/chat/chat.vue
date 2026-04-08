@@ -111,7 +111,7 @@
 			</template>
 		</popup>
 
-		<v-menu v-if="menuMessage && $store.state.farmer.verified" offset-y top :nudge-top="10" v-model="menuEmoji" :activator="menuEmojiActivator" content-class="emojis-dialog">
+		<v-menu v-if="menuMessage && $store.state.farmer?.verified" offset-y top :nudge-top="10" v-model="menuEmoji" :activator="menuEmojiActivator" content-class="emojis-dialog">
 			<v-card class="emojis">
 				<span v-for="(emoji, e) in emojis" :key="e" class="emoji" :class="{selected: emoji === menuMessage.my_reaction}" @click="toggleReaction(emoji)">{{ emoji }}</span>
 				<span v-if="menuMessage.my_reaction && !emojis.includes(menuMessage.my_reaction)" class="emoji selected" @click="toggleReaction(menuMessage.my_reaction)">{{ menuMessage.my_reaction }}</span>
@@ -208,10 +208,9 @@ import { emitter } from '@/model/vue'
 			emitter.on('chat', this.newMessage)
 			emitter.on('chat-history', this.chatHistory)
 			emitter.on('resize', this.updateScroll)
+			emitter.on('wsconnected', this.update)
 			if (store.state.wsconnected) {
 				this.update()
-			} else {
-				emitter.on('wsconnected', this.update)
 			}
 		}
 
@@ -309,6 +308,21 @@ import { emitter } from '@/model/vue'
 			LeekWars.track('chat-message')
 			if (message.startsWith('/ping')) {
 				this.$store.commit('last-ping', Date.now())
+			}
+			if (message.match(/(^|\s)\/(br|arena)!?(\s|$)/)) {
+				if (!LeekWars.arena.enabled) {
+					// Auto-inscription en arène avec le dernier poireau utilisé ou le premier disponible
+					const farmer = this.$store.state.farmer
+					if (farmer) {
+						const arenaLeekId = parseInt(localStorage.getItem('arena-leek') || '', 10)
+						const gardenLeekId = parseInt(localStorage.getItem('garden/leek') || '', 10)
+						const lastLeekId = (arenaLeekId && farmer.leeks[arenaLeekId]) ? arenaLeekId : gardenLeekId
+						const leek = (lastLeekId && farmer.leeks[lastLeekId]) ? farmer.leeks[lastLeekId] : Object.values(farmer.leeks)[0] as any
+						if (leek) {
+							LeekWars.arena.register(leek.id)
+						}
+					}
+				}
 			}
 			if (this.chat === null) {
 				LeekWars.post('message/create-conversation', {farmer_id: this.newFarmer.id, message}).then(data => {
@@ -439,6 +453,9 @@ import { emitter } from '@/model/vue'
 			content = LeekWars.linkify(content)
 			content = formatEmojis(content)
 			content = Commands.execute(content, message.farmer.name)
+			if (Date.now() / 1000 - message.date > 3600) {
+				content = content.replace(/<span class="br-invite"[^>]*><\/span>/g, '/arena')
+			}
 			content = content.replace(/@(\w+)/g, (a, b) => {
 				const farmer = store.state.farmer_by_name[b]
 				if (farmer) {
@@ -452,7 +469,7 @@ import { emitter } from '@/model/vue'
 			const element = document.createElement('div')
 			element.innerHTML = message.content
 			const innerText = element.innerText.trim()
-			message.only_emojis = innerText.length === 0 || /^[\s\p{Emoji_Presentation}]+$/gmu.test(innerText)
+			message.only_emojis = !element.querySelector('.br-invite') && (innerText.length === 0 || /^[\s\p{Emoji_Presentation}]+$/gmu.test(innerText))
 			if (!('censored' in message)) {
 				message.censored = 0
 			}

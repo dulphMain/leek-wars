@@ -205,6 +205,7 @@
 				{ name: "npm", link: "https://www.npmjs.com/", image: "npm.svg" },
 				{ name: "Vuetify", link: "https://vuetifyjs.com/en/", image: "vuetify.png" },
 				{ name: "Markdown it", link: "https://markdown-it.github.io/", image: "markdown-it.svg" },
+			{ name: "XP.css", link: "https://botoxparty.github.io/XP.css/", image: "xp-css.png" },
 			]},
 			{ name: "server", items: [
 				{ name: "Debian", link: "https://www.debian.org/", image: "debian.svg" },
@@ -212,7 +213,8 @@
 				{ name: "PostgreSQL", link: "https://www.postgresql.org/", image: "postgresql.svg" },
 				{ name: "Java", link: "http://www.java.com/fr/about/", image: "java.png" },
 				{ name: "PHP", link: "http://www.php.net/", image: "php.png" },
-				{ name: "Memcached", link: "https://memcached.org/", image: "memcached.svg" },
+				{ name: "APCu", link: "https://www.php.net/manual/en/book.apcu.php", image: "apcu.svg" },
+				{ name: "Redis", link: "https://redis.io/", image: "redis.svg" },
 				{ name: "Python", link: "https://www.python.org/", image: "python.svg" },
 				{ name: "Docker", link: "https://www.docker.com/", image: "docker.webp" },
 				{ name: "Traefik", link: "https://traefik.io/traefik/", image: "traefik.svg" },

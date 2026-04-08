@@ -479,6 +479,7 @@ class Game {
 
 			// Life
 			entity.life = e.life
+			entity.displayLife = e.life
 			entity.maxLife = entity.life
 			entity.initialMaxLife = entity.maxLife
 
@@ -588,7 +589,8 @@ class Game {
 
 			} else if (entity instanceof Bulb) {
 
-				entity.translatedName = i18n.t('entity.' + entity.name) as string
+				const key = 'entity.' + entity.name
+				entity.translatedName = i18n.global.te(key) ? i18n.t(key) as string : entity.name
 				if (e.critical) {
 					entity.translatedName += (locale === 'fr' ? ' !' : '!')
 					entity.initialMaxLife = entity.initialMaxLife / 1.2
@@ -631,6 +633,7 @@ class Game {
 					entity.drawID = this.addDrawableElement(entity, entity.y)
 				} else {
 					entity.life = 0
+					entity.displayLife = 0
 					entity.dead = true
 				}
 				this.entityOrder.push(entity)
@@ -1433,6 +1436,7 @@ class Game {
 			const entity = this.leeks[target]
 
 			entity.life = life
+			entity.displayLife = life
 			entity.maxLife = maxLife
 			if (entity.initialMaxLife === 0) {
 				entity.initialMaxLife = entity.maxLife
@@ -1723,6 +1727,21 @@ class Game {
 			case EffectType.ADD_STATE:
 				leek.addState(value)
 				break
+			case EffectType.MULTIPLY_STATS: {
+				const factor = value - 1
+				if (leek.strength) leek.buffStrength(leek.strength * factor, this.jumping)
+				if (leek.agility) leek.buffAgility(leek.agility * factor, this.jumping)
+				if (leek.resistance) leek.buffResistance(leek.resistance * factor, this.jumping)
+				if (leek.wisdom) leek.buffWisdom(leek.wisdom * factor, this.jumping)
+				if (leek.science) leek.buffScience(leek.science * factor, this.jumping)
+				if (leek.magic) leek.buffMagic(leek.magic * factor, this.jumping)
+				if (leek.tp) leek.buffTP(leek.tp * factor, this.jumping)
+				if (leek.mp) leek.buffMP(leek.mp * factor, this.jumping)
+				const ratio = leek.maxLife > 0 ? leek.life / leek.maxLife : 1
+				leek.winMaxLife(leek.maxLife * factor, this.jumping)
+				leek.life = Math.round(leek.maxLife * ratio)
+				break
+			}
 		}
 	}
 
@@ -1806,6 +1825,23 @@ class Game {
 		case EffectType.RAW_BUFF_POWER:
 			leek.power -= value
 			break
+		case EffectType.MULTIPLY_STATS: {
+			// Reverse: current = base * value, so base = current / value
+			leek.strength = Math.round(leek.strength / value)
+			leek.agility = Math.round(leek.agility / value)
+			leek.resistance = Math.round(leek.resistance / value)
+			leek.wisdom = Math.round(leek.wisdom / value)
+			leek.science = Math.round(leek.science / value)
+			leek.magic = Math.round(leek.magic / value)
+			leek.tp = Math.round(leek.tp / value)
+			leek.mp = Math.round(leek.mp / value)
+			const ratio = leek.maxLife > 0 ? leek.life / leek.maxLife : 1
+			leek.maxLife = Math.round(leek.maxLife / value)
+			leek.life = Math.round(leek.maxLife * ratio)
+			// Sync display life to avoid animation glitch during replace
+			leek.displayLife = leek.life
+			break
+		}
 		}
 		// Gestion des états du poireau
 		if (effect.item === 46) {
@@ -2149,6 +2185,9 @@ class Game {
 	public clearMarks() {
 		this.markers = []
 		this.markersText = []
+		if (this.paused) {
+			this.redraw()
+		}
 	}
 
 	public addObstacle(obstacle: Obstacle) {
@@ -2771,6 +2810,7 @@ class Game {
 			const leek = this.leeks[i] as Leek
 			leek.active = this.states[i].active && this.states[i].cell
 			leek.life = this.states[i].life
+			leek.displayLife = this.states[i].life
 			leek.maxLife = this.states[i].maxLife
 			leek.tp = this.states[i].tp
 			leek.mp = this.states[i].mp
@@ -2867,6 +2907,11 @@ class Game {
 			}
 		}
 		this.updateReachableCells()
+
+		// Sync displayLife
+		for (const entity of this.leeks) {
+			entity.displayLife = entity.life
+		}
 
 		// End
 		this.jumping = false

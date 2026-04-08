@@ -1,8 +1,8 @@
 {
 	"account": "Konto",
 	"activate_discrete_mode": "Aktiver stille tilstand",
-	"advanced": "Rykke",
-	"change": "At skifte",
+	"advanced": "Avanceret",
+	"change": "Skift",
 	"change_email": "Skift e-mail",
 	"change_email_send": "Send bekræftelsesmail",
 	"change_email_sent": "Bekræftelsesmail sendt til den aktuelle adresse",
@@ -40,6 +40,7 @@
 	"leek_theme": "Store porrer i hvid",
 	"logout": "Log ud",
 	"new_password": "Nyt kodeord",
+	"notifs_popups": "Notifikations-popups",
 	"notifs_results": "Kamp resulterer i meddelelser",
 	"old_password": "Gammelt kodeord",
 	"misc_options": "Forskellige muligheder",
@@ -63,8 +64,10 @@
 	"verify_pro5": "Battle Royales",
 	"Vérifier": "Bekræft konto",
 	"allow_github": "Tillad forbindelse via GitHub",
-	"light": "Clair",
+	"light": "Lys",
 	"dark": "Mørk",
 	"auto": "Auto",
-	"theme": "Tema"
+	"theme": "Tema",
+	"modern_theme": "Moderne tema (beta)",
+	"xp_theme": "XP-tema"
 }

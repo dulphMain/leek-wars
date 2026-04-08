@@ -82,7 +82,7 @@ class StatisticsEntity extends Entity {
 		this.name = leek.name
 		this.translatedName = leek.name
 		if (leek.type !== 0) {
-			this.translatedName = i18n.t('entity.' + leek.name) as string
+			this.translatedName = i18n.global.te('entity.' + leek.name) ? i18n.t('entity.' + leek.name) as string : leek.name
 		}
 		this.level = leek.level
 		this.team = leek.team
@@ -454,6 +454,7 @@ class FightStatistics {
 					const killer = action.length > 2 ? entities[action[2]] : currentEntity
 					if (killer) { killer.kills++ }
 					entity.life = 0
+					this.updateLifes()
 					this.addTime()
 					break
 				}
@@ -784,6 +785,12 @@ class FightStatistics {
 			break
 		case EffectType.POISON:
 			break
+		case EffectType.MULTIPLY_STATS: {
+			const ratio = leek.max_life > 0 ? leek.life / leek.max_life : 1
+			leek.max_life = Math.round(leek.max_life * value)
+			leek.life = Math.round(leek.max_life * ratio)
+			break
+		}
 		}
 	}
 
@@ -854,6 +861,12 @@ class FightStatistics {
 		case EffectType.RAW_BUFF_TP:
 			leek.tp -= value
 			break
+		case EffectType.MULTIPLY_STATS: {
+			const ratio = leek.max_life > 0 ? leek.life / leek.max_life : 1
+			leek.max_life = Math.round(leek.max_life / value)
+			leek.life = Math.round(leek.max_life * ratio)
+			break
+		}
 		}
 		delete leek.effects[id]
 		delete this.effects[id]

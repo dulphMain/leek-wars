@@ -40,6 +40,7 @@
 	"leek_theme": "Stor purre i hvitt",
 	"logout": "Logg ut",
 	"new_password": "Nytt passord",
+	"notifs_popups": "Varsel-popuper",
 	"notifs_results": "Kamp resulterer i varsler",
 	"old_password": "Gammelt passord",
 	"misc_options": "Ulike alternativer",
@@ -66,5 +67,7 @@
 	"light": "Clair",
 	"dark": "Mørk",
 	"auto": "Auto",
-	"theme": "Tema"
+	"theme": "Tema",
+	"modern_theme": "Moderne tema (beta)",
+	"xp_theme": "XP-tema"
 }

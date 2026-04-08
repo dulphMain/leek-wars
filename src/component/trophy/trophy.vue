@@ -1,8 +1,13 @@
 <template>
 	<div class="page">
 		<div class="page-bar page-header">
-			<h1>{{ $t('trophy') }} « {{ $t('trophy.' + code) }} »</h1>
+			<h1>
+				<breadcrumb :items="[{name: $t('trophies'), link: '/trophies'}, {name: $t('trophy.' + code), link: ''}]" :raw="true" />
+			</h1>
 		</div>
+		<panel v-if="!trophy" class="first">
+			<loader />
+		</panel>
 		<panel v-if="trophy" class="first">
 			<div class="flex">
 				<img class="image" :src="'/image/trophy/' + code + '.svg'" @click="trophy.code === 'joker' && LeekWars.lucky(true)" :class="{clickable: trophy.code === 'joker'}">
@@ -56,9 +61,7 @@
 				<div>
 					<h4><v-icon>mdi-chart-line</v-icon> {{ $t('stats') }}</h4>
 					<div class="rarity">{{ $t('created_the', [ LeekWars.formatDate(trophy.created_time) ]) }}</div>
-					<div class="rarity">{{ (trophy.rarity * 100).toPrecision(2) }}% • <i18n-t tag="span" keypath="n_pocessors">
-						<template #n>{{ $filters.number(trophy.total) }}</template>
-					</i18n-t></div>
+					<div class="rarity">{{ (trophy.rarity * 100).toPrecision(2) }}% • {{ $tc('n_pocessors', trophy.total, [$filters.number(trophy.total)]) }}</div>
 				</div>
 			</div>
 		</panel>
@@ -76,6 +79,7 @@
 						<v-icon>mdi-sword-cross</v-icon> {{ $filters.date(farmer.time) }}
 					</router-link>
 					<span v-else class="fight">{{ $filters.date(farmer.time) }}</span>
+					<v-icon v-if="$store.getters.admin" class="admin-delete" @click="confirmDelete(farmer)">mdi-delete</v-icon>
 				</div>
 			</panel>
 			<panel v-if="trophy.last_farmers.length" :title="$t('last_farmers')" icon="mdi-sort-ascending" class="last">
@@ -91,6 +95,7 @@
 						<v-icon>mdi-sword-cross</v-icon> {{ $filters.date(farmer.time) }}
 					</router-link>
 					<span v-else class="fight">{{ $filters.date(farmer.time) }}</span>
+					<v-icon v-if="$store.getters.admin" class="admin-delete" @click="confirmDelete(farmer)">mdi-delete</v-icon>
 				</div>
 			</panel>
 			<panel v-if="trophy.fastest_farmers?.length" :title="$t('fastest_farmers')" icon="mdi-flash" class="last">
@@ -106,6 +111,7 @@
 						<v-icon>mdi-sword-cross</v-icon> {{ $filters.date(farmer.time) }}
 					</router-link>
 					<span v-else class="fight">{{ $filters.date(farmer.time) }}</span>
+					<v-icon v-if="$store.getters.admin" class="admin-delete" @click="confirmDelete(farmer)">mdi-delete</v-icon>
 				</div>
 			</panel>
 			<panel v-if="trophy.slowest_farmers?.length" :title="$t('slowest_farmers')" icon="mdi-sleep" class="last">
@@ -121,6 +127,7 @@
 						<v-icon>mdi-sword-cross</v-icon> {{ $filters.date(farmer.time) }}
 					</router-link>
 					<span v-else class="fight">{{ $filters.date(farmer.time) }}</span>
+					<v-icon v-if="$store.getters.admin" class="admin-delete" @click="confirmDelete(farmer)">mdi-delete</v-icon>
 				</div>
 			</panel>
 			<panel v-if="trophy.title_farmers?.length" :title="$t('title_farmers')" icon="mdi-format-letter-case" class="last">
@@ -131,9 +138,18 @@
 					</router-link>
 					<div class="spacer"></div>
 					<lw-title :title="farmer.title" />
+					<v-icon v-if="$store.getters.admin" class="admin-delete" @click="confirmDelete(farmer)">mdi-delete</v-icon>
 				</div>
 			</panel>
 		</div>
+		<popup v-model="deleteDialog" :width="500" icon="mdi-delete">
+			<template #title>Supprimer le trophée</template>
+			<div v-if="deleteFarmer">Supprimer le trophée « {{ $t('trophy.' + code) }} » de <b>{{ deleteFarmer.name }}</b> ?</div>
+			<template #actions>
+				<div v-ripple @click="deleteDialog = false">{{ $t('main.cancel') }}</div>
+				<div v-ripple class="red" @click="deleteTrophy()">{{ $t('main.delete') }}</div>
+			</template>
+		</popup>
 	</div>
 </template>
 
@@ -143,13 +159,16 @@
 	import { LeekWars } from '@/model/leekwars'
 	import { Options, Vue, Watch } from 'vue-property-decorator'
 	import RichTooltipItem from '@/component/rich-tooltip/rich-tooltip-item.vue'
+	import Breadcrumb from '@/component/forum/breadcrumb.vue'
 	import LWTitle from '@/component/title/title.vue'
 
-	@Options({ name: 'trophy', i18n: {}, mixins: [...mixins], components: { 'lw-title': LWTitle, RichTooltipItem } })
+	@Options({ name: 'trophy', i18n: {}, mixins: [...mixins], components: { 'lw-title': LWTitle, RichTooltipItem, Breadcrumb } })
 	export default class Trophy extends Vue {
 		code: any = null
 		trophy: any = null
 		ItemType = ItemType
+		deleteDialog: boolean = false
+		deleteFarmer: any = null
 
 		get items() {
 			return this.trophy ? this.trophy.items.map((i: number) => LeekWars.items[i]) : []
@@ -158,7 +177,26 @@
 		@Watch('$route.params', { immediate: true })
 		update() {
 			this.code = this.$route.params.code
-			LeekWars.get('trophy-template/get/' + this.code + '/' + this.$i18n.locale).then(trophy => this.trophy = trophy)
+			LeekWars.get('trophy-template/get/' + this.code + '/' + this.$i18n.locale).then(trophy => {
+				this.trophy = trophy
+				LeekWars.setTitle(this.$t('trophy') + ' « ' + this.$t('trophy.' + this.code) + ' »')
+			})
+		}
+
+		confirmDelete(farmer: any) {
+			this.deleteFarmer = farmer
+			this.deleteDialog = true
+		}
+
+		deleteTrophy() {
+			if (!this.deleteFarmer) return
+			LeekWars.post('trophy/delete', { trophy_id: this.trophy.id, farmer_id: this.deleteFarmer.id })
+				.then(() => {
+					this.deleteDialog = false
+					LeekWars.toast("Trophée supprimé !")
+					this.update()
+				})
+				.error((error: any) => LeekWars.toast(this.$t('error_' + error.error, error.params) as string))
 		}
 	}
 </script>
@@ -166,6 +204,8 @@
 <style lang="scss" scoped>
 	.image {
 		width: 120px;
+		height: 120px;
+		object-fit: contain;
 		margin: 0 20px;
 		margin-right: 30px;
 		&.clickable {
@@ -312,6 +352,7 @@
 		}
 		.avatar {
 			width: 30px;
+			height: 30px;
 			vertical-align: bottom;
 		}
 		.v-icon {
@@ -343,6 +384,16 @@
 	}
 	.hab {
 		margin-right: 2px;
+	}
+	.admin-delete {
+		cursor: pointer;
+		opacity: 0.5;
+		font-size: 18px;
+		align-self: center;
+		&:hover {
+			opacity: 1;
+			color: red;
+		}
 	}
 	.grid {
 		display: grid;

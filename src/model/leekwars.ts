@@ -1,14 +1,18 @@
 import packageJson from '@/../package.json'
 import { env } from '@/env'
 import { locale } from '@/locale'
-import { BattleRoyale } from '@/model/battle-royale'
+import { Arena } from '@/model/arena'
 import { CHIP_TEMPLATES, HAT_TEMPLATES, HATS, POMPS, POTIONS, SUMMON_TEMPLATES, TROPHY_CATEGORIES, COMPLEXITIES } from '@/model/data'
 import { Socket } from '@/model/socket'
 import { Squares } from '@/model/squares'
 import { store } from '@/model/store'
 import { emitter, vueMain } from '@/model/emitter'
 import { WeaponTemplate } from '@/model/weapon'
-import router from '@/router'
+import type { Router } from 'vue-router'
+
+let _router: Router
+export function setRouter(r: Router) { _router = r }
+export function getRouter() { return _router }
 
 import { TranslateResult } from 'vue-i18n'
 import { Chat, ChatWindow } from './chat'
@@ -20,6 +24,7 @@ import { SCHEMES } from './schemes'
 import { COMPONENTS } from './components'
 import { WEAPONS } from './weapons'
 import { BossSquads } from './boss-squads'
+import { loadGameData as loadGameDataRaw } from './gamedata'
 import { nextTick, reactive } from 'vue'
 
 const DEV = window.location.port === '8080'
@@ -229,7 +234,7 @@ const LANGUAGES = Object.freeze({
 	es: { code: 'es', name: 'Español', country: 'es', flag: '/image/flag/es.png', chat: 2, encyclopedia: 'Enciclopedia', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
 	de: { code: 'de', name: 'Deutsch', country: 'de', flag: '/image/flag/de.png', chat: 2, encyclopedia: 'Enzyklopädie', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
 	it: { code: 'it', name: 'Italiano', country: 'it', flag: '/image/flag/it.png', chat: 2, encyclopedia: 'Enciclopedia', chats: null, currency: 'EUR', beta: false, forum: false } as Language,
-	pt: { code: 'pt', name: 'Portugais', country: 'pt', flag: '/image/flag/pt.png', chat: 2, encyclopedia: 'Enciclopédia', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
+	pt: { code: 'pt', name: 'Português', country: 'pt', flag: '/image/flag/pt.png', chat: 2, encyclopedia: 'Enciclopédia', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
 	da: { code: 'da', name: 'Dansk', country: 'dk', flag: '/image/flag/da.png', chat: 2, encyclopedia: 'Encyklopædi', chats: null, currency: 'DKK', beta: true, forum: false } as Language,
 	fi: { code: 'fi', name: 'Suomi', country: 'fi', flag: '/image/flag/fi.png', chat: 2, encyclopedia: 'Tietosanakirja', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
 	nl: { code: 'nl', name: 'Nederlands', country: 'nl', flag: '/image/flag/nl.png', chat: 2, encyclopedia: 'Encyclopedie', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
@@ -280,9 +285,10 @@ const LeekWars = reactive({
 	titleTag: null,
 	requests: 0,
 	notifsResults: localStorage.getItem('options/notifs-results') === 'true',
+	notifsPopups: localStorage.getItem('options/notifs-popups') !== 'false',
 	rankingInactive: localStorage.getItem('options/ranking-inactive') === 'true',
 	service_worker: null as ServiceWorkerRegistration | null,
-	battleRoyale: new BattleRoyale(),
+	arena: new Arena(),
 	bossSquads: new BossSquads(),
 	squares: new Squares(),
 	languages: LANGUAGES,
@@ -313,14 +319,23 @@ const LeekWars = reactive({
 	box: false,
 	nativeEmojis: detectNativeEmojis(),
 	leekTheme: localStorage.getItem('leek-theme') === 'true',
+	xpTheme: localStorage.getItem('theme') === 'xp',
+	xpCursorsInit() {
+		if (!LeekWars.xpTheme) { return }
+		document.addEventListener('mouseover', (e) => {
+			const el = e.target as HTMLElement
+			if (!el || !el.style) { return }
+			const cursor = getComputedStyle(el).cursor
+			if (cursor === 'pointer') {
+				el.style.cursor = "url('/image/pointer.png') 5 0, pointer"
+			}
+		})
+	},
 	keepConnected: null as any,
 	startIntervals: () => {
 		if (LeekWars.keepConnected || !store.state.connected) { return }
 		LeekWars.keepConnected = setInterval(() => {
 			store.commit('last-connection', LeekWars.time)
-			LeekWars.post('farmer/update').then(data => {
-				store.commit('connected-count', data.farmers)
-			})
 		}, 59 * 1000)
 	},
 	clearIntervals: () => {
@@ -700,25 +715,30 @@ const LeekWars = reactive({
 		nextTick(() => LeekWars.didactitial_visible = true)
 	},
 	socket: new Socket(),
-	hats: Object.freeze(HATS),
-	pomps: Object.freeze(POMPS),
-	schemes: Object.freeze(SCHEMES),
-	weapons: Object.freeze(WEAPONS),
-	weaponByName: Object.freeze(WEAPON_BY_NAME),
-	items: Object.freeze(ITEMS),
-	chipTemplates: Object.freeze(CHIP_TEMPLATES),
+	hats: HATS as any,
+	pomps: POMPS as any,
+	schemes: SCHEMES as any,
+	weapons: WEAPONS as any,
+	weaponByName: WEAPON_BY_NAME as any,
+	items: ITEMS as any,
+	chipTemplates: CHIP_TEMPLATES as any,
+	trophies: [] as any,
+	constants: [] as any,
+	functions: [] as any,
+	chips: {} as any,
 	trophyCategories: Object.freeze(TROPHY_CATEGORIES),
 	trophyCategoriesById: Object.freeze([...TROPHY_CATEGORIES].sort((a, b) => a.id - b.id)),
 	trophyCategoriesIcons: Object.freeze([
-		'mdi-trophy-variant-outline',
-		'mdi-sword-cross',
-		'mdi-trophy-outline',
-		'mdi-emoticon-outline',
-		'mdi-chat-outline',
-		'mdi-star-outline',
-		'mdi-code-braces',
-		'mdi-basket-outline',
-		'mdi-crown-outline'
+		'mdi-trophy-variant-outline',  // 1: general
+		'mdi-sword-cross',             // 2: fight
+		'mdi-trophy-outline',          // 3: tournament
+		'mdi-emoticon-outline',        // 4: fun
+		'mdi-chat-outline',            // 5: social
+		'mdi-star-outline',            // 6: bonus
+		'mdi-code-braces',             // 7: code
+		'mdi-basket-outline',          // 8: shopping
+		'mdi-crown-outline',           // 9: boss
+		'mdi-stadium',               // 10: arena
 	]),
 	summonTemplates: Object.freeze(SUMMON_TEMPLATES),
 	potions: Object.freeze(POTIONS),
@@ -780,6 +800,7 @@ const LeekWars = reactive({
 		}
 	},
 	christmasPresents: DATE.getMonth() === 11 && DATE.getDate() >= 25 && DATE.getDate() <= 31,
+	aprilFools: DATE.getMonth() === 3 && DATE.getDate() === 1,
 	LATEST_LEEKSCRIPT_VERSION: 4,
 	logClass: (log: any[]) => {
 		if (log[1] === 2 || log[1] === 7 || log[1] === 11) { return "warning" }
@@ -788,7 +809,7 @@ const LeekWars = reactive({
 		return null
 	},
 	logColor: (log: any[]) => {
-		return log[1] === 1 && log.length > 3 && log[3] ? LeekWars.colorToHex(log[3]) : ''
+		return log[1] === 1 && log.length > 3 && log[3] >= 0 ? LeekWars.colorToHex(log[3]) : ''
 	},
 	logText: (log: any[]) => {
 		if (log[1] === 5) { return "pause()" }
@@ -956,6 +977,7 @@ function formatDuration(timestamp: number, capital: boolean = false) {
 }
 
 function formatDate(timestamp: number) {
+	if (!timestamp) { return '' }
 	const date = new Date(timestamp * 1000)
 	const day = date.getDate()
 	const month = date.getMonth()
@@ -1183,10 +1205,54 @@ function goToRanking(type: string, order: string, id: number = 0) {
 		const page = 1 + Math.floor((data.rank - 1) / 50)
 		const active_url = data.active ? '' : '?inactive'
 		const newRoute = '/ranking/' + type + '/' + order + '/page-' + page + active_url + '#rank-' + data.rank
-		if (router.currentRoute.fullPath !== newRoute) {
-			router.push(newRoute)
+		if (_router.currentRoute.value.fullPath !== newRoute) {
+			_router.push(newRoute)
 		}
 	})
 }
 
-export { LeekWars, Language }
+/**
+ * Charge les données de jeu depuis __DATA__ (inline HTML) + IndexedDB, et met à jour l'objet LeekWars.
+ * À appeler au boot de l'app, juste après le mount.
+ */
+async function loadGameData() {
+	console.log('[GameData] Loading...')
+	const data = await loadGameDataRaw()
+	if (!data || Object.keys(data).length === 0) {
+		console.log('[GameData] No data to apply, keeping bundled static data')
+		return
+	}
+
+	const t0 = performance.now()
+
+	if (data.items) LeekWars.items = Object.freeze(data.items)
+	if (data.weapons) {
+		LeekWars.weapons = Object.freeze(data.weapons)
+		LeekWars.weaponByName = Object.freeze(weaponByName(data.weapons))
+	}
+	if (data.hats) LeekWars.hats = Object.freeze(data.hats)
+	if (data.pomps) LeekWars.pomps = Object.freeze(data.pomps)
+	if (data.potions) {
+		LeekWars.potions = Object.freeze(data.potions)
+		LeekWars.potionByName = Object.freeze(potionByName(data.potions))
+		LeekWars.potionsBySkin = Object.freeze(potionsBySkin(data.potions))
+	}
+	if (data.schemes) LeekWars.schemes = Object.freeze(data.schemes)
+	if (data.components) LeekWars.components = Object.freeze(data.components)
+	if (data.hat_templates) LeekWars.hatTemplates = Object.freeze(data.hat_templates)
+	if (data.chip_templates) LeekWars.chipTemplates = Object.freeze(data.chip_templates)
+	if (data.summon_templates) LeekWars.summonTemplates = Object.freeze(data.summon_templates)
+	if (data.trophy_categories) {
+		LeekWars.trophyCategories = Object.freeze(data.trophy_categories)
+		LeekWars.trophyCategoriesById = Object.freeze([...data.trophy_categories].sort((a: any, b: any) => a.id - b.id))
+	}
+	if (data.complexities) LeekWars.complexities = Object.freeze(data.complexities)
+	if (data.trophies) LeekWars.trophies = Object.freeze(data.trophies)
+	if (data.constants) LeekWars.constants = Object.freeze(data.constants)
+	if (data.functions) LeekWars.functions = Object.freeze(data.functions)
+	if (data.chips) LeekWars.chips = Object.freeze(data.chips)
+
+	console.log(`[GameData] Applied in ${(performance.now() - t0).toFixed(1)}ms`)
+}
+
+export { LeekWars, Language, loadGameData }

@@ -1,9 +1,7 @@
 <template>
 	<v-menu ref="menu" v-model="value" :close-on-content-click="false" offset-overflow :disabled="disabled" :nudge-top="0" :open-delay="_open_delay" :close-delay="_close_delay" :location="bottom ? 'bottom' : 'top'" :transition="instant ? 'none' : 'scale-transition'" :open-on-hover="!locked" offset-y @update:modelValue="open($event)">
-		<template #activator="{ props }">
-			<span v-bind="props">
-				<slot></slot>
-			</span>
+		<template #activator="{ props: activatorProps }">
+			<slot :props="activatorProps"></slot>
 		</template>
 		<div :class="{expanded: expand_items}" class="card" @mouseenter="mouse = true" @mouseleave="mouse = false">
 			<loader v-if="!leek" :size="30" />
@@ -25,7 +23,7 @@
 							</router-link>
 							<lw-title v-if="leek.title.length" :title="leek.title" />
 						</span>
-						<talent :id="leek.id" :talent="leek.talent" category="leek" />
+						<talent :id="leek.id" :talent="leek.talent" :max_talent="leek.max_talent" category="leek" />
 						<span class="talent-more">({{ leek.talent_more >= 0 ? '+' + leek.talent_more : leek.talent_more }})</span>
 						<ranking-badge v-if="leek && leek.ranking && leek.ranking <= 1000 && leek.in_garden" :id="leek.id" :ranking="leek.ranking" category="leek" />
 						<span class="level">• {{ $t('main.level_n', [leek.level]) }}</span>
@@ -85,7 +83,7 @@ const LWTitle = defineAsyncComponent(() => import('@/component/title/title.vue')
 import { CHIPS } from '@/model/chips'
 import { defineAsyncComponent } from 'vue'
 
-@Options({ components: { RichTooltipItem, 'lw-title': LWTitle, 'leek-image': LeekImage } })
+@Options({ components: { RichTooltipItem, 'lw-title': LWTitle, 'leek-image': LeekImage }, emits: ['update:modelValue'] })
 export default class RichTooltipLeek extends Vue {
 
 	@Prop({required: true}) id!: number
@@ -103,10 +101,10 @@ export default class RichTooltipLeek extends Vue {
 	value: boolean = false
 
 	get _open_delay() {
-		return this.instant ? 0 : 500
+		return this.instant ? 1 : 500
 	}
 	get _close_delay() {
-		return this.instant ? 0 : 1
+		return this.instant ? 1 : 1
 	}
 	@Watch('id')
 	update() {

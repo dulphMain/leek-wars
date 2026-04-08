@@ -100,5 +100,21 @@
 	"title_37": "{0} gav dig {1} habs",
 	"message_37": "Se marknaden",
 	"title_38": "{0} gav dig {1} slagsmål",
-	"message_38": "Gå till grönsaksgården"
+	"message_38": "Gå till grönsaksgården",
+	"title_39": "{0} röstade positivt på ditt meddelande i {1}",
+	"message_39": "Se meddelandet",
+	"title_40": "{0} röstade negativt på ditt meddelande i {1}",
+	"message_40": "Se meddelandet",
+	"title_43": "{0} deltog i en Battle Royale!",
+	"message_43": "Se Battle Royale",
+	"title_41": "Laget {0} har bjudit in dig att gå med!",
+	"message_41": "Se lagets sida",
+	"title_42": "{0} accepterade din inbjudan!",
+	"message_42": "Se lagets sida",
+	"title_44": "{0} deltog i ett Krig!",
+	"message_44": "Se Kriget",
+	"title_45": "{0} deltog i en Kistjakt!",
+	"message_45": "Se Kistjakten",
+	"title_46": "{0} deltog i en Koloss-strid!",
+	"message_46": "Se Koloss-striden"
 }

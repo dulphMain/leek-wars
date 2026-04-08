@@ -95,7 +95,7 @@
 				</div>
 			</div>
 			<div v-else>
-				<div class="center">
+				<div class="pagination-buttons-filters">
 					<pagination :current="page" :total="pages" :url="url" :url-query="urlQuery" />
 					<div v-if="$store.state.farmer" class="me-buttons">
 						<template v-if="category === 'leek'">
@@ -255,7 +255,7 @@
 					</table>
 					<loader v-if="!ranking" />
 				</div>
-				<div class="center">
+				<div class="pagination-buttons-filters">
 					<pagination :current="page" :total="pages" :url="url" :url-query="urlQuery" />
 				</div>
 			</div>
@@ -291,6 +291,7 @@
 	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 	import Pagination from '@/component/pagination.vue'
 import { emitter } from '@/model/vue'
+import { nextTick } from 'vue'
 
 	@Options({
 		name: 'ranking', i18n: {}, mixins: [...mixins],
@@ -436,6 +437,12 @@ import { emitter } from '@/model/vue'
 					const subtitle = this.category.includes('level') ? this.$t('main.level_n', [this.rankingLevel]) : this.$t('main.n_' + this.category + 's', [data.total])
 					LeekWars.setTitle(this.$t('title'), subtitle)
 					emitter.emit('loaded')
+					if (this.searchResult) {
+						nextTick(() => {
+							const row = document.querySelector('tr.highlight')
+							if (row) { row.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
+						})
+					}
 				})
 			}
 		}
@@ -499,21 +506,19 @@ import { emitter } from '@/model/vue'
 </script>
 
 <style lang="scss" scoped>
-	.center {
+	.pagination-buttons-filters {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		flex-wrap: wrap;
+		padding: 15px 0;
+		gap: 10px 20px;
 	}
 	.tab button {
 		margin-right: -6px;
 	}
 	.panel .content {
 		padding: 0
-	}
-	.pagination {
-		text-align: center;
-		display: inline-block;
 	}
 	.me-buttons {
 		display: inline-flex;
@@ -522,7 +527,6 @@ import { emitter } from '@/model/vue'
 		}
 	}
 	.inactives {
-		padding: 10px;
 		vertical-align: bottom;
 	}
 	.ranking.large {

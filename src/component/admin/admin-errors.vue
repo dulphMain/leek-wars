@@ -1,7 +1,7 @@
 <template>
 	<div class="page">
 		<div class="page-header page-bar">
-			<h1><router-link to="/admin">Administration</router-link> > Gestionnaire d'erreur</h1>
+			<h1><breadcrumb :items="[{name: 'Administration', link: '/admin'}, {name: 'Gestionnaire d\'erreur', link: '/admin/errors'}]" :raw="true" /></h1>
 		</div>
 		<panel class="first last">
 			<div class="errors content">
@@ -21,6 +21,7 @@
 						<div v-for="(error, e) in errors" :key="e" class="error">
 							<div class="card">
 								<div class="header">
+									<v-icon color="error" @click="removeError(error.id)">mdi-delete</v-icon>
 									<div>Erreur #{{ error.id }} - <b>{{ LeekWars.formatDateTime(error.time) }}</b> - Type {{ error.type }} - Gravité {{ error.severity }}</div>
 									<span v-if="error.service" class="service" :class="error.service">{{ error.service }}</span>
 									<div class="spacer"></div>
@@ -33,15 +34,24 @@
 									<span class="ip" v-if="error.ip">{{ error.ip }}</span>
 								<span v-if="error.user_agent" class="user-agent" :title="error.user_agent">{{ formatUA(error.user_agent) }}</span>
 									<span class="ls" v-if="error.ai_version">LS {{ error.ai_version }}</span>
+									<span class="strict" v-if="error.ai_strict">Strict</span>
 									<span class="ls" v-if="error.ai">IA {{ error.ai }}</span>
 									<!-- <a :href="LeekWars.API + 'ai/download/' + error.ai" target="_blank"><v-btn v-if="error.ai" color="primary" small>IA {{ error.ai }}</v-btn></a> -->
-									<a :href="LeekWars.API + 'error/ai-code/' + error.id" target="_blank"><v-btn v-if="error.ai" color="primary" size="small">IA {{ error.ai }}</v-btn></a>
+									<a :href="LeekWars.API + 'error/ai-code/' + error.id" target="_blank"><v-btn v-if="error.ai" color="primary" size="small">LS {{ error.ai }}</v-btn></a>
+									<a :href="LeekWars.API + 'error/ai-java-code/' + error.id" target="_blank"><v-btn v-if="error.ai" color="secondary" size="small">Java {{ error.ai }}</v-btn></a>
 									<router-link :to="'/fight/' + error.fight"><v-btn v-if="error.fight" size="small">Combat {{ error.fight }}</v-btn></router-link>
 									<a v-if="error.issue" :href="'https://github.com/5pilow/leek-wars-server/issues/' + error.issue" target="_blank"><v-btn size="small" color="success">Issue #{{ error.issue }}</v-btn></a>
 									<v-btn v-else size="small" @click="createIssue(error)">Créer issue</v-btn>
-									<v-icon color="error" @click="removeError(error.id)">mdi-delete</v-icon>
 								</div>
-								<code>{{ error.trace.substring(0, 8000) }}</code>
+								<div :ref="'trace-' + e" class="trace-container" :class="{ collapsed: traceOverflows[e] && !traceExpanded[e] }">
+									<code>{{ error.trace.substring(0, 8000) }}</code>
+									<div v-if="traceOverflows[e] && !traceExpanded[e]" class="trace-gradient" @click="toggleTrace(e, true)">
+										<v-icon>mdi-chevron-down</v-icon>
+									</div>
+								</div>
+								<div v-if="traceOverflows[e] && traceExpanded[e]" class="trace-collapse" @click="toggleTrace(e, false)">
+									<v-icon>mdi-chevron-up</v-icon>
+								</div>
 								<div v-if="error.file || error.line">Fichier <b>{{ error.file }}</b> <span v-if="error.line"> ligne <b>{{ error.line }}</b></span></div>
 							</div>
 						</div>
@@ -57,12 +67,16 @@
 	import { store } from '@/model/store'
 	import { emitter } from '@/model/vue'
 	import { Options, Vue } from 'vue-property-decorator'
+	import { nextTick } from 'vue'
+	import Breadcrumb from '@/component/forum/breadcrumb.vue'
 
-	@Options({})
+	@Options({ components: { Breadcrumb } })
 	export default class AdminErrors extends Vue {
 		errors: any[] | null = null
 		deleteQuery: string = ''
 		newErrors: number = 0
+		traceExpanded: Record<number, boolean> = {}
+		traceOverflows: Record<number, boolean> = {}
 
 		created() {
 			if (!this.$store.getters.admin) this.$router.replace('/')
@@ -80,9 +94,25 @@
 			}
 		}
 
+		toggleTrace(index: number, expanded: boolean) {
+			this.traceExpanded = { ...this.traceExpanded, [index]: expanded }
+		}
+
 		update() {
 			LeekWars.get('error/get-latest').then(data => {
 				this.errors = data.errors
+				this.traceExpanded = {}
+				this.traceOverflows = {}
+				nextTick(() => {
+					const overflows: Record<number, boolean> = {}
+					for (let i = 0; i < data.errors.length; i++) {
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						const refs = (this as any).$refs['trace-' + i]
+						const el = Array.isArray(refs) ? refs[0] : refs
+						overflows[i] = el ? el.scrollHeight > 300 : false
+					}
+					this.traceOverflows = overflows
+				})
 				this.$store.commit('error-count', data.count)
 				LeekWars.setTitle("Gestionnaire d'erreur (" + (store.state.farmer ? store.state.farmer!.errors : 0) + ")")
 			})
@@ -147,6 +177,14 @@
 				height: 26px;
 			}
 		}
+		.strict {
+			font-size: 11px;
+			font-weight: bold;
+			padding: 2px 6px;
+			border-radius: 3px;
+			background: #e57373;
+			color: white;
+		}
 		.ip {
 			font-family: monospace;
 			font-size: 13px;
@@ -173,11 +211,43 @@
 			&.client { background: #4caf50; color: white; }
 		}
 	}
-	.error code {
-		margin: 8px 0;
-		display: block;
-		word-break: break-word;
-		font-size: 14px;
+	.trace-container {
+		position: relative;
+		&.collapsed {
+			max-height: 300px;
+			overflow: hidden;
+		}
+		code {
+			margin: 8px 0;
+			display: block;
+			word-break: break-word;
+			font-size: 14px;
+		}
+	}
+	.trace-gradient {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		height: 80px;
+		background: linear-gradient(transparent, var(--pure-white));
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+		cursor: pointer;
+		padding-bottom: 4px;
+		.v-icon {
+			padding: 2px;
+		}
+	}
+	.trace-collapse {
+		display: flex;
+		justify-content: center;
+		cursor: pointer;
+		margin-top: -4px;
+		margin-bottom: 4px;
+		opacity: 0.6;
+		&:hover { opacity: 1; }
 	}
 	.errors td a {
 		color: #0a0;

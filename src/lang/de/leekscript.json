@@ -4,7 +4,7 @@
 	"expert": "Experte",
 	"normal": "Normal",
 	"lambda": "Lambda",
-	"leekscript": "Lauchscript",
+	"leekscript": "LeekScript",
 	"ls_function_definitions": "Die Funktion \"{0}\" bietet {1} Definitionen.",
 	"ls_function_information": "Informationen zur Funktion \"{0}\".",
 	"ls_return_nothing": "gibt nichts zurück",
@@ -81,7 +81,7 @@
 	"error_65": "KI-Unterbrechung: Die Ausführung der KI dauerte länger als 10 Sekunden, für den Rest des Kampfes deaktiviert",
 	"error_58": "\"{0}\" kann nicht ausgeführt werden",
 	"error_59": "Diese Funktion kann nicht mit Argumenten ({0}) verwendet werden, erwartete {1} Argumente",
-	"error_66": "Ihre KI konnte nicht korrekt kompiliert werden, da Ihr Code zu groß ist.",
+	"error_66": "Ihre KI konnte nicht korrekt kompiliert werden, da Ihr Code zu groß ist. {0}",
 	"error_55": "Funktion {0} wird entfernt, verwenden Sie jetzt {1}",
 	"error_57": "Durch Null teilen",
 	"error_60": "Du hast keine KI",
@@ -181,5 +181,8 @@
 	"intial_version": "Ursprüngliche Version",
 	"strict_mode": "Strenger Modus (fortgeschritten)",
 	"all_info_ls": "Alle Informationen über den {0}",
-	"size": "Größe"
+	"size": "Größe",
+	"error_146": "\"case\" oder \"default\" erwartet.",
+	"error_147": "Doppelpunkt nach \"case\" erwartet.",
+	"error_148": "Variable \"{0}\" wird nicht verwendet."
 }

@@ -48,8 +48,12 @@ class Team {
 	public unengaged_leeks!: Leek[]
 	public opened!: boolean
 	public description!: string
+	public recruitment_message!: string
 	public candidacy!: boolean
+	public candidacies!: any[]
+	public invitations!: any[]
 	public talent!: number
+	public max_talent!: number
 	public talent_history!: number[]
 	public turret_ai!: any
 	public chat!: number
@@ -57,10 +61,15 @@ class Team {
 	public forum!: number
 	public leek_count!: number
 	public rankings!: {leeks: any[], farmers: any[], trophies: any[]}
+	public members_columns!: { columns: string[], order?: string[], sort: { key: string, order: string } } | null
+	public likes!: number
+	public liked!: boolean
+	public language!: string
 }
 
 class TeamMember extends Farmer {
 	public logs_level!: number
+	public join_date!: number
 }
 
 enum TeamMemberLevel {
@@ -79,6 +88,7 @@ class Composition {
 	public tournamentRange!: any
 	public tournamentRangeLoading!: any
 	public talent!: number
+	public max_talent!: number
 }
 
 export { Composition, Team, TeamMember, TeamMemberLevel, TEAM_COLORS }

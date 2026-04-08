@@ -15,7 +15,7 @@ import RankingBadge from '@/component/ranking-badge.vue'
 import Talent from '@/component/talent.vue'
 import { env } from '@/env'
 import { i18n, loadLanguageAsync } from '@/model/i18n'
-import { LeekWars } from '@/model/leekwars'
+import { LeekWars, setRouter, loadGameData } from '@/model/leekwars'
 import '@/model/serviceworker'
 import { store } from "@/model/store"
 import router, { getRedirectAfterLogin } from '@/router'
@@ -28,7 +28,7 @@ import { createVuetify } from 'vuetify'
 import 'vuetify/styles'
 import '@mdi/font/css/materialdesignicons.css'
 import { formatEmojis } from './emojis'
-import { emitter, setVueMain } from './emitter'
+import { displayWarningMessage, emitter, setVueMain } from './emitter'
 import '@/chart'
 
 const Console = defineAsyncComponent(() => import('@/component/app/console.vue'))
@@ -73,17 +73,6 @@ const vuetify = createVuetify({
 		},
 	},
 })
-
-function displayWarningMessage() {
-	const style = "color: black; font-size: 13px; font-weight: bold;"
-	const styleRed = "color: red; font-size: 14px; font-weight: bold;"
-	console.log("%c" + i18n.global.t('main.console_alert_1'), style)
-	console.log("%c" + i18n.global.t('main.console_alert_2'), styleRed)
-	console.log("%c" + i18n.global.t('main.console_alert_3'), style)
-	console.log("")
-	console.log("%c✔️ " + i18n.global.t('main.console_github'), style)
-	console.log("")
-}
 
 // Handle Vite CSS/JS preload errors after deployment (stale hashed assets)
 // The guard flag prevents infinite reload loops if the error persists after reload.
@@ -157,6 +146,8 @@ const app = createApp({
 			}
 		});
 
+		LeekWars.xpCursorsInit()
+
 		const startIntervals = () => {
 			secondInterval = setInterval(() => {
 				LeekWars.timeSeconds = (Date.now() / 1000) | 0 - LeekWars.timeDelta
@@ -214,10 +205,14 @@ const app = createApp({
 		})
 		
 		window.onbeforeunload = () => {
-			const component = router.currentRoute.matched[0].instances.default
-			const beforeRouteLeave = (component.$options as any).beforeRouteLeave
-			if (beforeRouteLeave) {
-				if (!beforeRouteLeave[0].bind(component)()) { return "Confirm" }
+			const matched = router.currentRoute.value?.matched[0]
+			if (matched) {
+				const component = matched.instances?.default
+				if (!component) return
+				const beforeRouteLeave = (component.$options as any).beforeRouteLeave
+				if (beforeRouteLeave) {
+					if (!beforeRouteLeave[0].bind(component)()) { return "Confirm" }
+				}
 			}
 			LeekWars.unload()
 		}
@@ -267,6 +262,7 @@ const app = createApp({
 	}
 })
 
+setRouter(router)
 app.use(router)
 app.use(i18n)
 app.use(store)
@@ -357,20 +353,18 @@ app.directive('chat-code-latex', {
 			return "<code>" + code + "</code>"
 		})
 		el.querySelectorAll('code').forEach((c) => {
+			let props
 			if (c.innerHTML.indexOf("<br>") !== -1) {
-				const code = LeekWars.decodehtmlentities(c.innerHTML).replace(/<br>/gi, "\n").trim()
-				const codeApp = createApp(Code, { code, expandable: true })
-				codeApp.use(vuetify)
-				codeApp.use(i18n)
-				codeApp.use(store)
-				codeApp.mount(c)
+				props = { code: LeekWars.decodehtmlentities(c.innerHTML).replace(/<br>/gi, "\n").trim(), expandable: true }
 			} else {
-				const codeApp = createApp(Code, { code: c.textContent || '', single: true })
-				codeApp.use(vuetify)
-				codeApp.use(i18n)
-				codeApp.use(store)
-				codeApp.mount(c)
+				props = { code: c.textContent || '', single: true }
 			}
+			const codeApp = createApp(Code, props)
+			codeApp.use(vuetify)
+			codeApp.use(i18n)
+			codeApp.use(store)
+			const vm = codeApp.mount(c)
+			c.replaceWith(vm.$el)
 		})
 		el.querySelectorAll('latex').forEach((c) => {
 			Latex.latexify(c.innerHTML).then(result => {
@@ -378,7 +372,8 @@ app.directive('chat-code-latex', {
 			})
 		})
 		el.querySelectorAll('a').forEach(a => {
-			if (a.getAttribute('href')!.startsWith('/') ) {
+			const href = a.getAttribute('href')
+			if (href && href.startsWith('/') ) {
 				a.onclick = (e: Event) => {
 					e.stopPropagation()
 					e.preventDefault()
@@ -422,6 +417,18 @@ app.directive('emojis', (el) => {
 		}
 	})
 })
+
+app.config.globalProperties.$filters = {
+	number: LeekWars.formatNumber,
+	date: LeekWars.formatDate,
+	datetime: LeekWars.formatDateTime,
+	timeseconds: LeekWars.formatTimeSeconds,
+	time: LeekWars.formatTime,
+	duration: LeekWars.formatDuration,
+}
+
+// Charger les données de jeu AVANT le mount Vue
+await loadGameData().catch(e => console.warn('[GameData] Init failed:', e))
 
 const vm = app.mount('#app2') as ComponentPublicInstance & {
 	$once: (event: string, callback: () => void) => void
@@ -472,16 +479,6 @@ if (window.__FARMER__) {
 			}
 		})
 	}
-}
-
-// Register Vue filters after LeekWars is fully initialized
-app.config.globalProperties.$filters = {
-	number: LeekWars.formatNumber,
-	date: LeekWars.formatDate,
-	datetime: LeekWars.formatDateTime,
-	timeseconds: LeekWars.formatTimeSeconds,
-	time: LeekWars.formatTime,
-	duration: LeekWars.formatDuration,
 }
 
 export { vueMain } from './emitter'
