@@ -29,10 +29,10 @@
 
 				<div class="icon">📦</div>
 
-				<div>
+				<div v-if="language">
 					<v-menu offset-y>
 						<template #activator="{ props }">
-							<div v-bind="props" v-ripple class="language-button">
+							<div v-ripple v-bind="props" class="language-button">
 								<flag :code="language.country" />
 								{{ language.name }}
 								<v-icon>mdi-chevron-down</v-icon>
@@ -54,12 +54,12 @@
 		</panel>
 
 		<panel v-for="(category, c) in items" :key="c" :title="$t(category.name)" :icon="category.icon">
-			<div class="grid">
+			<div v-if="language" class="grid">
 				<div v-for="(item, i) in category.items" :key="i" class="item">
 					<iframe v-if="item.type === 'video'" width="500" height="315" :src="'https://www.youtube.com/embed/' + item.name" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-					<object class="card" v-else-if="item.type === 'text'" :data="'/press-kit/' + (item.localized ? language.code + '/' : '') + item.name + '.' + item.formats[0]" color-scheme="dark"></object>
-					<a v-else :href="'/press-kit/' + (item.localized ? language.code + '/' : '') + item.name + '.' + item.formats[0]" target="_blank">
-						<img :src="'/press-kit/' + (item.localized ? language.code + '/' : '') + item.name + '.' + item.formats[0]" :class="{alpha: item.alpha}">
+					<object v-else-if="item.type === 'text'" class="card" :data="'/press-kit/' + (item.localized ? language.code + '/' : '') + item.name + '.' + (item.formats?.[0] ?? '')" color-scheme="dark"></object>
+					<a v-else :href="'/press-kit/' + (item.localized ? language.code + '/' : '') + item.name + '.' + (item.formats?.[0] ?? '')" target="_blank">
+						<img :src="'/press-kit/' + (item.localized ? language.code + '/' : '') + item.name + '.' + (item.formats?.[0] ?? '')" :class="{alpha: item.alpha}">
 					</a>
 					<div class="legend">{{ item.legends ? item.legends[language.code] : item.legend }} <a v-for="format of item.formats" :key="format" :href="'/press-kit/' + (item.localized ? language.code + '/' : '') + item.name + '.' + format" target="_blank" class="format">{{ format }}</a></div>
 				</div>
@@ -81,17 +81,33 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { mixins } from '@/model/i18n'
-	import { Options, Vue } from 'vue-property-decorator'
-	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
-	import { Language, LeekWars } from '@/model/leekwars'
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { mixins } from '@/model/i18n'
+import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
+import { type Language, LeekWars } from '@/model/leekwars'
 
-	@Options({ name: 'press-kit', i18n: {}, mixins: [...mixins], components: { RichTooltipFarmer } })
-	export default class PressKit extends Vue {
+defineOptions({ name: 'PressKit', i18n: {}, mixins: [...mixins] })
 
-		language: Language | null = null
-		items = [
+const { locale } = useI18n()
+
+const language = ref<Language | null>(null)
+interface PressItem {
+	name: string
+	type?: 'video' | 'text'
+	formats?: string[]
+	alpha?: boolean
+	localized?: boolean
+	legend?: string
+	legends?: Record<string, string>
+}
+interface PressCategory {
+	name: string
+	icon: string
+	items: PressItem[]
+}
+const items: PressCategory[] = [
 			{ name: 'logos', icon: 'mdi-image', items: [
 				{ name: 'leekwars_logo_dark', formats: ['svg', 'png'], alpha: true, legends: {
 					fr: 'Logo Leek Wars sombre',
@@ -220,19 +236,16 @@
 				{ type: 'video', name: '9DXQfRH_2FM', legend: "As-tu toujours rêvé de créer un IA pour te battre avec un poireau?" },
 				{ type: 'video', name: 'EBI5IYuECvk', legend: "[Leek Wars] - Bataille de poireaux !" },
 				{ type: 'video', name: 'wmZB4fEhTBo', legend: "UN JEU DE PROGRAMMATION ?! - Leek Wars" },
-			]}
-		]
+		]}
+]
 
-		created() {
-			const lang = localStorage.getItem('forum/chat-language') || this.$i18n.locale
-			this.language = LeekWars.languages[lang]
-		}
+const lang = localStorage.getItem('forum/chat-language') || (locale.value as string)
+language.value = LeekWars.languages[lang]
 
-		setLanguage(language: Language) {
-			this.language = language
-			localStorage.setItem('forum/chat-language', language.code)
-		}
-	}
+function setLanguage(l: Language) {
+	language.value = l
+	localStorage.setItem('forum/chat-language', l.code)
+}
 </script>
 
 <style lang="scss" scoped>

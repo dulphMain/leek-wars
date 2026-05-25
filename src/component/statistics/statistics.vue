@@ -56,22 +56,22 @@
 					<div class="title">{{ $t('chart_chests') }}</div>
 				</div>
 				<template v-for="(statistic, name) in category">
-					<div v-if="statistic.visible" :key="name" :class="{private: statistic.private, show_today: statistic.show_today, color: selectedStatistic === name && !!selectedStatisticColor}" class="statistic card" :style="{background: selectedStatistic === name ? selectedStatisticColor : null}" @click="statistic.today_state = statistic.show_today && !statistic.today_state" @mouseenter="hoverStat(name)" @mouseleave="hoverLeave">
+					<div v-if="statistic.visible" :key="name" :class="{private: statistic.private, show_today: statistic.show_today, color: selectedStatistic === name && !!selectedStatisticColor}" class="statistic card" :style="{background: selectedStatistic === name ? selectedStatisticColor : ''}" @click="statistic.today_state = statistic.show_today && !statistic.today_state" @mouseenter="hoverStat(name)" @mouseleave="hoverLeave">
 						<div class="label"><v-icon v-if="statistic.icon">{{ 'mdi-' + statistic.icon }}</v-icon> {{ $t(name) }}</div>
 						<div v-if="!statistic.today_state" class="value total">{{ Math.floor(statistic.value).toLocaleString('fr-FR') }}</div>
 						<div v-else class="value today">{{ Math.floor(statistic.today).toLocaleString('fr-FR') }}</div>
 						<div class="type">{{ $t(statistic.today_state ? 'today' : 'total') }}</div>
 					</div>
 					<div v-if="name === 'fight_tournament' || name === 'turrets_killed' || name === 'ais_v4' || name === 'godsons'" :key="name + '1'" class="delimiter"></div>
-					<div v-if="name === 'godsons'" class="chart-wrap left" :key="name + '2'">
+					<div v-if="name === 'godsons'" :key="name + '2'" class="chart-wrap left">
 						<div class="chart"><Doughnut ref="charts" :data="chartLanguage" :options="chartOptions" /></div>
 						<div class="title">{{ $t('chart_language') }}</div>
 					</div>
-					<div v-if="name === 'damage'" class="chart-wrap left"  :key="name + '2'">
+					<div v-if="name === 'damage'" :key="name + '2'"  class="chart-wrap left">
 						<div class="chart"><Doughnut ref="charts" :data="chartDamage" :options="chartOptions" /></div>
 						<div class="title">{{ $t('chart_damage_type') }}</div>
 					</div>
-					<div v-if="name === 'fight_tournament'" class="chart-wrap right" :key="name + '2'">
+					<div v-if="name === 'fight_tournament'" :key="name + '2'" class="chart-wrap right">
 						<div class="chart"><Doughnut ref="charts" :data="chartFightContext" :options="chartOptions" /></div>
 						<div class="title">{{ $t('chart_fight_context') }}</div>
 					</div>
@@ -81,11 +81,13 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { mixins } from '@/model/i18n'
+<script setup lang="ts">
+	import { i18n, mixins, useNamespacedT } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
-	import { Options, Vue, Watch } from 'vue-property-decorator'
 	import { Doughnut } from 'vue-chartjs'
+	import { computed, onBeforeUnmount, ref, watch } from 'vue'
+	const t = useNamespacedT('statistics')
+	const te = (key: string) => (i18n.global.te as (k: string) => boolean)('statistics.' + key)
 
 	const GENERAL_CATEGORY = 1
 	const FIGHT_CATEGORY = 2
@@ -104,177 +106,161 @@
 		interpolate!: boolean
 		show_today!: boolean
 		today_state!: boolean
+		private?: boolean
+		icon?: string
 	}
 
-	@Options({ name: 'statistics', i18n: {}, mixins: [...mixins], components: { Doughnut } })
-	export default class Statistics extends Vue {
-		loaded: boolean = false
-		statistics: Array<{[key: string]: Statistic}> = []
-		statistics_cloned: Array<{[key: string]: Statistic}> = []
-		interpolated: Statistic[] = []
-		interval: any = null
-		playing: boolean = true
-		selectedStatistic: string = ''
-		selectedStatisticColor: string = ''
-		chartOptions: any = null
-		actions = [{icon: 'mdi-play', click: () => this.toggleAction()}]
+	defineOptions({ name: 'Statistics', i18n: {}, mixins: [...mixins] })
 
-		get chartFightType() {
-			return this.makeChartData(FIGHT_CATEGORY, ['fight_solo', 'fight_farmer', 'fight_team', 'fight_br'])
-		}
-		get chartFightContext() {
-			return this.makeChartData(FIGHT_CATEGORY, ['fight_garden', 'fight_test', 'fight_tournament', 'fight_challenge'])
-		}
-		get chartDamage() {
-			return this.makeChartData(FIGHT_CATEGORY, ['damage_direct', 'damage_poison', 'damage_return', 'damage_life'])
-		}
-		get chartAI() {
-			return this.makeChartData(AI_CATEGORY, ['ais_v1', 'ais_v2', 'ais_v3', 'ais_v4'])
-		}
-		get chartLanguage() {
-			return this.makeChartData(GENERAL_CATEGORY, ['lang_fr', 'lang_en', 'lang_es', 'lang_it', 'lang_de'])
-		}
-		get chartLanguages() {
-			return this.makeChartData(CODE_CATEGORY, ['lw_code_java', 'lw_code_javascript', 'lw_code_php', 'lw_code_css', 'lw_code_vue', 'lw_code_json'])
-		}
-		get chartItems() {
-			return this.makeChartData(ITEM_CATEGORY, [ 'item_resource', 'item_weapon', 'item_chip', 'item_potion', 'item_hat', 'item_pomp' ])
-		}
-		get chartChests() {
-			return this.makeChartData(CHEST_CATEGORY, [ 'chest_wood', 'chest_iron', 'chest_diamond' ])
-		}
+	const loaded = ref(false)
+	const statistics = ref<Array<{[key: string]: Statistic}>>([])
+	const statistics_cloned = ref<Array<{[key: string]: Statistic}>>([])
+	const interpolated: Statistic[] = []
+	let interval: ReturnType<typeof setInterval> | null = null
+	const playing = ref(true)
+	const selectedStatistic = ref('')
+	const selectedStatisticColor = ref('')
+	const chartOptions = ref<Record<string, unknown> | null>(null)
+	const actions = ref<{ icon: string, click: () => void }[]>([])
+	const charts = ref<{ chart?: unknown }[] | null>(null)
 
-		makeChartData(category: number, values: string[]) {
-			const statistics = this.statistics_cloned[category]
-			if (!statistics) { return { labels: [], datasets: [{ data: [] }] } }
-			const total = values.reduce((t, s) => t + statistics[s].value, 0)
-			const filtered_values = values.filter(s => statistics[s].value / total > 0.01)
-			filtered_values.sort((a, b) => statistics[b].value - statistics[a].value)
-			return {
-				labels: filtered_values.map(s => this.$i18n.te(s + '_chart') ? this.$i18n.t(s + '_chart') : this.$i18n.t(s)),
-				datasets: [{
-					data: filtered_values.map(s => statistics[s].value),
-					backgroundColor: CHART_COLORS.slice(0, filtered_values.length),
-					hoverOffset: 0,
-					keys: filtered_values,
-				}]
+	function makeChartData(category: number, values: string[]) {
+		const stats = statistics_cloned.value[category]
+		if (!stats) { return { labels: [], datasets: [{ data: [] }] } }
+		const total = values.reduce((t, s) => t + stats[s].value, 0)
+		const filtered_values = values.filter(s => stats[s].value / total > 0.01)
+		filtered_values.sort((a, b) => stats[b].value - stats[a].value)
+		return {
+			labels: filtered_values.map(s => te(s + '_chart') ? t(s + '_chart') : t(s)),
+			datasets: [{
+				data: filtered_values.map(s => stats[s].value),
+				backgroundColor: CHART_COLORS.slice(0, filtered_values.length),
+				hoverOffset: 0,
+				keys: filtered_values,
+			}]
+		}
+	}
+
+	const chartFightType = computed(() => makeChartData(FIGHT_CATEGORY, ['fight_solo', 'fight_farmer', 'fight_team', 'fight_br']))
+	const chartFightContext = computed(() => makeChartData(FIGHT_CATEGORY, ['fight_garden', 'fight_test', 'fight_tournament', 'fight_challenge']))
+	const chartDamage = computed(() => makeChartData(FIGHT_CATEGORY, ['damage_direct', 'damage_poison', 'damage_return', 'damage_life']))
+	const chartAI = computed(() => makeChartData(AI_CATEGORY, ['ais_v1', 'ais_v2', 'ais_v3', 'ais_v4']))
+	const chartLanguage = computed(() => makeChartData(GENERAL_CATEGORY, ['lang_fr', 'lang_en', 'lang_es', 'lang_it', 'lang_de']))
+	const chartLanguages = computed(() => makeChartData(CODE_CATEGORY, ['lw_code_java', 'lw_code_javascript', 'lw_code_php', 'lw_code_css', 'lw_code_vue', 'lw_code_json']))
+	const chartItems = computed(() => makeChartData(ITEM_CATEGORY, ['item_resource', 'item_weapon', 'item_chip', 'item_potion', 'item_hat', 'item_pomp']))
+	const chartChests = computed(() => makeChartData(CHEST_CATEGORY, ['chest_wood', 'chest_iron', 'chest_diamond']))
+
+	function toggleAction() {
+		playing.value = !playing.value
+	}
+
+	function play() {
+		actions.value[0].icon = 'mdi-pause'
+		interval = setInterval(() => {
+			for (const statistic of interpolated) {
+				statistic.value += statistic.speed
+				statistic.today += statistic.speed
 			}
-		}
+		}, DELAY)
+	}
 
-		created() {
-			this.chartOptions = {
-				responsive: true,
-				aspectRatio: 1,
-				cutout: '50%',
-				plugins: {
-					legend: { display: false },
-				},
-				onHover: (_event: any, elements: any, chart: any) => {
-					if (elements.length > 0) {
-						const idx = elements[0].index
-						const keys = (chart.data.datasets[0] as any).keys
-						this.selectedStatistic = keys[idx]
-						this.selectedStatisticColor = chart.data.datasets[0].backgroundColor[idx]
-					} else {
-						this.selectedStatistic = ''
-						this.selectedStatisticColor = ''
-					}
-				},
+	function pause() {
+		actions.value[0].icon = 'mdi-play'
+		if (interval) { clearInterval(interval) }
+	}
+
+	actions.value = [{icon: 'mdi-play', click: () => toggleAction()}]
+	chartOptions.value = {
+		responsive: true,
+		aspectRatio: 1,
+		cutout: '50%',
+		plugins: {
+			legend: { display: false },
+		},
+		onHover: (_event: unknown, elements: { index: number }[], chart: { data: { datasets: { keys?: string[], backgroundColor: string[] }[] }, setActiveElements: (e: unknown[]) => void, update: (mode: string) => void }) => {
+			if (elements.length > 0) {
+				const idx = elements[0].index
+				const keys = chart.data.datasets[0].keys
+				selectedStatistic.value = keys[idx]
+				selectedStatisticColor.value = chart.data.datasets[0].backgroundColor[idx]
+			} else {
+				selectedStatistic.value = ''
+				selectedStatisticColor.value = ''
 			}
+		},
+	}
 
-			LeekWars.get('statistic/get-all').then(data => {
-				LeekWars.setTitle(this.$i18n.t('title'))
-				LeekWars.setActions(this.actions)
+	LeekWars.get('statistic/get-all').then(data => {
+		LeekWars.setTitle(t('title'))
+		LeekWars.setActions(actions.value)
 
-				this.statistics = data.statistics
+		statistics.value = data.statistics
 
-				this.statistics[3].operations.value *= 1000000
-				this.statistics[3].operations.speed *= 1000000
-				this.statistics[3].operations.today *= 1000000
-				this.statistics[3].operations.value += Math.floor(Math.random() * 1000000)
-				this.statistics[3].operations.today += Math.floor(Math.random() * 1000000)
-				this.statistics[3].operations.speed += Math.floor(Math.random() * 10000)
+		statistics.value[3].operations.value *= 1000000
+		statistics.value[3].operations.speed *= 1000000
+		statistics.value[3].operations.today *= 1000000
+		statistics.value[3].operations.value += Math.floor(Math.random() * 1000000)
+		statistics.value[3].operations.today += Math.floor(Math.random() * 1000000)
+		statistics.value[3].operations.speed += Math.floor(Math.random() * 10000)
 
-				this.statistics_cloned = JSON.parse(JSON.stringify(this.statistics))
+		statistics_cloned.value = JSON.parse(JSON.stringify(statistics.value))
 
-				for (const c in this.statistics) {
-					for (const s in this.statistics[c]) {
-						const statistic = this.statistics[c][s]
-						statistic.today_state = false
-						if (!statistic.visible || !statistic.interpolate) { continue }
-						statistic.speed = statistic.speed * (DELAY / 1000)
-						if (statistic.speed > 0.002) {
-							this.interpolated.push(statistic)
-						}
-					}
-				}
-
-				this.playing = localStorage.getItem('statistics/play') !== 'false'
-				if (this.playing) { this.play() }
-
-				this.loaded = true
-			})
-		}
-
-		beforeUnmount() {
-			clearInterval(this.interval)
-		}
-
-		toggleAction() {
-			this.playing = !this.playing
-		}
-
-		@Watch('playing')
-		toggle() {
-			localStorage.setItem('statistics/play', '' + this.playing)
-			this.playing ? this.play() : this.pause()
-		}
-
-		play() {
-			this.actions[0].icon = 'mdi-pause'
-			this.interval = setInterval(() => {
-				for (const statistic of this.interpolated) {
-					statistic.value += statistic.speed
-					statistic.today += statistic.speed
-				}
-			}, DELAY)
-		}
-
-		pause() {
-			this.actions[0].icon = 'mdi-play'
-			if (this.interval) { clearInterval(this.interval) }
-		}
-
-		hoverStat(stat: string) {
-			this.selectedStatistic = stat
-			const charts = this.$refs.charts as any[]
-			if (!charts) return
-			for (const chartComponent of charts) {
-				const chart = chartComponent?.chart
-				if (!chart?.data?.datasets?.[0]) continue
-				const keys = (chart.data.datasets[0] as any).keys
-				if (!keys) continue
-				const idx = keys.indexOf(stat)
-				if (idx !== -1) {
-					this.selectedStatisticColor = chart.data.datasets[0].backgroundColor[idx]
-					chart.setActiveElements([{datasetIndex: 0, index: idx}])
-					chart.update('none')
-					break
+		for (const c in statistics.value) {
+			for (const s in statistics.value[c]) {
+				const statistic = statistics.value[c][s]
+				statistic.today_state = false
+				if (!statistic.visible || !statistic.interpolate) { continue }
+				statistic.speed = statistic.speed * (DELAY / 1000)
+				if (statistic.speed > 0.002) {
+					interpolated.push(statistic)
 				}
 			}
 		}
 
-		hoverLeave() {
-			this.selectedStatistic = ''
-			this.selectedStatisticColor = ''
-			const charts = this.$refs.charts as any[]
-			if (!charts) return
-			for (const chartComponent of charts) {
-				const chart = chartComponent?.chart
-				if (!chart) continue
-				chart.setActiveElements([])
+		playing.value = localStorage.getItem('statistics/play') !== 'false'
+		if (playing.value) { play() }
+
+		loaded.value = true
+	})
+
+	onBeforeUnmount(() => {
+		clearInterval(interval)
+	})
+
+	watch(playing, () => {
+		localStorage.setItem('statistics/play', '' + playing.value)
+		if (playing.value) { play() } else { pause() }
+	})
+
+	function hoverStat(stat: string) {
+		selectedStatistic.value = stat
+		const cs = charts.value
+		if (!cs) return
+		for (const chartComponent of cs) {
+			const chart = chartComponent?.chart as { data: { datasets: { keys?: string[], backgroundColor: string[] }[] }, setActiveElements: (e: unknown[]) => void, update: (mode: string) => void } | undefined
+			if (!chart?.data?.datasets?.[0]) continue
+			const keys = chart.data.datasets[0].keys
+			if (!keys) continue
+			const idx = keys.indexOf(stat)
+			if (idx !== -1) {
+				selectedStatisticColor.value = chart.data.datasets[0].backgroundColor[idx]
+				chart.setActiveElements([{datasetIndex: 0, index: idx}])
 				chart.update('none')
+				break
 			}
+		}
+	}
+
+	function hoverLeave() {
+		selectedStatistic.value = ''
+		selectedStatisticColor.value = ''
+		const cs = charts.value
+		if (!cs) return
+		for (const chartComponent of cs) {
+			const chart = chartComponent?.chart as { setActiveElements: (e: unknown[]) => void, update: (mode: string) => void } | undefined
+			if (!chart) continue
+			chart.setActiveElements([])
+			chart.update('none')
 		}
 	}
 </script>

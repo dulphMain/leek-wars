@@ -1,8 +1,8 @@
 {
 	"account": "Konto",
 	"activate_discrete_mode": "Aktiver stille tilstand",
-	"advanced": "Rykke",
-	"change": "At skifte",
+	"advanced": "Avanceret",
+	"change": "Skift",
 	"change_email": "Skift e-mail",
 	"change_email_send": "Send bekræftelsesmail",
 	"change_email_sent": "Bekræftelsesmail sendt til den aktuelle adresse",
@@ -40,6 +40,7 @@
 	"leek_theme": "Store porrer i hvid",
 	"logout": "Log ud",
 	"new_password": "Nyt kodeord",
+	"notifs_popups": "Notifikations-popups",
 	"notifs_results": "Kamp resulterer i meddelelser",
 	"old_password": "Gammelt kodeord",
 	"misc_options": "Forskellige muligheder",
@@ -53,6 +54,7 @@
 	"godfather": "Din gudfar (valgfrit)",
 	"verify": "Bekræft konto",
 	"verify_gh": "Bekræft med GitHub",
+	"verify_google": "Bekræft med Google",
 	"verify_message": "Du har ikke tilføjet en e-mailadresse, du kan miste adgangen til din konto, hvis du skifter enhed eller browser.",
 	"verify_tip": "Tip: behold den cookie, der indeholder dit brugernavn, hvis du mister det, mister du fuldstændig adgangen til kontoen.",
 	"verify_pros": "Når din konto er bekræftet, vil du være i stand til at:",
@@ -63,8 +65,11 @@
 	"verify_pro5": "Battle Royales",
 	"Vérifier": "Bekræft konto",
 	"allow_github": "Tillad forbindelse via GitHub",
-	"light": "Clair",
+	"allow_google": "Tillad forbindelse via Google",
+	"light": "Lys",
 	"dark": "Mørk",
 	"auto": "Auto",
-	"theme": "Tema"
+	"theme": "Tema",
+	"modern_theme": "Moderne tema (beta)",
+	"xp_theme": "XP-tema"
 }

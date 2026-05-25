@@ -3,7 +3,7 @@
 		<div class="header-left">
 			<router-link to="/">
 				<div class="logo-wrapper">
-					<img class="logo" src="/image/leekwars.svg">
+					<img class="logo" :src="LeekWars.xpTheme ? '/image/xp_logo.png' : '/image/leekwars.svg'">
 					<span v-if="LeekWars.LOCAL" class="local-label">local</span>
 					<span v-else-if="LeekWars.DEV" class="dev-label">dev</span>
 					<span v-if="env.BETA" class="beta-label">Bêta</span>
@@ -74,7 +74,7 @@
 					</div>
 				</div> -->
 				<div v-if="env.BANK && $store.state.farmer.verified && $store.state.farmer.bank_enabled" class="button-wrapper">
-					<router-link to="/bank">
+					<router-link to="/bank?ref=header">
 						<div v-if="$store.state.farmer" class="header-button">
 							<span class="farmer-crystals text">{{ $filters.number(Math.round($store.state.farmer.animated_crystals)) }}</span>
 							<span class="crystal text"></span>
@@ -94,7 +94,21 @@
 					</router-link>
 				</div>
 				<div class="button-wrapper">
-					<router-link to="/garden">
+					<v-tooltip v-if="$store.state.farmer?.bought_fights || $store.state.farmer?.team_fights" bottom>
+						<template #activator="{ props }">
+							<router-link to="/garden" v-bind="props">
+								<div class="header-button fights-button">
+									<span class="farmer-fights text">{{ $filters.number($store.state.farmer.fights) }}</span>
+									<span v-if="$store.state.farmer?.team_fights" class="farmer-fights text">+ {{ $filters.number($store.state.farmer.team_fights) }}</span>
+									<img src="/image/icon/garden.png">
+								</div>
+							</router-link>
+						</template>
+						{{ $t('main.free_fights') }} : {{ $filters.number($store.state.farmer.fights - $store.state.farmer.bought_fights) }}<br>
+						{{ $t('main.paid_fights') }} : {{ $filters.number($store.state.farmer.bought_fights) }}<template v-if="$store.state.farmer.team_fights"><br>
+						{{ $t('main.team') }} : {{ $filters.number($store.state.farmer.team_fights) }}</template>
+					</v-tooltip>
+					<router-link v-else to="/garden">
 						<div class="header-button fights-button">
 							<span v-if="$store.state.farmer" class="farmer-fights text">{{ $filters.number($store.state.farmer.fights) }}</span>
 							<span v-if="$store.state.farmer?.team_fights" class="farmer-fights text">+ {{ $filters.number($store.state.farmer.team_fights) }}</span>
@@ -150,27 +164,36 @@
 							<avatar :farmer="$store.state.farmer" />
 						</div>
 					</router-link>
+					<v-menu v-model="accountMenu" :width="300" :close-on-content-click="false" location="bottom end" scrim>
+						<template #activator="{ props }">
+							<div v-bind="props" class="header-button merge-left">
+								<v-icon>mdi-chevron-down</v-icon>
+							</div>
+						</template>
+						<account-switcher @close="accountMenu = false" />
+					</v-menu>
 				</div>
 			</div>
 		</div>
 	</div>
 </template>
 
-<script lang="ts">
+<script lang="ts" setup>
 	import { LeekWars } from '@/model/leekwars'
-	import { Notification } from '@/model/notification'
-	import { defineAsyncComponent } from 'vue'
-	import { Options, Vue } from 'vue-property-decorator'
-	const ConversationElement = defineAsyncComponent(() => import('@/component/messages/conversation.vue'))
+	import { store } from '@/model/store'
+	import { defineAsyncComponent, ref } from 'vue'
 
-	@Options({ name: 'lw-header', components: { 'conversation': ConversationElement } })
-	export default class Header extends Vue {
+	defineOptions({ name: 'LwHeader' })
 
-		readNotifications() {
-			if (this.$store.state.unreadNotifications) {
-				LeekWars.post('notification/read-all')
-				this.$store.commit('read-notifications')
-			}
+	const Conversation = defineAsyncComponent(() => import('@/component/messages/conversation.vue'))
+	const AccountSwitcher = defineAsyncComponent(() => import('@/component/app/account-switcher.vue'))
+
+	const accountMenu = ref(false)
+
+	function readNotifications() {
+		if (store.state.unreadNotifications) {
+			LeekWars.post('notification/read-all')
+			store.commit('read-notifications')
 		}
 	}
 </script>
@@ -188,7 +211,7 @@
 		height: 42px;
 		width: 42px;
 		margin-left: 8px;
-		margin-right: -4px;
+		margin-right: 0;
 	}
 	.header {
 		display: flex;
@@ -221,6 +244,7 @@
 	}
 	.header .button-wrapper {
 		flex-grow: 1;
+		white-space: nowrap;
 	}
 	.header .header-signin {
 		padding-bottom: 5px;
@@ -247,10 +271,15 @@
 			color: #eee;
 			font-size: 26px;
 		}
+		&.merge-left {
+			margin-left: 0;
+			&:before {
+				display: none;
+			}
+		}
 	}
 	.header-button i {
 		vertical-align: text-bottom;
-		padding-right: 3px;
 	}
 	.header .button-wrapper:first-child .header-button {
 		margin-left: 0;
@@ -339,6 +368,8 @@
 	}
 	.dialog {
 		background: var(--background);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+		border-radius: 4px;
 	}
 	.dialog-items {
 		width: 400px;
@@ -407,6 +438,7 @@
 	}
 	.beta {
 		background: white;
+		color: #333;
 		padding: 2px 4px;
 		border: 1px solid #aaa;
 		border-radius: 4px;

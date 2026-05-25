@@ -10,7 +10,7 @@
 			<div class="search">
 				<div class="search-box">
 					<div class="label">{{ $t('query') }}</div>
-					<input v-model="options.query" class="query card" type="text" @keydown.enter="search">
+					<input :value="options.query" class="query card" type="text" @input="onQueryInput" @keydown.enter="search">
 				</div>
 
 				<div class="center">
@@ -47,80 +47,97 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import Markdown from '@/component/encyclopedia/markdown.vue'
-	import { i18n, mixins } from '@/model/i18n'
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Vue, Watch } from 'vue-property-decorator'
-	import Breadcrumb from '../forum/breadcrumb.vue'
-	import Pagination from '@/component/pagination.vue'
+<script setup lang="ts">
+import { ref, computed, onBeforeMount, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import Markdown from '@/component/encyclopedia/markdown.vue'
+import { i18n, mixins , useNamespacedT } from '@/model/i18n'
+import { LeekWars } from '@/model/leekwars'
+import Breadcrumb from '../forum/breadcrumb.vue'
+import Pagination from '@/component/pagination.vue'
 
-	@Options({ name: 'encyclopedia-search', i18n: {}, mixins: [...mixins], components: { Breadcrumb, Markdown, Pagination } })
-	export default class EncyclopediaSearch extends Vue {
-		options = {
-			query: '',
-			page: 1,
-		} as {[key: string]: any}
+defineOptions({ name: 'EncyclopediaSearch', i18n: {}, mixins: [...mixins] })
 
-		queryLower: string = ''
-		pages: number = 0
-		results: any[] | null = null
-		categories: any[] = []
-		searchStarted: boolean = false
-		count: number = 0
-		floor = Math.floor
+const t = useNamespacedT('encyclopedia-search')
+const route = useRoute()
+const router = useRouter()
 
-		get canSearch() {
-			return this.options.query
-		}
-		created() {
-			LeekWars.setTitle(this.$i18n.t('title'))
-		}
+const options = ref<Record<string, unknown>>({ query: '', page: 1 })
+const queryLower = ref('')
+const pages = ref(0)
+const results = ref<Record<string, unknown>[] | null>(null)
+const searchStarted = ref(false)
+const count = ref(0)
+let urlSyncing = false
 
-		@Watch('$route.query', {immediate: true})
-		update() {
-			this.options.query = (this.$route.query.query as string || '').replace(/\+/g, ' ')
-			this.queryLower = this.options.query.toLowerCase()
-			if (this.options.query === '-') { this.options.query = '' }
-			this.options.page = parseInt(this.$route.query.page as string, 10) || 1
+const canSearch = computed(() => options.value.query)
 
-			this.searchStarted = false
-			this.results = null
-			if (this.canSearch) {
-				this.searchStarted = true
-				LeekWars.get('encyclopedia/search/' + i18n.locale + '/' + this.options.query.replace(/ /g, '+') + '/' + this.options.page).then(data => {
-					this.results = data.results
-					this.pages = data.pages
-					this.count = data.count
-				}).error(error => {
-					this.results = []
-					this.count = 0
-					LeekWars.toast(error.error)
-				})
-			}
-		}
-		get url() {
-			return this.urlPagination + (this.options.page > 1 ? '&page=' + this.options.page : '')
-		}
-		get urlPagination() {
-			const url = "/encyclopedia-search"
-			const options = Object.keys(this.options)
-				.filter(option => this.options[option] !== null && option !== 'page')
-				.map(option => option + '=' + this.options[option])
-				.join('&')
-			return url + '?' + options
-		}
-		search() {
-			this.$router.push(this.url)
-		}
-		searchButton() {
-			if (!this.canSearch) {
-				LeekWars.toast(this.$t('not_enough_parameters'))
-			} else {
-				this.search()
-			}
-		}
+onBeforeMount(() => LeekWars.setTitle(t('title')))
+
+function onQueryInput(e: Event) {
+	const query = (e.target as HTMLInputElement).value
+	options.value.query = query
+	const currentUrlQuery = (route.query.query as string || '').replace(/\+/g, ' ')
+	if (query !== currentUrlQuery) {
+		urlSyncing = true
+		router.replace('/encyclopedia-search' + (query ? '?query=' + query.replace(/ /g, '+') : ''))
 	}
+}
+
+function doSearch() {
+	searchStarted.value = false
+	results.value = null
+	if (canSearch.value) {
+		searchStarted.value = true
+		LeekWars.get('encyclopedia/search/' + i18n.locale + '/' + options.value.query.replace(/ /g, '+') + '/' + options.value.page).then(data => {
+			results.value = data.results
+			pages.value = data.pages
+			count.value = data.count
+		}).catch((err) => {
+			results.value = []
+			count.value = 0
+			LeekWars.toast(err.error)
+		})
+	}
+}
+
+watch(() => route.query, () => {
+	if (urlSyncing) {
+		urlSyncing = false
+		return
+	}
+	const query = (route.query.query as string || '').replace(/\+/g, ' ')
+	options.value.query = query === '-' ? '' : query
+	queryLower.value = options.value.query.toLowerCase()
+	options.value.page = parseInt(route.query.page as string, 10) || 1
+	doSearch()
+}, { immediate: true })
+
+const urlPagination = computed(() => {
+	const url = '/encyclopedia-search'
+	const opts = Object.keys(options.value)
+		.filter(option => options.value[option] !== null && option !== 'page')
+		.map(option => option + '=' + options.value[option])
+		.join('&')
+	return url + '?' + opts
+})
+
+const url = computed(() => urlPagination.value + (options.value.page > 1 ? '&page=' + options.value.page : ''))
+
+function search() {
+	if (!canSearch.value) return
+	router.push(url.value).then((failure) => {
+		if (failure) doSearch()
+	})
+}
+
+function searchButton() {
+	if (!canSearch.value) {
+		LeekWars.toast(t('not_enough_parameters'))
+	} else {
+		search()
+	}
+}
 </script>
 
 <style lang="scss" scoped>

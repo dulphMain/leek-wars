@@ -1,12 +1,17 @@
 <template>
-	<div class="ai" ref="editor">
+	<div ref="editorEl" class="ai">
 		<!-- Editeur -->
 		<div class="compilation">
 			<div v-if="saving" class="compiling">
 				<loader :size="15" /> {{ t('main.saving') }}
 			</div>
 			<div class="results">
-				<div v-for="(good, g) in goods" :key="g" class="good" v-html="'✓ ' + (good.ai !== ai && ai ? ai.name + ' ➞ ' : '') + t('main.valid_ai', [good.ai.name])"></div>
+				<div v-for="(good, g) in goods" :key="g" class="good">
+					✓ <template v-if="good.ai !== ai && ai">{{ ai.name }} ➞ </template>
+					<i18n-t keypath="main.valid_ai" tag="span">
+						<template #name><b>{{ good.ai.name }}</b></template>
+					</i18n-t>
+				</div>
 				<div v-if="serverError" class="error" @click="serverError = false">× <i>{{ t('main.server_error') }}</i></div>
 				<!-- <div v-for="(error, e) in errors" :key="e" class="error" @click="errors.splice(e, 1)">
 					× <span v-html="$t('ai_error', [error.ai, error.line])"></span> ▶ {{ error.message }}
@@ -16,419 +21,452 @@
 	</div>
 </template>
 
-
-<script lang="ts">
-
+<script setup lang="ts">
 import * as monaco from 'monaco-editor'
-import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
 import { fileSystem } from '@/model/filesystem'
-import { LeekWars } from '@/model/leekwars';
+import { LeekWars } from '@/model/leekwars'
+import { farmerId } from '@/model/store'
 import './monaco'
 import { AI } from '@/model/ai'
-import { analyzer, AnalyzerPromise } from './analyzer'
-import { code, dochash, vueMain, vuetify } from '@/model/vue'
+import { analyzer } from './analyzer'
+import { getLanguageForPath } from './file-types'
+import { code, dochash, createSubApp, emitter } from '@/model/vue'
 import DocumentationConstant from '../documentation/documentation-constant.vue'
 import DocumentationFunction from '../documentation/documentation-function.vue'
 import Javadoc from './javadoc.vue'
-import { FUNCTIONS } from '@/model/functions';
-import { CONSTANTS } from '@/model/constants';
-import { createApp, markRaw, nextTick } from 'vue';
-import { create } from 'domain';
-import { i18n } from '@/model/i18n';
-import router from '@/router';
+import { FUNCTIONS } from '@/model/functions'
+import { markRaw, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import Code from '@/component/app/code.vue'
+import { parseConflicts, hasConflictMarkers, buildConflictDecorations, registerConflictCodeLens, type MergeConflict } from './merge-conflicts'
 
-@Options({ name: 'ai-view-monaco', components: {
+defineOptions({ name: 'AiViewMonaco' })
 
-}})
-export default class AIViewMonaco extends Vue {
+const scrollKey = (path: string) => 'editor/scroll/' + farmerId() + '/' + path
+const viewStateKey = (path: string) => 'editor/viewstate/' + farmerId() + '/' + path
 
-	@Prop({required: true}) ai!: AI
-	@Prop({required: true}) theme!: string
-	@Prop() fontSize!: number
-	@Prop() lineHeight!: number
-	@Prop() t!: any
-	@Prop() console!: boolean
-	@Prop() lineNumbers!: boolean
+const props = defineProps<{
+	ai: AI
+	theme: string
+	fontSize?: number
+	lineHeight?: number
+	t?: (key: string, values?: unknown[]) => string
+	console?: boolean
+	lineNumbers?: boolean
+}>()
 
-	hover: any
-	editor!: monaco.editor.IStandaloneCodeEditor
-	jumpToLine: number | null = 0
-	jumpToColumn: number | null = 0
-	scrollListener!: monaco.IDisposable
-	private analyzerTimeout: any
-	private viewStateSaveTimeout: any
-	private currentAiId: number | null = null
-	public analyzing: boolean = false
-	public saving: boolean = false
-	public serverError: boolean = false
-	public goods: any[] = []
-	public position: monaco.Position = { lineNumber: 1, column: 1 } as monaco.Position
-	public selected: string = ''
-	public currentVersionId: number = 0
+const emit = defineEmits<{
+	focus: []
+	enter: []
+	up: []
+	down: []
+}>()
 
-	mounted() {
-		// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IEditorOptions.html
-		this.editor = markRaw(monaco.editor.create(this.$refs.editor as HTMLElement, {
-			language: "leekscript",
-			automaticLayout: true,
-			wordWrap: "on",
-			fontSize: this.fontSize,
-			lineHeight: this.lineHeight,
-			theme: this.theme,
-			lineNumbers: this.lineNumbers ? 'on' : 'off',
-			glyphMargin: this.lineNumbers,
-			folding: this.lineNumbers,
-			scrollbar: {
-				vertical: this.lineNumbers ? 'visible' : 'hidden',
-				useShadows: this.lineNumbers,
+const editorEl = useTemplateRef<HTMLElement>('editorEl')
+
+let editor: monaco.editor.IStandaloneCodeEditor
+let jumpToLine: number | null = 0
+let jumpToColumn: number | null = 0
+let scrollListener: monaco.IDisposable
+let analyzerTimeout: ReturnType<typeof setTimeout> | null = null
+let viewStateSaveTimeout: ReturnType<typeof setTimeout> | null = null
+let currentAiPath: string | null = null
+const analyzing = ref(false)
+const saving = ref(false)
+const serverError = ref(false)
+const goods = ref<{ ai: AI }[]>([])
+const position = ref<monaco.Position>({ lineNumber: 1, column: 1 } as monaco.Position)
+const selected = ref('')
+let currentVersionId = 0
+let conflictDecorations: monaco.editor.IEditorDecorationsCollection | null = null
+let conflictLenses: monaco.IDisposable | null = null
+let conflicts: MergeConflict[] = []
+
+onMounted(() => {
+	editor = markRaw(monaco.editor.create(editorEl.value as HTMLElement, {
+		language: "leekscript",
+		automaticLayout: true,
+		wordWrap: "on",
+		fontSize: props.fontSize,
+		fontFamily: LeekWars.xpTheme ? "'Perfect DOS VGA 437 Win', monospace" : undefined,
+		lineHeight: props.lineHeight,
+		theme: props.theme,
+		lineNumbers: props.lineNumbers ? 'on' : 'off',
+		glyphMargin: props.lineNumbers,
+		folding: props.lineNumbers,
+		scrollbar: {
+			vertical: props.lineNumbers ? 'visible' : 'hidden',
+			useShadows: props.lineNumbers,
+		},
+		overviewRulerBorder: props.lineNumbers,
+		overviewRulerLanes: props.lineNumbers ? 3 : 0,
+		lineDecorationsWidth: props.lineNumbers ? 10 : 0,
+		scrollBeyondLastLine: props.lineNumbers,
+		scrollPredominantAxis: props.lineNumbers,
+		minimap: {
+			enabled: props.lineNumbers,
+		},
+		fixedOverflowWidgets: true,
+		accessibilitySupport: 'off',
+	}, {
+		storageService: {
+			get() {},
+			getBoolean(key: string) {
+				if (key === "expandSuggestionDocs") return true
+				return false
 			},
-			overviewRulerBorder: this.lineNumbers,
-			overviewRulerLanes: this.lineNumbers ? 3 : 0,
-			lineDecorationsWidth: this.lineNumbers ? 10 : 0,
-			scrollBeyondLastLine: this.lineNumbers,
-			scrollPredominantAxis: this.lineNumbers,
-			minimap: {
-				enabled: this.lineNumbers,
-			}
-		}, {
-			storageService: {
-				get() {},
-				getBoolean(key: any) {
-					if (key === "expandSuggestionDocs")
-						return true
-					return false
-				},
-				remove() {},
-				store() {},
-				onWillSaveState() {},
-				onDidChangeStorage() {}
-			}
-		}))
-		this.scrollListener = this.editor.onDidScrollChange((e) => {
-			if (!this.ai) return
-			// console.log('scroll', this.ai.id, e.scrollTop, e.scrollHeight, e.scrollWidth)
-			localStorage.setItem('editor/scroll/' + this.ai.id, '' + e.scrollTop)
-			this.debouncedSaveViewState()
-		})
-		// Restore focus after mouse drag-select to prevent first keystroke
-		// from being lost (#817)
-		this.editor.onMouseUp((e) => {
-			if (e.event.rightButton) return
-			requestAnimationFrame(() => {
-				if (!this.editor.hasWidgetFocus()) {
-					this.editor.focus()
-				}
-			})
-		})
-		this.editor.onDidFocusEditorWidget(() => {
-			this.$emit('focus')
-		})
-		this.editor.onKeyDown((e) => {
-			if (e.code === 'Enter') {
-				if (this.console) {
-					e.preventDefault()
-				}
+			remove() {},
+			store() {},
+			onWillSaveState() {},
+			onDidChangeStorage() {}
+		}
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	} as any))
+	scrollListener = editor.onDidScrollChange((e) => {
+		if (!props.ai) return
+		localStorage.setItem(scrollKey(props.ai.path), '' + e.scrollTop)
+		debouncedSaveViewState()
+	})
+	editor.onMouseUp((e) => {
+		if (e.event.rightButton) return
+		requestAnimationFrame(() => {
+			if (!editor.hasWidgetFocus()) {
+				editor.focus()
 			}
 		})
-		this.editor.onKeyUp((e) => {
-			// console.log("keyup", e)
-			if (e.code === 'Delete') {
-				e.stopPropagation()
-			}
-			if (e.code === 'Enter') {
-				if (this.console) {
-					this.$emit('enter')
-					e.preventDefault()
-				}
-			}
-			if (e.code === 'ArrowDown') {
-				if (this.console) {
-					this.$emit('down')
-					e.preventDefault()
-				}
-			}
-			if (e.code === 'ArrowUp') {
-				if (this.console) {
-					this.$emit('up')
-					e.preventDefault()
-				}
-			}
-		})
-		this.editor.onDidChangeCursorPosition((e) => {
-			this.position = this.editor.getPosition()!
-			this.selected = this.editor.getModel()!.getValueInRange(this.editor.getSelection()!)
-		})
-		this.editor.onDidChangeModelContent((e) => {
-			this.ai.modified = this.currentVersionId !== this.ai.model.getAlternativeVersionId()
-			this.setAnalyzerTimeout()
-		})
+	})
+	editor.onDidFocusEditorWidget(() => {
+		emit('focus')
+	})
+	const isKey = (e: monaco.IKeyboardEvent, key: string) => e.code === key || e.browserEvent?.key === key
+	editor.onKeyDown((e) => {
+		if (props.console && isKey(e, 'Enter')) {
+			e.preventDefault()
+		}
+	})
+	editor.onKeyUp((e) => {
+		if (e.code === 'Delete') {
+			e.stopPropagation()
+		}
+		if (!props.console) return
+		if (isKey(e, 'Enter')) {
+			emit('enter')
+			e.preventDefault()
+		} else if (isKey(e, 'ArrowDown')) {
+			emit('down')
+			e.preventDefault()
+		} else if (isKey(e, 'ArrowUp')) {
+			emit('up')
+			e.preventDefault()
+		}
+	})
 
-		const suggestionWidget = (this.editor.getContribution('editor.contrib.suggestController') as any).widget
-		suggestionWidget.value.onDidShow(() => {
-			// console.log("Show suggestions", suggestionWidget)
-			// suggestionWidget.value.selectFirst()
-			// suggestionWidget.value.showDetails()
-			const widget = suggestionWidget.value._details.widget
-			widget.onDidChangeContents((e: any) => {
-				// console.log("widget", widget)
-				var body = widget._body as HTMLElement
-				const docs = widget._docs
-				docs.style.display = 'none'
-				body.querySelectorAll('.lw').forEach((e: any) => {
-					e.remove()
-				})
-				var element = document.createElement('div')
-				element.classList.add('lw')
-				body.appendChild(element)
-				const fun = FUNCTIONS.find(f => f.name === docs.innerText)
-				if (fun) {
-					const doc = createApp(DocumentationFunction, { fun })
-						.mixin({ data() { return { LeekWars } }})
-						.use(i18n)
-						.use(vuetify)
-						.use(router)
-						.directive('code', code)
-						.directive('dochash', dochash)
-						.mount(element)
-					setTimeout(() => {
-						suggestionWidget.value._details._placeAtAnchor(suggestionWidget.value._details._anchorBox, { width: 500, height: doc.$el.clientHeight + 10 }, true)
-					})
-				}
-				const constant = CONSTANTS.find(c => c.name === docs.innerText)
-				if (constant) {
-					const doc = createApp(DocumentationConstant, { constant })
-						.mixin({ data() { return { LeekWars } }})
-						.use(i18n)
-						.use(vuetify)
-						.use(router)
-						.component('lw-code', Code)
-						.directive('code', code)
-						.directive('dochash', dochash)
-						.mount(element)
-					setTimeout(() => {
-						suggestionWidget.value._details._placeAtAnchor(suggestionWidget.value._details._anchorBox, { width: 500, height: doc.$el.clientHeight + 10 }, true)
-					})
-				}
-				// console.log("suggestion", docs.innerText)
-				const symbol = fileSystem.symbols[docs.innerText]
-				if (symbol) {
-					const doc = createApp(Javadoc, { javadoc: symbol.javadoc, keyword: symbol })
-						.directive('code', code)
-						.directive('dochash', dochash)
-						.mount(element)
-					setTimeout(() => {
-						suggestionWidget.value._details._placeAtAnchor(suggestionWidget.value._details._anchorBox, { width: 500, height: doc.$el.clientHeight + 10 }, true)
-					})
-				}
-			})
-		})
+	editor.onDidChangeCursorPosition(() => {
+		position.value = editor.getPosition()!
+		selected.value = editor.getModel()!.getValueInRange(editor.getSelection()!)
+	})
+	editor.onDidChangeModelContent(() => {
+		// eslint-disable-next-line vue/no-mutating-props
+		props.ai.modified = currentVersionId !== props.ai.model.getAlternativeVersionId()
+		setAnalyzerTimeout()
+		updateConflictDecorations()
+	})
 
-		const hoverController = (this.editor.getContribution('editor.contrib.contentHover') as any)
-		// console.log("hoverController", hoverController)
-		hoverController._getOrCreateContentWidget()
-		hoverController._contentWidget.onContentsChanged(() => {
-			// console.log("Show hover", hoverController)
-			const widget = hoverController._contentWidget.widget._resizableNode
-			const body = widget.domNode.querySelector('.hover-row-contents')
-			body.querySelectorAll('.lw').forEach((e: any) => {
-				e.remove()
-			})
-			const firstRow = body.querySelector('.markdown-hover')
-			// console.log("hover symbol", firstRow.innerText)
-
-			var element = document.createElement('div')
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const suggestionWidget = (editor.getContribution('editor.contrib.suggestController') as any).widget
+	suggestionWidget.value.onDidShow(() => {
+		const widget = suggestionWidget.value._details.widget
+		widget.onDidChangeContents(() => {
+			const body = widget._body as HTMLElement
+			const docs = widget._docs
+			docs.style.display = 'none'
+			body.querySelectorAll('.lw').forEach((e: Element) => { e.remove() })
+			const element = document.createElement('div')
 			element.classList.add('lw')
-			body.prepend(element)
-
-			const fun = FUNCTIONS.find(f => f.name === firstRow.innerText)
+			body.appendChild(element)
+			const fun = FUNCTIONS.find((f) => f.name === docs.innerText)
 			if (fun) {
-				firstRow.style.display = 'none'
-				const doc = createApp(DocumentationFunction, { fun })
-					.mixin({ data() { return { LeekWars } }})
-					.use(i18n)
-					.use(vuetify)
-					.use(router)
+				const doc = createSubApp(DocumentationFunction, { fun }, 'suggest-function')
 					.directive('code', code)
 					.directive('dochash', dochash)
 					.mount(element)
 				setTimeout(() => {
-					hoverController._contentWidget.widget._resize({ width: 500, height: doc.$el.clientHeight + 40 })
+					suggestionWidget.value._details._placeAtAnchor(suggestionWidget.value._details._anchorBox, { width: 500, height: doc.$el.clientHeight + 10 }, true)
 				})
 			}
-			const constant = CONSTANTS.find(c => c.name === firstRow.innerText)
+			const constant = LeekWars.constants.find((c) => c.name === docs.innerText)
 			if (constant) {
-				firstRow.style.display = 'none'
-				const doc = createApp(DocumentationConstant, { constant })
-					.mixin({ data() { return { LeekWars } }})
-					.use(i18n)
-					.use(vuetify)
-					.use(router)
+				const doc = createSubApp(DocumentationConstant, { constant }, 'suggest-constant')
 					.component('lw-code', Code)
 					.directive('code', code)
 					.directive('dochash', dochash)
 					.mount(element)
 				setTimeout(() => {
-					hoverController._contentWidget.widget._resize({ width: 350, height: doc.$el.clientHeight + 40 })
+					suggestionWidget.value._details._placeAtAnchor(suggestionWidget.value._details._anchorBox, { width: 500, height: doc.$el.clientHeight + 10 }, true)
 				})
 			}
-			const symbol = fileSystem.symbols[firstRow.innerText]
-			if (symbol) {
-				firstRow.style.display = 'none'
-				const doc = createApp(Javadoc, { javadoc: symbol.javadoc, keyword: symbol })
+			const symbol = fileSystem.symbols[docs.innerText]
+			if (symbol && symbol.javadoc) {
+				const doc = createSubApp(Javadoc, { javadoc: symbol.javadoc, keyword: symbol }, 'suggest-javadoc')
 					.directive('code', code)
 					.directive('dochash', dochash)
 					.mount(element)
 				setTimeout(() => {
-					hoverController._contentWidget.widget._resize({ width: 500, height: doc.$el.clientHeight + 80 })
+					suggestionWidget.value._details._placeAtAnchor(suggestionWidget.value._details._anchorBox, { width: 500, height: doc.$el.clientHeight + 10 }, true)
 				})
 			}
 		})
+	})
 
-		this.update()
-	}
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const hoverController = (editor.getContribution('editor.contrib.contentHover') as any)
+	hoverController._getOrCreateContentWidget()
+	hoverController._contentWidget.onContentsChanged(() => {
+		const widget = hoverController._contentWidget.widget._resizableNode
+		const body = widget.domNode.querySelector('.hover-row-contents')
+		if (!body) return
+		body.querySelectorAll('.lw').forEach((e: Element) => { e.remove() })
+		const firstRow = body.querySelector('.markdown-hover') as HTMLElement | null
+		if (!firstRow) return
 
-	beforeUnmount() {
-		this.saveViewState()
-		this.scrollListener.dispose()
-		if (this.editor) {
-			this.editor.dispose()
-		}
-	}
+		const element = document.createElement('div')
+		element.classList.add('lw')
+		body.prepend(element)
 
-	@Watch('theme')
-	@Watch('lineHeight')
-	@Watch('fontSize')
-	updateSettings() {
-		this.editor.updateOptions({
-			theme: this.theme,
-			lineHeight: this.lineHeight,
-			fontSize: this.fontSize,
-		})
-	}
-
-	@Watch('ai.id', { immediate: true })
-	update() {
-		if (!this.ai) return
-		// console.log("update ai", this.ai.id)
-
-		// Save view state for the previous AI before switching
-		if (this.currentAiId !== null && this.currentAiId !== this.ai.id) {
-			this.saveViewState()
-		}
-		this.currentAiId = this.ai.id
-
-		const uri = monaco.Uri.parse('file:///' + this.ai.path)
-		const model = monaco.editor.getModel(uri) || monaco.editor.createModel(this.ai.code, 'leekscript', uri)
-		this.ai.model = model
-
-		if (!this.editor) return
-		this.editor.setModel(model)
-		this.currentVersionId = model.getAlternativeVersionId()
-
-		this.setAnalyzerTimeout()
-		this.editor.focus()
-
-		nextTick(() => {
-			if (this.jumpToLine) {
-				nextTick(() => {
-					this.scrollToLine(this.ai, this.jumpToLine!, this.jumpToColumn!)
-				})
-			} else {
-				this.restoreViewState()
-			}
-		})
-	}
-
-	public scrollToLine(ai: AI, line: number, column: number = 0) {
-		// console.log("scrollToLine", ai, line, column)
-		if (ai.model && this.editor.getModel()?.id === ai.model.id) {
-			this.editor.revealLineInCenterIfOutsideViewport(line, monaco.editor.ScrollType.Immediate)
-			const pos = { lineNumber: line, column: column + 1 }
-			// Set position immediately after reveal
-			this.editor.setPosition(pos, 'jump')
-			// Focus the editor to ensure the cursor is visible
-			this.editor.focus()
-			this.jumpToLine = null
-			this.jumpToColumn = null
-		} else {
-			this.jumpToLine = line
-			this.jumpToColumn = column
-		}
-	}
-
-	setAnalyzerTimeout() {
-		clearTimeout(this.analyzerTimeout)
-		this.analyzerTimeout = setTimeout(() => {
-
-			this.analyzing = true
-			this.ai.code = this.editor.getValue()
-			this.ai.analyze()
-
-			// DISABLE AUTO ANALYZE
-			// if (true) return;
-
-			analyzer.analyze(this.ai, this.ai.code).then((result) => {
-				// console.log("analyze", result)
-				this.analyzing = false
-
-				for (const entrypoint in result) {
-					const entrypoint_id = parseInt(entrypoint, 10)
-					const ai = fileSystem.ais[entrypoint_id]
-
-					// Valid?
-					let valid = true
-					for (const problem of result[entrypoint]) {
-						if (problem[0] === 0) { valid = false; break }
-					}
-					ai.valid = valid
-					analyzer.handleProblems(ai, result[entrypoint])
-				}
-				analyzer.updateCount()
+		const fun = FUNCTIONS.find((f) => f.name === firstRow.innerText)
+		if (fun) {
+			firstRow.style.display = 'none'
+			const doc = createSubApp(DocumentationFunction, { fun }, 'hover-function')
+				.directive('code', code)
+				.directive('dochash', dochash)
+				.mount(element)
+			setTimeout(() => {
+				hoverController._contentWidget.widget._resize({ width: 500, height: doc.$el.clientHeight + 40 })
 			})
-		}, 1000)
-	}
-
-	public save() {
-		this.ai.modified = false
-		this.currentVersionId = this.ai.model.getAlternativeVersionId()
-		// console.log("save", this.currentVersionId)
-		// console.log(this.editor.getModel())
-	}
-
-	private saveViewState(aiId?: number) {
-		const id = aiId ?? this.currentAiId
-		if (!id) return
-		const viewState = this.editor.saveViewState()
-		if (viewState) {
-			localStorage.setItem('editor/viewstate/' + id, JSON.stringify(viewState))
 		}
-	}
-
-	private restoreViewState() {
-		const viewStateStr = localStorage.getItem('editor/viewstate/' + this.ai.id)
-		if (viewStateStr) {
-			try {
-				const viewState = JSON.parse(viewStateStr)
-				this.editor.restoreViewState(viewState)
-				return
-			} catch (e) {
-				// Fall through to scroll-only restore
-			}
+		const constant = LeekWars.constants.find((c) => c.name === firstRow.innerText)
+		if (constant) {
+			firstRow.style.display = 'none'
+			const doc = createSubApp(DocumentationConstant, { constant }, 'hover-constant')
+				.component('lw-code', Code)
+				.directive('code', code)
+				.directive('dochash', dochash)
+				.mount(element)
+			setTimeout(() => {
+				hoverController._contentWidget.widget._resize({ width: 350, height: doc.$el.clientHeight + 40 })
+			})
 		}
-		// Fallback: restore scroll position only (backward compatibility)
-		const scrollPosition = parseInt(localStorage.getItem('editor/scroll/' + this.ai.id) || '0')
-		this.editor.setScrollTop(scrollPosition)
-	}
+		const symbol = fileSystem.symbols[firstRow.innerText]
+		if (symbol && symbol.javadoc) {
+			firstRow.style.display = 'none'
+			const doc = createSubApp(Javadoc, { javadoc: symbol.javadoc, keyword: symbol }, 'hover-javadoc')
+				.directive('code', code)
+				.directive('dochash', dochash)
+				.mount(element)
+			setTimeout(() => {
+				hoverController._contentWidget.widget._resize({ width: 500, height: doc.$el.clientHeight + 80 })
+			})
+		}
+	})
 
-	private debouncedSaveViewState() {
-		clearTimeout(this.viewStateSaveTimeout)
-		this.viewStateSaveTimeout = setTimeout(() => {
-			this.saveViewState()
-		}, 1000)
+	update()
+	emitter.on('file-reloaded', onFileReloaded)
+})
+
+onBeforeUnmount(() => {
+	emitter.off('file-reloaded', onFileReloaded)
+	clearTimeout(analyzerTimeout)
+	clearTimeout(viewStateSaveTimeout)
+	saveViewState()
+	scrollListener?.dispose()
+	conflictLenses?.dispose()
+	if (editor) {
+		editor.dispose()
+	}
+})
+
+watch([() => props.theme, () => props.lineHeight, () => props.fontSize], () => {
+	if (!editor) return
+	editor.updateOptions({
+		theme: props.theme,
+		lineHeight: props.lineHeight,
+		fontSize: props.fontSize,
+	})
+})
+
+watch(() => props.ai?.path, () => update(), { immediate: true })
+
+function update() {
+	if (!props.ai) return
+	if (currentAiPath !== null && currentAiPath !== props.ai.path) {
+		saveViewState()
+	}
+	currentAiPath = props.ai.path
+	syncModel()
+}
+
+function onFileReloaded(path: string) {
+	if (!props.ai || props.ai.path !== path || !props.ai.model || !editor) return
+	if (props.ai.model.getValue() !== props.ai.code) {
+		editor.executeEdits('git', [{
+			range: props.ai.model.getFullModelRange(),
+			text: props.ai.code,
+		}])
+		currentVersionId = props.ai.model.getAlternativeVersionId()
+		// eslint-disable-next-line vue/no-mutating-props
+		props.ai.modified = false
+		updateConflictDecorations()
 	}
 }
 
+function syncModel() {
+	const uri = monaco.Uri.file(props.ai.path)
+	const model = monaco.editor.getModel(uri) || markRaw(monaco.editor.createModel(props.ai.code, getLanguageForPath(props.ai.path), uri))
+	// eslint-disable-next-line vue/no-mutating-props
+	props.ai.model = model
+
+	if (!editor) return
+	editor.setModel(model)
+	currentVersionId = model.getAlternativeVersionId()
+
+	updateConflictDecorations()
+	setAnalyzerTimeout()
+	editor.focus()
+
+	nextTick(() => {
+		if (jumpToLine) {
+			nextTick(() => {
+				scrollToLine(props.ai, jumpToLine!, jumpToColumn!)
+			})
+		} else {
+			restoreViewState()
+		}
+	})
+}
+
+function scrollToLine(ai: AI, line: number, column: number = 0) {
+	if (ai.model && editor.getModel()?.id === ai.model.id) {
+		editor.revealLineInCenterIfOutsideViewport(line, monaco.editor.ScrollType.Immediate)
+		const pos = { lineNumber: line, column: column + 1 }
+		editor.setPosition(pos, 'jump')
+		editor.focus()
+		jumpToLine = null
+		jumpToColumn = null
+	} else {
+		jumpToLine = line
+		jumpToColumn = column
+	}
+}
+
+function setAnalyzerTimeout() {
+	clearTimeout(analyzerTimeout)
+	analyzerTimeout = setTimeout(() => {
+		const ai = props.ai
+		analyzing.value = true
+		ai.code = editor.getValue()
+		ai.analyze()
+
+		analyzer.updateTodos(ai)
+
+		analyzer.analyze(ai, ai.code).then((result) => {
+			analyzing.value = false
+			if (!result) return
+			analyzer.applyAnalyzeResult(result)
+			analyzer.updateTodos(ai)
+			analyzer.updateCount()
+		}).catch(() => {
+			analyzing.value = false
+		})
+	}, 500)
+}
+
+function updateConflictDecorations() {
+	if (!editor) return
+	const model = editor.getModel()
+	if (!model) return
+
+	const content = model.getValue()
+	const hadConflicts = conflicts.length > 0
+
+	if (!hasConflictMarkers(content)) {
+		conflicts = []
+		if (conflictDecorations) { conflictDecorations.set([]) }
+		conflictLenses?.dispose()
+		conflictLenses = null
+		// eslint-disable-next-line vue/no-mutating-props
+		if (props.ai) props.ai.hasConflict = false
+		return
+	}
+
+	conflicts = parseConflicts(content)
+	// eslint-disable-next-line vue/no-mutating-props
+	if (props.ai) props.ai.hasConflict = true
+
+	if (conflictDecorations) {
+		conflictDecorations.set(buildConflictDecorations(model, conflicts))
+	} else {
+		conflictDecorations = editor.createDecorationsCollection(buildConflictDecorations(model, conflicts))
+	}
+
+	conflictLenses?.dispose()
+	conflictLenses = registerConflictCodeLens(editor, model, conflicts, () => {
+		updateConflictDecorations()
+		setAnalyzerTimeout()
+	})
+
+	if (!hadConflicts && conflicts.length > 0) {
+		editor.revealLineInCenter(conflicts[0].startLine + 1, monaco.editor.ScrollType.Smooth)
+	}
+}
+
+function save() {
+	// eslint-disable-next-line vue/no-mutating-props
+	props.ai.modified = false
+	currentVersionId = props.ai.model.getAlternativeVersionId()
+}
+
+function saveViewState(aiPath?: string) {
+	if (!editor) return
+	const path = aiPath ?? currentAiPath
+	if (!path) return
+	const viewState = editor.saveViewState()
+	if (viewState) {
+		localStorage.setItem(viewStateKey(path), JSON.stringify(viewState))
+	}
+}
+
+function restoreViewState() {
+	const viewStateStr = localStorage.getItem(viewStateKey(props.ai.path))
+	if (viewStateStr) {
+		try {
+			const viewState = JSON.parse(viewStateStr)
+			editor.restoreViewState(viewState)
+			return
+		} catch { /* empty */ }
+	}
+	const scrollPosition = parseInt(localStorage.getItem(scrollKey(props.ai.path)) || '0')
+	editor.setScrollTop(scrollPosition)
+}
+
+function debouncedSaveViewState() {
+	clearTimeout(viewStateSaveTimeout)
+	viewStateSaveTimeout = setTimeout(() => {
+		saveViewState()
+	}, 1000)
+}
+
+defineExpose({
+	scrollToLine,
+	save,
+	setAnalyzerTimeout,
+	get editor() { return editor },
+	get ai() { return props.ai },
+	get analyzing() { return analyzing.value },
+	get saving() { return saving.value }, set saving(v: boolean) { saving.value = v },
+	get serverError() { return serverError.value }, set serverError(v: boolean) { serverError.value = v },
+	get goods() { return goods.value }, set goods(v: { ai: AI }[]) { goods.value = v },
+	get position() { return position.value },
+	get selected() { return selected.value },
+})
 </script>
 
 <style lang="scss" scoped>
@@ -444,6 +482,9 @@ export default class AIViewMonaco extends Vue {
 	}
 	& :deep(.lw) {
 		padding: 4px 10px;
+	}
+	& :deep(.hover-row-contents .lw:has(.doc-constant.item)) {
+		padding: 0;
 	}
 	& :deep(.doc-constant.item) {
 		padding: 0;

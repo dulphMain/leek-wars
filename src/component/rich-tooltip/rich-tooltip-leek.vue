@@ -1,9 +1,7 @@
 <template>
 	<v-menu ref="menu" v-model="value" :close-on-content-click="false" offset-overflow :disabled="disabled" :nudge-top="0" :open-delay="_open_delay" :close-delay="_close_delay" :location="bottom ? 'bottom' : 'top'" :transition="instant ? 'none' : 'scale-transition'" :open-on-hover="!locked" offset-y @update:modelValue="open($event)">
-		<template #activator="{ props }">
-			<span v-bind="props">
-				<slot></slot>
-			</span>
+		<template #activator="{ props: activatorProps }">
+			<slot :props="activatorProps"></slot>
 		</template>
 		<div :class="{expanded: expand_items}" class="card" @mouseenter="mouse = true" @mouseleave="mouse = false">
 			<loader v-if="!leek" :size="30" />
@@ -25,11 +23,11 @@
 							</router-link>
 							<lw-title v-if="leek.title.length" :title="leek.title" />
 						</span>
-						<talent :id="leek.id" :talent="leek.talent" category="leek" />
+						<talent :id="leek.id" :talent="leek.talent" :max_talent="leek.max_talent" category="leek" />
 						<span class="talent-more">({{ leek.talent_more >= 0 ? '+' + leek.talent_more : leek.talent_more }})</span>
 						<ranking-badge v-if="leek && leek.ranking && leek.ranking <= 1000 && leek.in_garden" :id="leek.id" :ranking="leek.ranking" category="leek" />
 						<span class="level">• {{ $t('main.level_n', [leek.level]) }}</span>
-						<v-btn class="expand" variant="text" size="x-small" @click="expand_items = !expand_items" :icon="expand_items ? 'mdi-chevron-up' : 'mdi-chevron-down'" />
+						<v-btn class="expand" variant="text" size="x-small" :icon="expand_items ? 'mdi-chevron-up' : 'mdi-chevron-down'" @click="expand_items = !expand_items" />
 					</div>
 				</div>
 				<div v-if="expand_items">
@@ -63,7 +61,7 @@
 							</rich-tooltip-item>
 						</div>
 						<div class="components">
-							<rich-tooltip-item v-for="component in leek.components.filter(c => c)" :key="component.id" v-slot="{ props }" :item="LeekWars.items[component.template]" :bottom="true" @update:modelValue="setParent">
+							<rich-tooltip-item v-for="component in leek.components.filter((c: any) => c)" :key="component.id" v-slot="{ props }" :item="LeekWars.items[component.template]" :bottom="true" @update:modelValue="setParent">
 								<img :src="'/image/component/' + LeekWars.items[component.template].name + '.png'" class="component" v-bind="props">
 							</rich-tooltip-item>
 						</div>
@@ -74,84 +72,70 @@
 	</v-menu>
 </template>
 
-<script lang="ts">
-
+<script setup lang="ts">
+import { ref, computed, watch, useTemplateRef, defineAsyncComponent } from 'vue'
 import { Leek } from '@/model/leek'
 import { LeekWars } from '@/model/leekwars'
-import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
 import RichTooltipItem from '@/component/rich-tooltip/rich-tooltip-item.vue'
 import LeekImage from '@/component/leek-image.vue'
-const LWTitle = defineAsyncComponent(() => import('@/component/title/title.vue'))
-import { CHIPS } from '@/model/chips'
-import { defineAsyncComponent } from 'vue'
+import { CHIPS as CHIPS_TYPED } from '@/model/chips'
 
-@Options({ components: { RichTooltipItem, 'lw-title': LWTitle, 'leek-image': LeekImage } })
-export default class RichTooltipLeek extends Vue {
+const LwTitle = defineAsyncComponent(() => import('@/component/title/title.vue'))
 
-	@Prop({required: true}) id!: number
-	@Prop() disabled!: boolean
-	@Prop() bottom!: boolean
-	@Prop() instant!: boolean
+const CHIPS = CHIPS_TYPED
 
-	CHIPS = CHIPS
-	LeekWars = LeekWars
-	content_created: boolean = false
-	leek: Leek | null = null
-	expand_items: boolean = false
-	locked: boolean = false
-	mouse: boolean = false
-	value: boolean = false
+const props = defineProps<{
+	id: number
+	disabled?: boolean
+	bottom?: boolean
+	instant?: boolean
+}>()
 
-	get _open_delay() {
-		return this.instant ? 0 : 500
-	}
-	get _close_delay() {
-		return this.instant ? 0 : 1
-	}
-	@Watch('id')
-	update() {
-		this.leek = null
-		this.content_created = false
-	}
-	open(v: boolean) {
-		this.$emit('update:modelValue', v)
-		this.expand_items = localStorage.getItem('richtooltipleek/expanded') === 'true'
-		if (this.content_created) { return }
-		this.content_created = true
-		if (this.id > 0 && !this.leek) {
-			LeekWars.get<Leek>('leek/rich-tooltip/' + this.id).then(leek => {
-				this.leek = new Leek(leek)
-				if (this.expand_items) {
-					(this.$refs.menu as any)?.updateLocation?.()
-				}
-			})
-		}
-	}
-	@Watch('expand_items')
-	updateExpand() {
-		localStorage.setItem('richtooltipleek/expanded', this.expand_items ? 'true' : 'false')
-	}
+const emit = defineEmits<{
+	'update:modelValue': [value: boolean]
+}>()
 
-	setParent(event: boolean) {
-		this.locked = event
-		if (!event && !this.mouse) {
-			this.value = false
-			this.$emit('update:modelValue', false)
-		}
-	}
+const menu = useTemplateRef<{ updateLocation?: () => void }>('menu')
+const content_created = ref(false)
+const leek = ref<Leek | null>(null)
+const expand_items = ref(false)
+const locked = ref(false)
+const mouse = ref(false)
+const value = ref(false)
 
-	// get orderedWeapons() {
-	// 	if (!this.leek) return []
-	// 	return [...this.leek.weapons].sort((weaponA, weaponB) => {
-	// 		return LeekWars.items[weaponA.template].level - LeekWars.items[weaponB.template].level
-	// 	})
-	// }
-	// get orderedChips() {
-	// 	if (!this.leek) return []
-	// 	return [...this.leek.chips].sort((chipA, chipB) => {
-	// 		return ORDERED_CHIPS[chipA.template] - ORDERED_CHIPS[chipB.template]
-	// 	})
-	// }
+const _open_delay = computed(() => props.instant ? 1 : 500)
+const _close_delay = computed(() => props.instant ? 1 : 1)
+
+watch(() => props.id, () => {
+	leek.value = null
+	content_created.value = false
+})
+
+function open(v: boolean) {
+	emit('update:modelValue', v)
+	expand_items.value = localStorage.getItem('richtooltipleek/expanded') === 'true'
+	if (content_created.value) { return }
+	content_created.value = true
+	if (props.id > 0 && !leek.value) {
+		LeekWars.get('leek/rich-tooltip/' + props.id).then(l => {
+			leek.value = new Leek(l)
+			if (expand_items.value) {
+				menu.value?.updateLocation?.()
+			}
+		})
+	}
+}
+
+watch(expand_items, () => {
+	localStorage.setItem('richtooltipleek/expanded', expand_items.value ? 'true' : 'false')
+})
+
+function setParent(event: boolean) {
+	locked.value = event
+	if (!event && !mouse.value) {
+		value.value = false
+		emit('update:modelValue', false)
+	}
 }
 </script>
 

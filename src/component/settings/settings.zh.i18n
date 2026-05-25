@@ -1,7 +1,7 @@
 {
 	"account": "帐户",
-	"activate_discrete_mode": "激活静音模式",
-	"advanced": "进步",
+	"activate_discrete_mode": "启用隐身模式",
+	"advanced": "高级",
 	"change": "改变",
 	"change_email": "更改电子邮件",
 	"change_email_send": "发送确认邮件",
@@ -28,7 +28,7 @@
 	"error_password_length": "密码必须包含 {0} 到 {1} 个字符",
 	"error_wrong_password": "密码不正确",
 	"error_forbidden_name": "这个名字被禁止",
-	"error_invalid_godfather": "该播放器不存在",
+	"error_invalid_godfather": "该玩家不存在",
 	"error_invalid_length": "密码必须包含 {0} 到 {1} 个字符",
 	"error_invalid_mail": "电子邮件地址必须有效",
 	"error_login_already_used": "用户名已存在",
@@ -40,6 +40,7 @@
 	"leek_theme": "白色的大韭菜",
 	"logout": "登出",
 	"new_password": "新密码",
+	"notifs_popups": "通知弹窗",
 	"notifs_results": "战斗结果通知",
 	"old_password": "旧密码",
 	"misc_options": "多种选择",
@@ -53,6 +54,7 @@
 	"godfather": "你的教父（可选）",
 	"verify": "验证账户",
 	"verify_gh": "通过 GitHub 验证",
+	"verify_google": "通过 Google 验证",
 	"verify_message": "您尚未添加电子邮件地址，如果您更换设备或浏览器，您可能无法访问您的帐户。",
 	"verify_tip": "提示：保留包含您用户名的 cookie，如果丢失，您将完全失去对帐户的访问权限。",
 	"verify_pros": "一旦您的帐户通过验证，您将能够：",
@@ -63,8 +65,11 @@
 	"verify_pro5": "大逃杀",
 	"Vérifier": "验证账户",
 	"allow_github": "允许通过 GitHub 连接",
+	"allow_google": "允许通过 Google 连接",
 	"light": "克莱尔",
 	"dark": "黑暗",
 	"auto": "汽车",
-	"theme": "主题"
+	"theme": "主题",
+	"modern_theme": "现代主题（测试版）",
+	"xp_theme": "XP 主题"
 }

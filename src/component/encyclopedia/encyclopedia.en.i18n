@@ -5,12 +5,19 @@
 	"edited_by_x_the_y": "Edited by {farmer} on {date}",
 	"n_views": "{v} views",
 	"n_contributions": "{n} contributions",
-	"not_found": "The page « {name} » does not exist in this language.",
+	"not_found": "The page \"{name}\" does not exist in this language.",
 	"available_in": "This page is available in:",
 	"contributor_create": "You are a contributor 😎 Click Edit to start editing this page",
 	"locked": "Finish the chapter to unlock the complete AI",
 	"end_edition": "End editing",
 	"editing_by_x": "Currently being edited by {0}",
 	"redirected_from": "Redirected from {0}",
-	"aliases": "Also known as: {0}"
+	"aliases": "Also known as: {0}",
+	"history": "History",
+	"initial": "creation",
+	"child_pages": "Child pages",
+	"referencing_translations": "Linked translations",
+	"linked_from": "Pages linking here",
+	"n_references": "reference | reference | references",
+	"views": "views"
 }

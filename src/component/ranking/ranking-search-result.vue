@@ -2,8 +2,8 @@
 	<div class="result card">
 		<div v-ripple class="main" @click="$emit('gotoresult', result)">
 			<div class="image">
-				<rich-tooltip-leek v-if="result.type === 'leek'" :id="result.id">
-					<leek-image :leek="result" :scale="1" width="44" height="44" />
+				<rich-tooltip-leek v-if="result.type === 'leek'" :id="result.id" v-slot="{ props }">
+					<span v-bind="props"><leek-image :leek="result" :scale="1" width="44" height="44" /></span>
 				</rich-tooltip-leek>
 				<rich-tooltip-farmer v-else-if="result.type === 'farmer'" :id="result.id">
 					<avatar :farmer="result" />
@@ -24,26 +24,27 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { i18n } from '@/model/i18n'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
-	import RichTooltipLeek from '@/component/rich-tooltip/rich-tooltip-leek.vue'
-	import RichTooltipTeam from '@/component/rich-tooltip/rich-tooltip-team.vue'
+<script setup lang="ts">
+import { computed } from 'vue'
+import { i18n } from '@/model/i18n'
+import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
+import RichTooltipLeek from '@/component/rich-tooltip/rich-tooltip-leek.vue'
+import RichTooltipTeam from '@/component/rich-tooltip/rich-tooltip-team.vue'
 
-	@Options({ components: { RichTooltipFarmer, RichTooltipLeek, RichTooltipTeam } })
-	export default class RankingSearchResult extends Vue {
-		@Prop({ required: true }) result!: any
-		get description() {
-			if (this.result.type === 'leek') {
-				return i18n.t('main.leek_level', [this.result.level])
-			} else if (this.result.type === 'farmer') {
-				return i18n.t('main.farmer')
-			} else if (this.result.type === 'team') {
-				return i18n.t('main.team_level', [this.result.level])
-			}
-		}
-	}
+const props = defineProps<{
+	result: Record<string, unknown>
+}>()
+
+defineEmits<{
+	gotoresult: [result: Record<string, unknown>]
+}>()
+
+const description = computed(() => {
+	if (props.result.type === 'leek') return i18n.t('main.leek_level', [props.result.level])
+	if (props.result.type === 'farmer') return i18n.t('main.farmer')
+	if (props.result.type === 'team') return i18n.t('main.team_level', [props.result.level])
+	return ''
+})
 </script>
 
 <style lang="scss" scoped>

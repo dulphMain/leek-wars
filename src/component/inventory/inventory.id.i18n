@@ -5,5 +5,11 @@
 	"name": "Nama",
 	"level": "Tingkat",
 	"date": "Tanggal",
-	"rarity": "Kelangkaan"
+	"rarity": "Kelangkaan",
+	"type": "Tipe",
+	"no_group": "Tanpa grup",
+	"size": "Ukuran",
+	"size_small": "Kecil",
+	"size_normal": "Normal",
+	"size_large": "Besar"
 }

@@ -1,21 +1,20 @@
 <template>
 	<rich-tooltip-farmer v-if="farmer" :id="farmer.id">
 		<router-link :to="'/farmer/' + farmer.id">
-			<span class="pseudo" :class="{me: $store.state.farmer.id === farmer.id}">{{ farmer.name }}</span>
+			<span class="pseudo" :class="{me: $store.state.farmer?.id === farmer.id}">{{ farmer.name }}</span>
 		</router-link>
 	</rich-tooltip-farmer>
 </template>
 
-<script lang="ts">
-	import { Farmer } from '@/model/farmer'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
+<script setup lang="ts">
+import type { Farmer } from '@/model/farmer'
+import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 
-	@Options({ name: 'lw-pseudo', components: { RichTooltipFarmer } })
-	export default class Pseudo extends Vue {
+defineOptions({ name: 'LwPseudo' })
 
-		@Prop({required: true}) farmer!: Farmer
-	}
+defineProps<{
+	farmer: Farmer
+}>()
 </script>
 
 <style lang="scss" scoped>

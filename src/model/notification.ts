@@ -39,6 +39,16 @@ enum NotificationType {
 	FORUM_TOPIC = 36, // Création d'un nouveau topic
 	GIVE_MONEY = 37, // Don d'argent
 	GIVE_FIGHTS = 38, // Don de combats
+	FORUM_VOTE_UP = 39, // Vote positif sur un message/topic forum
+	FORUM_VOTE_DOWN = 40, // Vote négatif sur un message/topic forum
+	TEAM_INVITATION = 41, // Invitation à rejoindre une équipe
+	TEAM_INVITATION_ACCEPTED = 42, // Invitation acceptée par le joueur
+	BATTLE_ROYALE_REPORT = 43, // Rapport de Battle Royale (avec nom du poireau)
+	WAR_REPORT = 44, // Rapport de Guerre
+	CHEST_HUNT_REPORT = 45, // Rapport de Chasse aux coffres
+	COLOSSUS_REPORT = 46, // Rapport de Colosse
+	LEEK_AUTO_EXIT_ARENA = 47, // Poireau sorti auto du potager (20 défaites en défense)
+	FARMER_AUTO_EXIT_GARDEN = 48, // Éleveur sorti auto du potager (20 défaites en défense)
 }
 
 class Notification {
@@ -55,9 +65,9 @@ class Notification {
 	public icon!: boolean
 	public clazz!: string
 
-	constructor(data: any, link: string | null, image: string | null, title: string[] = [], message: string[] = [], result: number | null = null) {
-		this.id = data.id
-		this.date = data.date
+	constructor(data: Record<string, unknown>, link: string | null, image: string | null, title: string[] = [], message: string[] = [], result: number | null = null) {
+		this.id = data.id as number
+		this.date = data.date as number
 		this.type = data.type as NotificationType
 		this.link = link
 		this.image = image
@@ -70,10 +80,10 @@ class Notification {
 				this.icon = true
 			}
 		}
-		this.title = title.map(LeekWars.protect)
+		this.title = title.map(t => '<b>' + LeekWars.protect(t) + '</b>')
 		this.message = message.map(LeekWars.protect)
 		this.result = result
-		this.read = data.read
+		this.read = data.read as boolean
 
 		this.clazz = ''
 		if (this.type === NotificationType.TROPHY_UNLOCKED) {

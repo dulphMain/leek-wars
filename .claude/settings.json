@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd *)",
+      "Bash(ls *)",
+      "Bash(grep *)",
+      "Bash(wc *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue list *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr list *)",
+      "Bash(gh run view *)",
+      "Bash(gh repo view *)",
+      "WebFetch(domain:github.com)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git diff-tree *)",
+      "Bash(git show *)",
+      "Bash(git status *)",
+      "Bash(git add *)",
+      "Bash(git blame *)",
+      "Bash(git -C *)",
+      "Bash(php -l *)",
+      "Bash(npx vue-tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(head *)",
+      "Bash(sed -n:*)",
+      "mcp__chrome-devtools__take_screenshot",
+      "mcp__chrome-devtools__fill",
+      "mcp__chrome-devtools__click",
+      "mcp__chrome-devtools__wait_for",
+      "mcp__chrome-devtools__evaluate_script",
+      "mcp__chrome-devtools__take_snapshot"
+    ]
+  }
+}

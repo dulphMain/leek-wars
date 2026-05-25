@@ -1,83 +1,133 @@
 import { locale as initialLocale, messages } from '@/locale'
-import { Component, ComponentInstance } from 'vue'
+import type { Component, ComponentInstance } from 'vue'
 import { createI18n } from 'vue-i18n'
 
 // Pre-declare dynamic imports for Vite to bundle them
 const localeModules = import.meta.glob('/src/lang/locale/*.ts') as Record<string, () => Promise<{ translations: Record<string, unknown> }>>
 const i18nModules = import.meta.glob('/src/component/**/*.i18n', {
-	query: '?raw',
-	import: 'default',
-}) as Record<string, () => Promise<string>>
+	import: 'messages',
+}) as Record<string, () => Promise<Record<string, unknown>>>
+
+type I18nWithCompat = ReturnType<typeof createI18n> & {
+	t: (key: string, ...args: unknown[]) => string
+	tc: (key: string, choice?: number, ...args: unknown[]) => string
+	locale: string
+}
 
 const i18n = createI18n({
-	legacy: true, // Use legacy mode for compatibility
-	allowComposition: true, // Allow useI18n() in <script setup>
+	legacy: false,
+	globalInjection: true, // expose $t, $tc, $te, $i18n on all components
 	locale: initialLocale,
-	messages: {[initialLocale]: messages},
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	messages: {[initialLocale]: messages} as any,
 	silentTranslationWarn: true,
 	silentFallbackWarn: true,
 	missingWarn: false,
 	fallbackWarn: false,
 	warnHtmlMessage: false,
 	warnHtmlInMessage: 'off',
-})
+	escapeParameter: false,
+}) as unknown as I18nWithCompat
 
-// Add backward compatibility helpers for Vue 2 -> Vue 3 migration
-// This allows code to use i18n.t() instead of i18n.global.t()
+// Compat wrappers: en mode composition, i18n.global.locale est un WritableComputedRef
+// et t/tc nécessitent un binding correct. On garde i18n.t() / i18n.tc() / i18n.locale
+// pour le code historique (pages chargées hors composant Vue, services, etc.)
 Object.defineProperty(i18n, 't', {
 	get() {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		return (i18n.global as any).t
+		return (i18n.global.t as any).bind(i18n.global)
 	}
 })
 Object.defineProperty(i18n, 'tc', {
 	get() {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		return (i18n.global as any).tc
+		return (i18n.global as any).rt
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			? (i18n.global.t as any).bind(i18n.global)
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-function-type
+			: ((i18n.global as any).tc as Function).bind(i18n.global)
 	}
 })
 Object.defineProperty(i18n, 'locale', {
 	get() {
-		return i18n.global.locale
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		return (i18n.global.locale as any).value ?? i18n.global.locale
 	},
 	set(value: string) {
-		i18n.global.locale = value
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const loc = i18n.global.locale as any
+		if (loc && typeof loc === 'object' && 'value' in loc) {
+			loc.value = value
+		} else {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			;(i18n.global as any).locale = value
+		}
 	}
 })
 
 const loadedLanguages: string[] = [initialLocale]
 
+function currentLocale(): string {
+	const loc = i18n.global.locale as unknown as { value?: string } | string
+	return typeof loc === 'object' && loc !== null && 'value' in loc ? (loc.value as string) : (loc as string)
+}
+
+// Normalise un nom de composant en clé i18n: PascalCase → kebab-case,
+// underscores → dashes, lowercase ; bank-* → bank (toutes les pages bank
+// partagent le même fichier .i18n).
+function normalizeComponentName(rawName: string): string {
+	const name = rawName.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase().replace(/_/g, '-')
+	if (name.startsWith('bank-') || name === 'bankbuy' || name === 'bankvalidate') return 'bank'
+	return name
+}
+
+function mergeNamespaced(locale: string, name: string, messages: unknown) {
+	i18n.global.mergeLocaleMessage(locale, { [name]: messages as Record<string, unknown> })
+}
+
+const MERGED_FLAG = '__i18nMerged'
+
 const mixins = [{
 	beforeCreate() {
 		// Reload translations because in case of hot reloading, they are lost
 		// Missing messages or messages for the current locale
-		if (!(this as any).$options.i18n.messages || !(this as any).$options.i18n.messages[i18n.global.locale]) {
-			// console.log("reload translations...")
-			loadInstanceTranslations(i18n.global.locale, this)
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const opts = (this as any).$options
+		const locale = currentLocale()
+		if (!opts?.i18n?.messages?.[locale]) {
+			loadInstanceTranslations(locale, this)
+		} else if (opts.name && opts[MERGED_FLAG] !== locale) {
+			// Messages déjà attachés à Component.i18n par le i18nPlugin Vite mais
+			// pas encore mergés dans le composer global pour cette locale.
+			mergeNamespaced(locale, normalizeComponentName(opts.name), opts.i18n.messages[locale])
+			opts[MERGED_FLAG] = locale
 		}
 	},
 	watch: {
 		'$i18n.locale'() {
-			const name = (this as any).$options.name!
-			// console.log("Reload translations of component", name)
-			const newLocale = i18n.global.locale
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const rawName = (this as any).$options?.name
+			if (!rawName) return
+			const newLocale = currentLocale()
+			const name = normalizeComponentName(rawName)
 			const folder = name.startsWith('signup-') ? 'signup' : name
 			const modulePath = `/src/component/${folder}/${name}.${newLocale}.i18n`
 			const loader = i18nModules[modulePath]
 			if (!loader) return
-			return loader().then((raw) => {
-				const messages = JSON.parse(raw)
-				i18n.global.mergeLocaleMessage(newLocale, { [name]: messages })
-				// console.log("i18n watch set instance messages", newLocale, messages, module)
-				const instanceI18n = (this as any).$i18n
-				instanceI18n.setLocaleMessage(newLocale, messages)
+			return loader().then((messages) => {
+				mergeNamespaced(newLocale, name, messages)
 			})
 		}
 	}
 }]
 
 function setI18nLanguage(lang: string) {
-	i18n.global.locale = lang
+	const loc = i18n.global.locale as unknown as { value?: string } | string
+	if (typeof loc === 'object' && loc !== null && 'value' in loc) {
+		(loc as { value: string }).value = lang
+	} else {
+		(i18n.global as { locale: string }).locale = lang
+	}
 	const html = document.querySelector('html')
 	if (html) {
 		html.setAttribute('lang', lang)
@@ -85,6 +135,7 @@ function setI18nLanguage(lang: string) {
 	return lang
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function loadLanguageAsync(vue: any, newLocale: string) {
 	// console.log("loadLanguageAsync", newLocale)
 	const currentRoute = vue.$router.currentRoute.value?.matched[0]
@@ -108,82 +159,69 @@ function loadLanguageAsync(vue: any, newLocale: string) {
 	return Promise.resolve(setI18nLanguage(newLocale))
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function loadInstanceTranslations(newLocale: string, instance: any) {
-	// console.log("load instance translations", "instance", instance, newLocale)
-	if (!instance.$options.name) {
+	if (!instance.$options?.name) {
 		return
 	}
 	if (!instance.$options.i18n) {
 		instance.$options.i18n = {}
 	}
-	let name = instance.$options.name.toLowerCase().replace(/_/g, '-')
+	const name = normalizeComponentName(instance.$options.name)
 	let folder = name
-	if (name.indexOf("bank-") === 0) { name = "bank" }
-	if (name.indexOf("editor-") === 0) { folder = "editor" }
-	if (name.indexOf("signup-") === 0) { folder = "signup" }
-	if (name.indexOf("encyclopedia-") === 0) { folder = "encyclopedia" }
-	if (name.indexOf("level-dialog") === 0) { folder = "leek" }
-	if (name.indexOf("forum-") === 0) { folder = "forum" }
-	if (name.indexOf("inventory-") === 0) { folder = "inventory" }
+	if (name.startsWith("editor-")) { folder = "editor" }
+	if (name.startsWith("git-")) { folder = "editor" }
+	if (name.startsWith("signup-")) { folder = "signup" }
+	if (name.startsWith("encyclopedia-")) { folder = "encyclopedia" }
+	if (name.startsWith("level-dialog")) { folder = "leek" }
+	if (name.startsWith("forum-")) { folder = "forum" }
+	if (name.startsWith("inventory-")) { folder = "inventory" }
+	if (name === "fights-history-table") { folder = "history" }
 
 	const modulePath = `/src/component/${folder}/${name}.${newLocale}.i18n`
 	const loader = i18nModules[modulePath]
 	if (!loader) return
-	return loader().then((raw) => {
-		const messages = JSON.parse(raw)
-		const instanceI18n = (instance as any).$i18n
-		// console.log("instance i18n", instanceI18n, instance, "messages", messages)
-		if (instanceI18n) {
-			instanceI18n.setLocaleMessage(newLocale, messages)
-		}
+	return loader().then((messages) => {
+		mergeNamespaced(newLocale, name, messages)
+		instance.$options[MERGED_FLAG] = newLocale
 	})
 }
 
 function loadComponentLanguage(newLocale: string, component: ComponentInstance<Component>, instance: Component | undefined) {
-
-	// console.log("loadComponentLanguage", newLocale, "component", component, "instance", instance)
-
-	let name = component.name?.toLowerCase().replace(/_/g, '-')
-	if (name === "bankbuy" || name === "bankvalidate") { name = "bank" }
+	let name = component.name ? normalizeComponentName(component.name) : undefined
 	if (name === "home" || !name) { name = "signup" }
 
-	if (instance && (instance as any).$i18n && (instance as any).$i18n.messages[newLocale]) {
-		// console.log("i18n already loaded on instance!")
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	if ((instance as any)?.$i18n?.messages?.[newLocale]) {
 		return
 	}
-	if (component && component.i18n && component.i18n.messages && component.i18n.messages[newLocale]) {
-		// console.log("i18n already set on component!")
+	if (component?.i18n?.messages?.[newLocale]) {
 		return
 	}
 	const modulePath = `/src/component/${name}/${name}.${newLocale}.i18n`
 	const loader = i18nModules[modulePath]
-	// console.log("loader", loader, modulePath, i18nModules)
 	if (!loader) return
-	return loader().then((raw) => {
-		const messages = JSON.parse(raw)
-		// if (!(name in module.translations)) {
-			// console.log("No messages for '" + name + "' in '" + locale + "'!")
-			// return
-		// }
-		// console.log("messages", messages)
-		i18n.global.mergeLocaleMessage(newLocale, { [name]: messages })
-		if (instance && (instance as any).$i18n) {
-			const instanceI18n = (instance as any).$i18n
-			instanceI18n.setLocaleMessage(newLocale, messages)
-			// console.log("installed '" + newLocale + "' messages on instance '" + name + "'")
-		} else {
-			if (component.i18n) {
-				(component as any).i18n = {messages: {[newLocale]: messages}}
-			}
-			// console.log("set '" + newLocale + "' messages on component '" + name + "'")
-		}	
+	return loader().then((messages) => {
+		mergeNamespaced(newLocale, name!, messages)
 	})
 }
 
 // Helpers for <script setup> components (avoids i18n.global boilerplate)
 function t(key: string, ...args: unknown[]): string {
-	return String((i18n.global as Record<string, Function>).t(key, ...args))
+	return String((i18n.global.t as (...a: unknown[]) => unknown).call(i18n.global, key, ...args))
 }
-const locale = i18n.global.locale as string
+const locale = currentLocale()
 
-export { i18n, mixins, loadComponentLanguage, loadLanguageAsync, loadInstanceTranslations, t, locale }
+// For sub-pages sharing a parent's .i18n without their own component-local i18n scope.
+function useNamespacedT(name: string) {
+	const prefix = normalizeComponentName(name) + '.'
+	return (key: string, ...args: unknown[]): string => {
+		const namespaced = prefix + key
+		if ((i18n.global.te as (key: string) => boolean)(namespaced)) {
+			return String((i18n.global.t as (...a: unknown[]) => unknown)(namespaced, ...args))
+		}
+		return String((i18n.global.t as (...a: unknown[]) => unknown)(key, ...args))
+	}
+}
+
+export { i18n, mixins, loadLanguageAsync, t, locale, normalizeComponentName, useNamespacedT }

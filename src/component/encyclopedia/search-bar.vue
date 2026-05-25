@@ -1,6 +1,6 @@
 <template>
 	<div class="search-bar">
-		<input class="card" v-model="query" type="text" :placeholder="$t('main.search_bar')">
+		<input v-model="query" class="card" type="text" :placeholder="$t('main.search_bar')">
 
 		<loader v-if="loading" />
 		<div v-else-if="results && results.length" class="results">
@@ -14,45 +14,52 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { i18n } from '@/model/i18n'
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Vue, Watch } from 'vue-property-decorator'
+<script setup lang="ts">
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { i18n } from '@/model/i18n'
+import { LeekWars } from '@/model/leekwars'
 
-	@Options({ name: 'search-bar' })
-	export default class SearchBar extends Vue {
+defineOptions({ name: 'SearchBar' })
 
-		query: string = ''
-		loading: boolean = false
-		results: any[] | null = null
-		timer: any
+const route = useRoute()
+const router = useRouter()
 
-		@Watch('query')
-		update() {
-			this.results = []
-			if (this.query === '') {
-				clearTimeout(this.timer)
-				this.loading = false
-				return
-			}
-			if (this.timer) {
-				clearTimeout(this.timer)
-			}
-			this.loading = true
-			this.timer = setTimeout(() => {
-				LeekWars.get('encyclopedia/search/' + i18n.locale + '/' + this.query.replace(/ /g, '+') + '/1').then(data => {
-					this.results = data.results
-					this.loading = false
-					// this.pages = data.pages
-					// this.count = data.count
-				}).error(error => {
-					this.results = []
-					// this.count = 0
-					LeekWars.toast(error.error)
-				})
-			}, 200)
-		}
+const query = ref('')
+const loading = ref(false)
+const results = ref<unknown[] | null>(null)
+let timer: ReturnType<typeof setTimeout> | null = null
+
+const urlQuery = route.query.query as string
+if (urlQuery) {
+	query.value = urlQuery.replace(/\+/g, ' ')
+}
+
+watch(query, () => {
+	const encoded = query.value.replace(/ /g, '+')
+	const currentUrlQuery = (route.query.query as string) || ''
+	if (encoded !== currentUrlQuery) {
+		router.replace({ query: { ...route.query, query: encoded || undefined } })
 	}
+
+	results.value = []
+	if (query.value === '') {
+		clearTimeout(timer)
+		loading.value = false
+		return
+	}
+	if (timer) clearTimeout(timer)
+	loading.value = true
+	timer = setTimeout(() => {
+		LeekWars.get('encyclopedia/search/' + i18n.locale + '/' + query.value.replace(/ /g, '+') + '/1').then(data => {
+			results.value = data.results
+			loading.value = false
+		}).catch((err) => {
+			results.value = []
+			LeekWars.toast(err.error)
+		})
+	}, 200)
+})
 </script>
 
 <style lang="scss" scoped>

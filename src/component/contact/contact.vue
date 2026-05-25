@@ -8,7 +8,7 @@
 				<div class="text">{{ $t('intro') }}</div>
 
 				<a href="mailto:contact@leekwars.com" target="_blank">
-					<div class="card" v-ripple>
+					<div v-ripple class="card">
 						<i18n-t keypath="email">
 							<template #email>contact@leekwars.com</template>
 						</i18n-t>
@@ -19,17 +19,17 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { mixins } from '@/model/i18n';
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Vue } from 'vue-property-decorator'
+<script setup lang="ts">
+import { onBeforeMount } from 'vue'
+import { mixins, useNamespacedT } from '@/model/i18n'
+import { LeekWars } from '@/model/leekwars'
+import { useI18n } from 'vue-i18n'
 
-	@Options({ name: 'contact', i18n: {}, mixins: [...mixins] })
-	export default class Contact extends Vue {
-		created() {
-			LeekWars.setTitle(this.$t('title'))
-		}
-	}
+defineOptions({ name: 'Contact', i18n: {}, mixins: [...mixins] })
+
+useI18n()
+const t = useNamespacedT('contact')
+onBeforeMount(() => LeekWars.setTitle(t('title')))
 </script>
 
 <style lang="scss" scoped>

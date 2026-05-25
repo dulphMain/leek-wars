@@ -3,7 +3,7 @@
 		<div class="page-header page-bar">
 			<h1>{{ $t('title') }}</h1>
 			<div class="tabs">
-				<div v-if="$store.state.farmer && $store.state.farmer.verified" class="tab action" icon="mdi-power-settings-new" @click="logout">
+				<div v-if="$store.state.farmer && $store.state.farmer.verified" class="tab action" icon="mdi-power" @click="logout">
 					<v-icon>mdi-power</v-icon>
 					<span>{{ $t('logout') }}</span>
 				</div>
@@ -48,9 +48,10 @@
 						</tr>
 						<tr>
 							<td colspan="2">
-								<v-radio-group v-model="signupMethod" class="radio" :row="true" :dense="true" :hide-details="true">
+								<v-radio-group v-model="signupMethod" class="radio" :inline="true" :dense="true" :hide-details="true">
 									<v-radio label="Email / mot de passe" :value="1" />
 									<v-radio label="GitHub" :value="2" />
+									<v-radio label="Google" :value="3" />
 								</v-radio-group>
 							</td>
 						</tr>
@@ -71,13 +72,14 @@
 						<tr>
 							<td><div class="space"></div></td>
 						</tr>
-						<tr v-if="signupMethod === 2">
+						<tr v-if="signupMethod === 2 || signupMethod === 3">
 							<td><div class="space"></div></td>
 						</tr>
 					</table>
 					<div class="center">
-						<v-btn v-if="signupMethod === 1" size="large" color="primary" type="submit">{{ $t('verify') }}</v-btn>
-						<v-btn v-else color="black" type="submit" class="gh-button"> <img src="/image/github_black.png"> {{ $t('verify_gh') }}</v-btn>
+						<v-btn v-if="signupMethod === 1" size="large" color="primary" type="submit" :disabled="submittingVerify" :loading="submittingVerify">{{ $t('verify') }}</v-btn>
+						<v-btn v-else-if="signupMethod === 2" color="black" type="submit" class="gh-button" :disabled="submittingVerify" :loading="submittingVerify"> <img src="/image/github_white.png"> {{ $t('verify_gh') }}</v-btn>
+						<v-btn v-else type="submit" class="google-button" :disabled="submittingVerify" :loading="submittingVerify"> <img src="/image/google.svg"> {{ $t('verify_google') }}</v-btn>
 					</div>
 				</form>
 			</div>
@@ -95,7 +97,7 @@
 
 			<panel :title="$t('misc_options')" icon="mdi-cog-outline">
 				<div class="misc-settings">
-					<div class="setting" id="dark-button">
+					<div id="dark-button" class="setting">
 						<div>{{ $t('theme') }}</div>
 						<div width="100">
 							<v-radio-group v-model="LeekWars.themeSetting" hide-details inline>
@@ -105,21 +107,29 @@
 							</v-radio-group>
 						</div>
 					</div>
-					<div class="setting" id="sfw-button">
+					<div id="sfw-button" class="setting">
 						<div>{{ $t('activate_discrete_mode') }}</div>
 						<div><v-switch v-model="sfwMode" hide-details /></div>
 					</div>
-					<div class="setting" id="notifs-results-button">
+					<div id="notifs-popups-button" class="setting">
+						<div>{{ $t('notifs_popups') }}</div>
+						<div><v-switch v-model="notifsPopups" hide-details /></div>
+					</div>
+					<div id="notifs-results-button" class="setting">
 						<div>{{ $t('notifs_results') }}</div>
 						<div><v-switch v-model="notifsResults" hide-details /></div>
 					</div>
-					<div class="setting" v-if="LeekWars.mobile">
+					<div v-if="LeekWars.mobile" class="setting">
 						<div>{{ $t('chat_first') }}</div>
 						<div><v-switch v-model="chatFirst" hide-details /></div>
 					</div>
-					<div class="setting" v-if="!LeekWars.mobile">
+					<div v-if="!LeekWars.mobile" class="setting">
 						<div>{{ $t('leek_theme') }}</div>
 						<div><v-switch v-model="LeekWars.leekTheme" hide-details /></div>
+					</div>
+					<div class="setting">
+						<div>{{ $t('modern_theme') }}</div>
+						<div><v-switch v-model="modernTheme" hide-details /></div>
 					</div>
 				</div>
 			</panel>
@@ -161,11 +171,12 @@
 					<v-icon>{{ viewDeleteAccount ? 'mdi-menu-up' : 'mdi-menu-down' }}</v-icon>
 				</div>
 				<div v-if="viewDeleteAccount">
-					<v-btn @click="deleteDialog = true" color="error">{{ $t('delete_account') }}</v-btn>
+					<v-btn color="error" @click="deleteDialog = true">{{ $t('delete_account') }}</v-btn>
 					<br><br>
 				</div>
 
-				<v-switch v-if="$store.state.farmer?.verified" v-model="settings.github_login" :disabled="!$store.state.farmer.pass" :label="$t('allow_github')" @change="updateGithubLogin" />
+				<v-switch v-if="settings && $store.state.farmer?.verified" v-model="settings.github_login" :disabled="!$store.state.farmer.pass && !settings.google_login" :label="$t('allow_github')" hide-details @change="updateGithubLogin" />
+				<v-switch v-if="settings && $store.state.farmer?.verified" v-model="settings.google_login" :disabled="!$store.state.farmer.pass && !settings.github_login" :label="$t('allow_google')" hide-details @change="updateGoogleLogin" />
 			</panel>
 
 			<panel v-if="$store.state.farmer?.verified" :title="$t('main.notifications')" icon="mdi-bell-outline">
@@ -189,11 +200,11 @@
 									<td class="item">
 										{{ $t('notification.category_' + category.id + '_desc') }}
 									</td>
-									<td class="push">
-										<v-checkbox v-model="settings['push_' + category.name]" hide-details label="Push" @change="updateNotif('push_' + category.name, $event)" />
+									<td v-if="settings" class="push">
+										<v-checkbox v-model="settings['push_' + category.name]" hide-details label="Push" @update:model-value="updateNotif('push_' + category.name, settings['push_' + category.name])" />
 									</td>
-									<td class="mail">
-										<v-checkbox v-model="settings['mail_' + category.name]" hide-details label="E-mail" @change="updateNotif('mail_' + category.name, $event)" />
+									<td v-if="settings" class="mail">
+										<v-checkbox v-model="settings['mail_' + category.name]" hide-details label="E-mail" @update:model-value="updateNotif('mail_' + category.name, settings['mail_' + category.name])" />
 									</td>
 								</tr>
 							</template>
@@ -252,269 +263,302 @@
 		<popup v-model="deleteFailedDialog" :width="600">
 			<template #icon><v-icon>mdi-delete</v-icon></template>
 			<template #title><span>{{ $t('delete_failed') }}</span></template>
-			{{ $t(deleteFailedError) }}
+			{{ $t('error_' + deleteFailedError) }}
 		</popup>
 	</div>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
 	import TwoFactor from '@/component/settings/two-factor.vue'
-	import { mixins } from '@/model/i18n'
+	import { mixins, t as gt , useNamespacedT } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
-	import { Options, Vue, Watch } from 'vue-property-decorator'
+	import { store } from '@/model/store'
+	import { ref, watch } from 'vue'
+	import { useRouter } from 'vue-router'
 
-	@Options({ name: 'settings', i18n: {}, mixins: [...mixins], components: {TwoFactor} })
-	export default class Settings extends Vue {
-		vapid_key = new Uint8Array([4, 92, 237, 40, 114, 162, 99, 215, 179, 242, 70, 151, 236, 60, 216, 10, 167, 186, 77, 27, 233, 193, 117, 111, 78, 20, 121, 201, 142, 186, 91, 13, 111, 26, 241, 126, 12, 216, 94, 160, 38, 110, 214, 161, 249, 147, 233, 133, 128, 210, 170, 161, 158, 57, 24, 54, 194, 103, 195, 94, 49, 182, 20, 62, 184])
-		mails = [
-			{ id: 1, icon: 'mdi-star', name: 'general' },
-			{ id: 2, icon: 'mdi-gamepad-square', name: 'game' },
-			{ id: 3, icon: 'mdi-sword-cross', name: 'fight' },
-			{ id: 4, icon: 'mdi-flag', name: 'challenge' },
-			{ id: 5, icon: 'mdi-trophy', name: 'tournament' },
-			{ id: 6, icon: 'mdi-chat', name: 'social' },
-			{ id: 7, icon: 'mdi-message-text-outline', name: 'private' },
-			{ id: 8, icon: 'mdi-account-multiple', name: 'team' },
-			{ id: 9, icon: 'mdi-gavel', name: 'moderation' }
-		]
+	defineOptions({ name: 'Settings', i18n: {}, mixins: [...mixins], components: { TwoFactor } })
 
-		settings: any = null
-		sfwMode: boolean = localStorage.getItem('sfw') === 'true'
-		notifsResults: boolean = localStorage.getItem('options/notifs-results') === 'true'
-		chatFirst: boolean = localStorage.getItem('options/chat-first') === 'true'
-		pushNotifications: boolean = localStorage.getItem('options/push-notifs') === 'true'
-		deleteDialog: boolean = false
-		deleteConfirmDialog: boolean = false
-		deleteConfirmPassword: string = ''
-		deleteSuccessDialog: boolean = false
-		deleteFailedDialog: boolean = false
-		deleteFailedError: any = null
-		deleteForumMessages: boolean = false
-		advanced: boolean = false
-		password: string = ''
-		newPassword1: string = ''
-		newPassword2: string = ''
-		viewChangePassword: boolean = false
-		viewChangeEmail: boolean = false
-		viewDeleteAccount: boolean = false
-		view2FA: boolean = false
-		changeEmailSent: boolean = false
-		errors: {[key: string]: string[]} = {}
-		login: string = ''
-		godfather: string = ''
-		signupMethod: number = 1
-		email: string = ''
-		password1: string = ''
+	const t = useNamespacedT('settings')
+	const router = useRouter()
 
-		created() {
-			this.settings = {}
-			for (const category in this.mails) {
-				this.settings['push_' + category] = false
-			}
-			if (this.$store.state.farmer && this.$store.state.farmer.verified) {
-				LeekWars.setActions([
-					{icon: 'mdi-power', click: () => this.logout()}
-				])
-			}
+	const vapid_key = new Uint8Array([4, 92, 237, 40, 114, 162, 99, 215, 179, 242, 70, 151, 236, 60, 216, 10, 167, 186, 77, 27, 233, 193, 117, 111, 78, 20, 121, 201, 142, 186, 91, 13, 111, 26, 241, 126, 12, 216, 94, 160, 38, 110, 214, 161, 249, 147, 233, 133, 128, 210, 170, 161, 158, 57, 24, 54, 194, 103, 195, 94, 49, 182, 20, 62, 184])
+	const mails = [
+		{ id: 1, icon: 'mdi-star', name: 'general' },
+		{ id: 2, icon: 'mdi-gamepad-square', name: 'game' },
+		{ id: 3, icon: 'mdi-sword-cross', name: 'fight' },
+		{ id: 4, icon: 'mdi-flag', name: 'challenge' },
+		{ id: 5, icon: 'mdi-trophy', name: 'tournament' },
+		{ id: 6, icon: 'mdi-chat', name: 'social' },
+		{ id: 7, icon: 'mdi-message-text-outline', name: 'private' },
+		{ id: 8, icon: 'mdi-account-multiple', name: 'team' },
+		{ id: 9, icon: 'mdi-gavel', name: 'moderation' }
+	]
 
-			LeekWars.get('settings/get-settings').then(data => {
+	const settings = ref<Record<string, boolean> | null>(null)
+	const sfwMode = ref(localStorage.getItem('sfw') === 'true')
+	const notifsPopups = ref(localStorage.getItem('options/notifs-popups') !== 'false')
+	const notifsResults = ref(localStorage.getItem('options/notifs-results') === 'true')
+	const chatFirst = ref(localStorage.getItem('options/chat-first') === 'true')
+	const modernTheme = ref(localStorage.getItem('theme') === 'xp')
+	const pushNotifications = ref(localStorage.getItem('options/push-notifs') === 'true')
+	const deleteDialog = ref(false)
+	const deleteConfirmDialog = ref(false)
+	const deleteConfirmPassword = ref('')
+	const deleteSuccessDialog = ref(false)
+	const deleteFailedDialog = ref(false)
+	const deleteFailedError = ref<string>('unknown')
+	const deleteForumMessages = ref(false)
+	const advanced = ref(false)
+	const password = ref('')
+	const newPassword1 = ref('')
+	const newPassword2 = ref('')
+	const viewChangePassword = ref(false)
+	const viewChangeEmail = ref(false)
+	const viewDeleteAccount = ref(false)
+	const changeEmailSent = ref(false)
+	const errors = ref<{[key: string]: string[]}>({})
+	const login = ref('')
+	const godfather = ref('')
+	const signupMethod = ref(1)
+	const email = ref('')
+	const password1 = ref('')
+	const submittingVerify = ref(false)
 
-				this.settings = data.settings
+	settings.value = {}
+	for (const category in mails) {
+		settings.value['push_' + category] = false
+	}
+	if (store.state.farmer && store.state.farmer.verified) {
+		LeekWars.setActions([
+			{icon: 'mdi-power', click: () => logout()}
+		])
+	}
 
-				if (this.$store.state.farmer) {
-					LeekWars.setTitle(this.$t('title'), this.$store.state.farmer.name)
-				}
-
-				if (LeekWars.service_worker) {
-					// Check the push notifs switch if we have a valid subscription
-					LeekWars.service_worker.pushManager.getSubscription().then((subscription: PushSubscription | null) => {
-						if (subscription) {
-							for (const endpoint of data.push_endpoints) {
-								if (subscription.endpoint === endpoint) {
-									this.pushNotifications = true
-									break
-								}
-							}
+	LeekWars.get('settings/get-settings').then(data => {
+		settings.value = data.settings
+		if (store.state.farmer) {
+			LeekWars.setTitle(t('title'), store.state.farmer.name)
+		}
+		if (LeekWars.service_worker) {
+			LeekWars.service_worker.pushManager.getSubscription().then((subscription: PushSubscription | null) => {
+				if (subscription) {
+					for (const endpoint of data.push_endpoints) {
+						if (subscription.endpoint === endpoint) {
+							pushNotifications.value = true
+							break
 						}
-					})
+					}
 				}
 			})
 		}
-		updatePushNotifications(e: Event) {
-			if (!LeekWars.service_worker) { return }
-			if (this.pushNotifications) {
-				LeekWars.service_worker.pushManager.getSubscription().then((subscription: PushSubscription | null) => {
-					if (subscription) {
-						subscription.unsubscribe()
-					}
-				})
-			} else {
-				LeekWars.service_worker.pushManager.subscribe({
-					applicationServerKey: this.vapid_key,
-					userVisibleOnly: true
-				}).then((subscription: PushSubscription) => {
-					LeekWars.post('push-endpoint/register', {subscription: JSON.stringify(subscription)})
-				})
+	})
+
+	function updatePushNotifications(_e: Event) {
+		if (!LeekWars.service_worker) { return }
+		if (pushNotifications.value) {
+			LeekWars.service_worker.pushManager.getSubscription().then((subscription: PushSubscription | null) => {
+				if (subscription) {
+					subscription.unsubscribe()
+				}
+			})
+		} else {
+			LeekWars.service_worker.pushManager.subscribe({
+				applicationServerKey: vapid_key,
+				userVisibleOnly: true
+			}).then((subscription: PushSubscription) => {
+				LeekWars.post('push-endpoint/register', {subscription: JSON.stringify(subscription)})
+			})
+		}
+		pushNotifications.value = !pushNotifications.value
+	}
+
+	function logout() {
+		LeekWars.logoutDialog = true
+	}
+
+	function clearLocalStorage() {
+		localStorage.clear()
+		LeekWars.toast("localstorage cleared!")
+		setTimeout(() => location.reload(), 800)
+	}
+
+	watch(sfwMode, () => {
+		localStorage.setItem('sfw', '' + sfwMode.value)
+		if (sfwMode.value) { LeekWars.sfwOn() } else { LeekWars.sfwOff() }
+		if (sfwMode.value) {
+			LeekWars.post('trophy/unlock', {trophy_id: 234})
+		}
+	})
+
+	watch(() => LeekWars.themeSetting, () => {
+		localStorage.setItem('theme', '' + LeekWars.themeSetting)
+		LeekWars.xpTheme = LeekWars.themeSetting === 'xp'
+		modernTheme.value = LeekWars.themeSetting === 'xp'
+		localStorage.setItem('xp-theme', '' + LeekWars.xpTheme)
+		if (LeekWars.themeSetting === 'xp') {
+			import('@/xp.scss')
+			LeekWars.xpCursorsInit()
+			LeekWars.darkMode = false
+			if (LeekWars.aprilFools) {
+				LeekWars.post('trophy/unlock', {trophy_id: 280})
 			}
-			this.pushNotifications = !this.pushNotifications
-		}
-
-		logout() {
-			this.$store.commit('disconnect')
-			this.$router.push('/')
-		}
-
-		clearLocalStorage() {
-			localStorage.clear()
-			LeekWars.toast("localstorage cleared!")
-			setTimeout(() => location.reload(), 800)
-		}
-
-		@Watch('sfwMode')
-		updateSfwMode() {
-			localStorage.setItem('sfw', '' + this.sfwMode)
-			this.sfwMode ? LeekWars.sfwOn() : LeekWars.sfwOff()
-			if (this.sfwMode) {
-				LeekWars.post('trophy/unlock', {trophy_id: 234}) // Trophée On me voit on me voit plus
-			}
-		}
-
-		@Watch('LeekWars.themeSetting')
-		updateTheme() {
-			localStorage.setItem('theme', '' + LeekWars.themeSetting)
+		} else {
+			document.querySelectorAll<HTMLElement>('[style*="pointer.png"]').forEach(el => { el.style.cursor = '' })
 			LeekWars.darkMode = LeekWars.themeSetting !== 'auto' ? LeekWars.themeSetting === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
 		}
+	})
 
-		@Watch('notifsResults')
-		updateNotifsResults() {
-			localStorage.setItem('options/notifs-results', '' + this.notifsResults)
-			LeekWars.notifsResults = this.notifsResults
-		}
+	watch(modernTheme, () => {
+		LeekWars.themeSetting = modernTheme.value ? 'xp' : 'auto'
+	})
 
-		@Watch('chatFirst')
-		updateChatFirst() {
-			localStorage.setItem('options/chat-first', '' + this.chatFirst)
-		}
+	watch(notifsPopups, () => {
+		localStorage.setItem('options/notifs-popups', '' + notifsPopups.value)
+		LeekWars.notifsPopups = notifsPopups.value
+	})
 
-		updateNotif(setting: string, value: boolean) {
-			LeekWars.post('settings/update-setting', {setting, value})
-		}
+	watch(notifsResults, () => {
+		localStorage.setItem('options/notifs-results', '' + notifsResults.value)
+		LeekWars.notifsResults = notifsResults.value
+	})
 
-		changePassword(e: Event) {
-			e.preventDefault()
-			if (this.newPassword1 !== this.newPassword2) {
-				LeekWars.toast(this.$t('error_not_same_password'))
-				return false
-			}
-			LeekWars.post('farmer/change-password', {password: this.password, new_password: this.newPassword1}).then(data => {
-				this.$store.commit('disconnect')
-				LeekWars.toast(this.$i18n.t('settings.password_changed'))
-				this.$router.push('/login')
-			}).error(error => {
-				LeekWars.toast(this.$t('error_' + error.error, error.params))
-			})
+	watch(chatFirst, () => {
+		localStorage.setItem('options/chat-first', '' + chatFirst.value)
+	})
+
+	function updateNotif(setting: string, value: boolean) {
+		LeekWars.post('settings/update-setting', {setting, value})
+	}
+
+	function changePassword(e: Event) {
+		e.preventDefault()
+		if (newPassword1.value !== newPassword2.value) {
+			LeekWars.toast(t('error_not_same_password'))
 			return false
 		}
+		LeekWars.post('farmer/change-password', {password: password.value, new_password: newPassword1.value}).then(() => {
+			store.commit('disconnect')
+			LeekWars.toast(gt('settings.password_changed'))
+			router.push('/login')
+		}).error(error => {
+			LeekWars.toast(t('error_' + error.error, error.params))
+		})
+		return false
+	}
 
-		deleteAccountConfirm() {
-			if (this.$store.state.farmer.verified) {
-				this.deleteDialog = false
-				this.deleteConfirmDialog = true
-			} else {
-				LeekWars.post('farmer/unregister-fast').then(data => {
-					this.deleteDialog = false
-					this.deleteSuccessDialog = true
-					setTimeout(() => {
-						this.$store.commit('disconnect')
-						this.deleteSuccessDialog = false
-						this.$router.push('/')
-					}, 3000)
-				}).error(error => {
-					this.deleteDialog = false
-					this.deleteFailedDialog = true
-					this.deleteFailedError = error.error
-				})
-			}
-		}
-
-		deleteAccountFinal() {
-			LeekWars.post('farmer/unregister', {password: this.deleteConfirmPassword, delete_forum_messages: this.deleteForumMessages}).then(data => {
-				this.deleteConfirmDialog = false
-				this.deleteSuccessDialog = true
+	function deleteAccountConfirm() {
+		if (store.state.farmer!.verified) {
+			deleteDialog.value = false
+			deleteConfirmDialog.value = true
+		} else {
+			LeekWars.post('farmer/unregister-fast').then(() => {
+				deleteDialog.value = false
+				deleteSuccessDialog.value = true
 				setTimeout(() => {
-					this.$store.commit('disconnect')
-					this.deleteSuccessDialog = false
-					this.$router.push('/')
+					store.commit('disconnect')
+					deleteSuccessDialog.value = false
+					router.push('/')
 				}, 3000)
 			}).error(error => {
-				this.deleteConfirmDialog = false
-				this.deleteFailedDialog = true
-				this.deleteFailedError = error.error
+				deleteDialog.value = false
+				deleteFailedDialog.value = true
+				deleteFailedError.value = typeof error?.error === 'string' ? error.error : 'unknown'
 			})
 		}
+	}
 
-		sendChangeEmail() {
-			LeekWars.post('farmer/change-email1').then(data => {
-				LeekWars.toast(this.$i18n.t('change_email_sent'))
-			})
-			this.changeEmailSent = true
+	function deleteAccountFinal() {
+		LeekWars.post('farmer/unregister', {password: deleteConfirmPassword.value, delete_forum_messages: deleteForumMessages.value}).then(() => {
+			deleteConfirmDialog.value = false
+			deleteSuccessDialog.value = true
+			setTimeout(() => {
+				store.commit('disconnect')
+				deleteSuccessDialog.value = false
+				router.push('/')
+			}, 3000)
+		}).error(error => {
+			deleteConfirmDialog.value = false
+			deleteFailedDialog.value = true
+			deleteFailedError.value = typeof error?.error === 'string' ? error.error : 'unknown'
+		})
+	}
+
+	function sendChangeEmail() {
+		LeekWars.post('farmer/change-email1').then(() => {
+			LeekWars.toast(gt('change_email_sent'))
+		})
+		changeEmailSent.value = true
+	}
+
+	function updateGithubLogin() {
+		if (!settings.value) return
+		LeekWars.post("settings/update-setting", {setting: 'github_login', value: settings.value.github_login})
+	}
+
+	function updateGoogleLogin() {
+		if (!settings.value) return
+		LeekWars.post("settings/update-setting", {setting: 'google_login', value: settings.value.google_login})
+	}
+
+	watch(() => LeekWars.leekTheme, () => {
+		localStorage.setItem('leek-theme', '' + LeekWars.leekTheme)
+		// Cookie miroir pour que le serveur puisse injecter le bon preload du big-leek dans le HTML.
+		document.cookie = 'leek_theme=' + (LeekWars.leekTheme ? '1' : '0') + '; path=/; max-age=31536000; SameSite=Lax'
+	})
+
+	function submit(e: Event) {
+		e.preventDefault()
+		if (submittingVerify.value) return false
+		submittingVerify.value = true
+		errors.value = {}
+		const provider = signupMethod.value === 2 ? 'github' : signupMethod.value === 3 ? 'google' : null
+		const service = provider ? `farmer/verify-${provider}` : 'farmer/verify'
+		const args: Record<string, unknown> = {
+			login: login.value,
+			godfather: godfather.value,
+			source: 'settings',
 		}
-
-		updateGithubLogin() {
-			LeekWars.post("settings/update-setting", {setting: 'github_login', value: this.settings.github_login})
+		if (signupMethod.value === 1) {
+			args.password = password1.value
+			args.email = email.value
 		}
-
-		@Watch('LeekWars.leekTheme')
-		updateLeekTheme() {
-			localStorage.setItem('leek-theme', '' + LeekWars.leekTheme)
-		}
-
-		submit(e: Event) {
-			e.preventDefault()
-			this.errors = {}
-			const service = this.signupMethod === 1 ? 'farmer/verify' : 'farmer/verify-github'
-			const args = {
-				login: this.login,
-				godfather: this.godfather,
-			} as any
-			if (this.signupMethod === 1) {
-				args.password = this.password1
-				args.email = this.email
+		LeekWars.post(service, args).then(() => {
+			if (provider) {
+				document.location.href = LeekWars.API + `farmer/start-${provider}-login`
+			} else {
+				router.push('/signup/success/' + login.value)
 			}
-			LeekWars.post(service, args).then(data => {
-				console.log("post", data, this.signupMethod)
-				if (this.signupMethod === 1) {
-					this.$router.push('/signup/success/' + this.login)
-				} else {
-					const redirect_uri = document.location.origin + "/api/farmer/login-github"
-					document.location.href = "https://github.com/login/oauth/authorize?client_id=0253d6b35d4db2a77a3b&scope=user:email&redirect_uri=" + redirect_uri + "&state=" + data.state
-				}
-			}).error(errors => {
-				for (const error of errors) {
+		}).error(payload => {
+			submittingVerify.value = false
+			if (Array.isArray(payload)) {
+				for (const error of payload) {
 					const form = ['login', 'leek', 'email', 'password1', 'password2', 'godfather'][error[0]]
-					this.addError(form, this.$t('error_' + error[1], error[2]) as string)
-				}
-			})
-			return false
-		}
-
-		addError(form: string, error: string) {
-			if (!(form in this.errors)) {
-				this.errors[form] = []
-			}
-			this.errors[form].push(error)
-		}
-
-		status(form: string) {
-			if (form in this.errors) {
-				if (Object.keys(this.errors[form]).length > 0) {
-					return 'error'
-				} else {
-					return 'valid'
+					addError(form, t('error_' + error[1], error[2]) as string)
 				}
 			} else {
-				return null
+				const code = typeof payload?.error === 'string' ? payload.error : 'unknown'
+				LeekWars.toast(t('error_' + code) as string)
 			}
+		})
+		return false
+	}
+
+	function addError(form: string, error: string) {
+		if (!(form in errors.value)) {
+			errors.value[form] = []
+		}
+		errors.value[form].push(error)
+	}
+
+	function status(form: string) {
+		if (form in errors.value) {
+			if (Object.keys(errors.value[form]).length > 0) {
+				return 'error'
+			} else {
+				return 'valid'
+			}
+		} else {
+			return null
 		}
 	}
 </script>
@@ -684,7 +728,7 @@
 	.account {
 		text-align: left;
 	}
-	.v-btn.gh-button {
+	.v-btn.gh-button, .v-btn.google-button {
 		height: 40px;
 		margin-right: 10px;
 		img {

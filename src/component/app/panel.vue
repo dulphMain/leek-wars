@@ -8,8 +8,8 @@
 			<div class="actions">
 				<slot name="actions"></slot>
 				<div v-if="toggle" class="button text expand" @click="expanded = !expanded">
-					<v-icon v-if="expanded">mdi-chevron-up</v-icon>
-					<v-icon v-else>mdi-chevron-down</v-icon>
+					<v-icon v-if="expanded">{{ toggleInvert ? 'mdi-chevron-down' : 'mdi-chevron-up' }}</v-icon>
+					<v-icon v-else>{{ toggleInvert ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
 				</div>
 			</div>
 		</div>
@@ -22,32 +22,44 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
+<script setup lang="ts">
+import { computed, ref, useSlots, watch } from 'vue'
 
-	@Options({ name: 'panel' })
-	export default class Panel extends Vue {
-		@Prop() icon!: string
-		@Prop() title!: string
-		@Prop() toggle!: string
-		expanded: boolean = true
+defineOptions({ name: 'Panel' })
 
-		get hasTitle() {
-			return this.title || !!this.$slots.title
-		}
-		created() {
-			if (this.toggle) {
-				if (localStorage.getItem(this.toggle) === null) { localStorage.setItem(this.toggle, 'true') }
-				this.expanded = localStorage.getItem(this.toggle) === 'true'
-			}
-		}
-		@Watch('expanded')
-		update() {
-			if (this.toggle) {
-				localStorage.setItem(this.toggle, '' + this.expanded)
-			}
-		}
+const props = withDefaults(defineProps<{
+	icon?: string
+	title?: string
+	toggle?: string
+	toggleInvert?: boolean
+}>(), {
+	icon: undefined,
+	title: undefined,
+	toggle: undefined,
+	toggleInvert: false,
+})
+
+const emit = defineEmits<{
+	'update:expanded': [value: boolean]
+}>()
+
+const slots = useSlots()
+
+const expanded = ref(true)
+
+const hasTitle = computed(() => props.title || !!slots.title)
+
+if (props.toggle) {
+	if (localStorage.getItem(props.toggle) === null) { localStorage.setItem(props.toggle, 'true') }
+	expanded.value = localStorage.getItem(props.toggle) === 'true'
+}
+
+watch(expanded, () => {
+	if (props.toggle) {
+		localStorage.setItem(props.toggle, '' + expanded.value)
+		emit('update:expanded', expanded.value)
 	}
+})
 </script>
 
 <style lang="scss" scoped>
@@ -85,7 +97,7 @@
 		}
 		h2 {
 			color: #eee;
-			font-size: 18px;
+			font-size: 17px;
 			display: inline-flex;
 			align-items: center;
 			height: 36px;
@@ -114,7 +126,7 @@
 	.panel.first > .header {
 		border-top-left-radius: 0px;
 	}
-	
+
 	.panel.first > .header h2 {
 		border-top-left-radius: 0px;
 	}
@@ -139,12 +151,12 @@
 			opacity: 0.9;
 			vertical-align: top;
 		}
-		i {
-			padding: 6px 0;
-			opacity: 0.9;
-			font-size: 24px;
-		}
 		.v-icon {
+			width: 24px;
+			height: 24px;
+			padding: 6px 0;
+			box-sizing: content-box;
+			opacity: 0.9;
 			color: white;
 		}
 	}

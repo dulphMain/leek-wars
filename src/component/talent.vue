@@ -1,24 +1,29 @@
 <template lang="html">
-	<span class="talent" v-bind="$props" @click.stop="LeekWars.goToRanking(category, 'talent', id)">
-		<div v-ripple class="icon">
-			<img src="/image/talent.png">
-		</div>
-		<div v-ripple class="value">{{ LeekWars.formatNumber(talent) }}</div>
-	</span>
+	<v-tooltip :disabled="!label && !max_talent">
+		<template #activator="{ props: tp }">
+			<span class="talent" v-bind="tp" @click.stop="LeekWars.goToRanking(category, 'talent', id)">
+				<div v-ripple class="icon">
+					<img src="/image/talent.png">
+				</div>
+				<div v-ripple class="value">{{ LeekWars.formatNumber(talent) }}</div>
+			</span>
+		</template>
+		<div v-if="label">{{ label }}</div>
+		<div v-if="max_talent">{{ $t('main.max_talent', [LeekWars.formatNumber(max_talent)]) }}</div>
+	</v-tooltip>
 </template>
 
-<script lang="ts">
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	@Options({ name: "talent" })
-	export default class Talent extends Vue {
-		@Prop() talent!: number
-		@Prop() id!: number
-		@Prop() category!: string
-		@Prop() on!: any
+<script setup lang="ts">
+defineOptions({ name: 'Talent' })
 
-		LeekWars = LeekWars
-	}
+defineProps<{
+	talent: number | string
+	max_talent?: number
+	label?: string
+	id: number
+	category: string
+	on?: Record<string, unknown>
+}>()
 </script>
 
 <style lang="scss" scoped>

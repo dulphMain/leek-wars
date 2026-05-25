@@ -1,11 +1,9 @@
 import { CHIPS } from '@/model/chips'
-import { CONSTANTS } from '@/model/constants'
 import { FUNCTIONS } from '@/model/functions'
 import { Keyword, KeywordKind } from '@/model/keyword'
 import { LeekWars } from '@/model/leekwars'
 
 const keywords: Keyword[] = []
-const keywordsLSOnly: Keyword[] = []
 let initialized = false
 
 function initializeKeywords() {
@@ -51,9 +49,6 @@ for (const fun of FUNCTIONS) {
 		tags: fun.deprecated ? [ 1 ] : [],
 	}
 	keywords.push(keyword)
-	if (fun.category === 1 || fun.category === 2 || fun.category === 3 || fun.category === 4 || fun.category === 10 || fun.category === 12 || fun.category === 13 || fun.category === 14) {
-		keywordsLSOnly.push(keyword)
-	}
 }
 
 // Constantes
@@ -71,8 +66,8 @@ const getChipByName = (name: string) => {
 	return null
 }
 
-for (const constant of CONSTANTS) {
-	let details: any = ""
+for (const constant of LeekWars.constants) {
+	let details: unknown
 	if (constant.name.substring(0, 5) === 'CHIP_') {
 		details = {type: 'chip', chip: getChipByName(constant.name.substring(5).toLowerCase())}
 	} else if (constant.name.substring(0, 7) === 'WEAPON_') {
@@ -91,9 +86,6 @@ for (const constant of CONSTANTS) {
 		tags: constant.deprecated ? [ 1 ] : [],
 	}
 	keywords.push(keyword)
-	if (constant.category === 1 || constant.category === 2 || constant.category === 3 || constant.category === 4 || constant.category === 10 || constant.category === 12 || constant.category === 13 || constant.category === 14) {
-		keywordsLSOnly.push(keyword)
-	}
 }
 
 function getKeywords() {
@@ -101,9 +93,4 @@ function getKeywords() {
 	return keywords
 }
 
-function getKeywordsLSOnly() {
-	initializeKeywords()
-	return keywordsLSOnly
-}
-
-export { getKeywords, getKeywordsLSOnly }
+export { getKeywords }

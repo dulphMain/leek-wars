@@ -1,0 +1,23 @@
+{
+	"type": "タイプ",
+	"result": "結果",
+	"match": "対戦相手",
+	"date": "日付",
+	"duration": "時間",
+	"levelups": "レベルアップ",
+	"trophies": "トロフィー",
+	"chests": "宝箱",
+	"rare_loot": "レア資源",
+	"comments": "コメント",
+	"win": "勝利",
+	"defeat": "敗北",
+	"draw": "引き分け",
+	"challenge": "チャレンジ",
+	"garden": "菜園",
+	"tournament": "トーナメント",
+	"battle_royale": "バトルロイヤル",
+	"war": "戦争",
+	"chest_hunt": "宝箱ハント",
+	"colossus": "コロッサス",
+	"boss": "ボス"
+}

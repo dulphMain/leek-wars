@@ -1,7 +1,7 @@
 <template>
 	<div class="page">
 		<div class="page-header page-bar">
-			<h1><router-link to="/admin">Administration</router-link> > Trophées</h1>
+			<h1><breadcrumb :items="[{name: 'Administration', link: '/admin'}, {name: 'Trophées', link: '/admin/trophies'}]" :raw="true" /></h1>
 		</div>
 		<panel class="first">
 			<loader v-if="!trophies" />
@@ -41,40 +41,40 @@
 					<td :contenteditable="trophy.category != 6" @focusout="pointsFocusout(trophy, $event)">{{ trophy.category == 6 ? '' : trophy.points }}</td>
 					<td><span v-if="trophy.points">{{ $filters.number(100 * Math.pow(trophy.points, 2)) }} <span class="hab"></span></span></td>
 					<td>
-						<input type="checkbox" :checked="trophy.title & 1" @change="updateTitle(trophy, 1, $event)"> N
-						<input type="checkbox" :checked="trophy.title & 2" @change="updateTitle(trophy, 2, $event)"> A
+						<input type="checkbox" :checked="!!(trophy.title & 1)" @change="updateTitle(trophy, 1, $event)"> N
+						<input type="checkbox" :checked="!!(trophy.title & 2)" @change="updateTitle(trophy, 2, $event)"> A
 					</td>
 					<td contenteditable @focusout="nameFocusout(trophy, 'fr', $event)"><div>{{ trophy.name_fr }}</div></td>
 					<td contenteditable @focusout="nameFocusout(trophy, 'en', $event)"><div>{{ trophy.name_en }}</div></td>
 					<td>
 						<span v-if="trophy.title & 1">
-							<input type="checkbox" :checked="trophy.noun_gender & 1" @change="updateNounGender(trophy, 1, $event)"> M
-							<input type="checkbox" :checked="trophy.noun_gender & 2" @change="updateNounGender(trophy, 2, $event)"> F
+							<input type="checkbox" :checked="!!(trophy.noun_gender & 1)" @change="updateNounGender(trophy, 1, $event)"> M
+							<input type="checkbox" :checked="!!(trophy.noun_gender & 2)" @change="updateNounGender(trophy, 2, $event)"> F
 						</span>
 					</td>
 					<td>
 						<span v-if="trophy.title & 1">
 							<span v-if="!(trophy.noun_gender & 1)">
-								<input type="checkbox" :checked="trophy.noun_translation & 1" @change="updateNounTranslation(trophy, 1, $event)"> M
+								<input type="checkbox" :checked="!!(trophy.noun_translation & 1)" @change="updateNounTranslation(trophy, 1, $event)"> M
 							</span>
 							<span v-if="!(trophy.noun_gender & 2)">
-								<input type="checkbox" :checked="trophy.noun_translation & 2" @change="updateNounTranslation(trophy, 2, $event)"> F
+								<input type="checkbox" :checked="!!(trophy.noun_translation & 2)" @change="updateNounTranslation(trophy, 2, $event)"> F
 							</span>
 						</span>
 					</td>
 					<td>
 						<span v-if="trophy.title & 2">
-							<input v-if="trophy.title & 2" type="checkbox" :checked="trophy.adj_gender & 1" @change="updateAdjectiveGender(trophy, 1, $event)"> M
-							<input v-if="trophy.title & 2" type="checkbox" :checked="trophy.adj_gender & 2" @change="updateAdjectiveGender(trophy, 2, $event)"> F
+							<input v-if="trophy.title & 2" type="checkbox" :checked="!!(trophy.adj_gender & 1)" @change="updateAdjectiveGender(trophy, 1, $event)"> M
+							<input v-if="trophy.title & 2" type="checkbox" :checked="!!(trophy.adj_gender & 2)" @change="updateAdjectiveGender(trophy, 2, $event)"> F
 						</span>
 					</td>
 					<td>
 						<span v-if="trophy.title & 2">
 							<span v-if="!(trophy.adj_gender & 1)">
-								<input type="checkbox" :checked="trophy.adj_translation & 1" @change="updateAdjectiveTranslation(trophy, 1, $event)"> M
+								<input type="checkbox" :checked="!!(trophy.adj_translation & 1)" @change="updateAdjectiveTranslation(trophy, 1, $event)"> M
 							</span>
 							<span v-if="!(trophy.adj_gender & 2)">
-								<input type="checkbox" :checked="trophy.adj_translation & 2" @change="updateAdjectiveTranslation(trophy, 2, $event)"> F
+								<input type="checkbox" :checked="!!(trophy.adj_translation & 2)" @change="updateAdjectiveTranslation(trophy, 2, $event)"> F
 							</span>
 						</span>
 					</td>
@@ -92,84 +92,103 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { i18n } from '@/model/i18n'
+<script setup lang="ts">
 	import { LeekWars } from '@/model/leekwars'
-	import { Options, Vue } from 'vue-property-decorator'
+	import { store } from '@/model/store'
+	import { onBeforeUnmount, onMounted, ref } from 'vue'
+	import { useRouter } from 'vue-router'
+	import Breadcrumb from '@/component/forum/breadcrumb.vue'
 
-	@Options({})
-	export default class AdminTrophies extends Vue {
-		trophies: any = null
-		difficulties = [
-			{id: 0, color: '#444'},
-			{id: 1, color: '#00aa00'},
-			{id: 2, color: '#0090ff'},
-			{id: 3, color: '#c21aff'},
-			{id: 4, color: '#f8ac00'},
-			{id: 5, color: 'red'}
-		]
-		created() {
-			if (!this.$store.getters.admin) this.$router.replace('/')
-			LeekWars.setTitle("Admin Trophies")
-			LeekWars.get('trophy/get-admin').then(data => {
-				this.trophies = data.trophies
-			})
-		}
-		mounted() {
-			LeekWars.large = true
-		}
-		beforeUnmount() {
-			LeekWars.large = false
-		}
+	interface AdminTrophy {
+		id: number
+		index: number
+		code: string
+		difficulty: number
+		points: number
+		category: number
+		title: number
+		noun_gender: number
+		noun_translation: number
+		adj_gender: number
+		adj_translation: number
+		public_description: boolean
+		name_fr: string
+		name_en: string
+		unlocked: number
+		unlocked_percent: number
+		last: number
+	}
 
-		nameFocusout(trophy: any, locale: string, e: Event) {
-			const value = (e.target as HTMLElement).textContent || ''
-			if (trophy['name_' + locale] !== value) {
-				trophy['name_' + locale] = value
-				LeekWars.put('trophy-template/name', {id: trophy.id, locale, name: value})
-			}
-		}
-		descriptionFocusout(trophy: any, locale: string, e: Event) {
-			const value = (e.target as HTMLElement).textContent || ''
-			if (trophy['description_' + locale] !== value) {
-				trophy['description_' + locale] = value
-				LeekWars.put('trophy-template/description', {id: trophy.id, locale, description: value})
-			}
-		}
+	const router = useRouter()
+	const trophies = ref<AdminTrophy[] | null>(null)
+	const difficulties = [
+		{id: 0, color: '#444'},
+		{id: 1, color: '#00aa00'},
+		{id: 2, color: '#0090ff'},
+		{id: 3, color: '#c21aff'},
+		{id: 4, color: '#f8ac00'},
+		{id: 5, color: 'red'}
+	]
 
-		pointsFocusout(trophy: any, e: Event) {
-			trophy.points = parseInt((e.target as HTMLElement).innerText, 10)
-			LeekWars.put('trophy-template/points', {id: trophy.id, points: trophy.points})
-		}
-		difficultyChange(trophy: any) {
-			LeekWars.put('trophy-template/difficulty', {id: trophy.id, difficulty: trophy.difficulty})
-		}
+	if (!store.getters.admin) router.replace('/')
+	LeekWars.setTitle("Admin Trophies")
+	LeekWars.get<{ trophies: AdminTrophy[] }>('trophy/get-admin').then(data => {
+		trophies.value = data.trophies
+	})
 
-		publicDescUpdate(trophy: any) {
-			LeekWars.put('trophy-template/public-description', {id: trophy.id, is_public: trophy.public_description})
-		}
+	onMounted(() => {
+		LeekWars.large = true
+	})
+	onBeforeUnmount(() => {
+		LeekWars.large = false
+	})
 
-		updateTitle(trophy: any, part: number, e: any) {
-			if (e.target.checked) { trophy.title += part } else { trophy.title -= part }
-			LeekWars.put('trophy-template/title', {id: trophy.id, title: trophy.title})
+	function nameFocusout(trophy: AdminTrophy, locale: string, e: Event) {
+		const value = (e.target as HTMLElement).textContent || ''
+		const key = ('name_' + locale) as 'name_fr' | 'name_en'
+		if (trophy[key] !== value) {
+			trophy[key] = value
+			LeekWars.put('trophy-template/name', {id: trophy.id, locale, name: value})
 		}
+	}
+	function descriptionFocusout(trophy: AdminTrophy, locale: string, e: Event) {
+		const value = (e.target as HTMLElement).textContent || ''
+		LeekWars.put('trophy-template/description', {id: trophy.id, locale, description: value})
+	}
+	void descriptionFocusout
 
-		updateNounGender(trophy: any, part: number, e: any) {
-			if (e.target.checked) { trophy.noun_gender += part } else { trophy.noun_gender -= part }
-			LeekWars.put('trophy-template/noun-gender', {id: trophy.id, gender: trophy.noun_gender})
-		}
-		updateNounTranslation(trophy: any, part: number, e: any) {
-			if (e.target.checked) { trophy.noun_translation += part } else { trophy.noun_translation -= part }
-			LeekWars.put('trophy-template/noun-translation', {id: trophy.id, gender: trophy.noun_translation})
-		}
-		updateAdjectiveGender(trophy: any, part: number, e: any) {
-			if (e.target.checked) { trophy.adj_gender += part } else { trophy.adj_gender -= part }
-			LeekWars.put('trophy-template/adjective-gender', {id: trophy.id, gender: trophy.adj_gender})
-		}
-		updateAdjectiveTranslation(trophy: any, part: number, e: any) {
-			if (e.target.checked) { trophy.adj_translation += part } else { trophy.adj_translation -= part }
-			LeekWars.put('trophy-template/adjective-translation', {id: trophy.id, gender: trophy.adj_translation})
-		}
+	function pointsFocusout(trophy: AdminTrophy, e: Event) {
+		trophy.points = parseInt((e.target as HTMLElement).innerText, 10)
+		LeekWars.put('trophy-template/points', {id: trophy.id, points: trophy.points})
+	}
+	function difficultyChange(trophy: AdminTrophy) {
+		LeekWars.put('trophy-template/difficulty', {id: trophy.id, difficulty: trophy.difficulty})
+	}
+
+	function publicDescUpdate(trophy: AdminTrophy) {
+		LeekWars.put('trophy-template/public-description', {id: trophy.id, is_public: trophy.public_description})
+	}
+
+	function updateTitle(trophy: AdminTrophy, part: number, e: Event) {
+		if ((e.target as HTMLInputElement).checked) { trophy.title += part } else { trophy.title -= part }
+		LeekWars.put('trophy-template/title', {id: trophy.id, title: trophy.title})
+	}
+
+	function updateNounGender(trophy: AdminTrophy, part: number, e: Event) {
+		if ((e.target as HTMLInputElement).checked) { trophy.noun_gender += part } else { trophy.noun_gender -= part }
+		LeekWars.put('trophy-template/noun-gender', {id: trophy.id, gender: trophy.noun_gender})
+	}
+	function updateNounTranslation(trophy: AdminTrophy, part: number, e: Event) {
+		if ((e.target as HTMLInputElement).checked) { trophy.noun_translation += part } else { trophy.noun_translation -= part }
+		LeekWars.put('trophy-template/noun-translation', {id: trophy.id, gender: trophy.noun_translation})
+	}
+	function updateAdjectiveGender(trophy: AdminTrophy, part: number, e: Event) {
+		if ((e.target as HTMLInputElement).checked) { trophy.adj_gender += part } else { trophy.adj_gender -= part }
+		LeekWars.put('trophy-template/adjective-gender', {id: trophy.id, gender: trophy.adj_gender})
+	}
+	function updateAdjectiveTranslation(trophy: AdminTrophy, part: number, e: Event) {
+		if ((e.target as HTMLInputElement).checked) { trophy.adj_translation += part } else { trophy.adj_translation -= part }
+		LeekWars.put('trophy-template/adjective-translation', {id: trophy.id, gender: trophy.adj_translation})
 	}
 </script>
 

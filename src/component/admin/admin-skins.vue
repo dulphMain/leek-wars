@@ -1,7 +1,7 @@
 <template>
 	<div class="page">
 		<div class="page-header page-bar">
-			<h1><router-link to="/admin">Administration</router-link> > Skins</h1>
+			<h1><breadcrumb :items="[{name: 'Administration', link: '/admin'}, {name: 'Skins', link: '/admin/skins'}]" :raw="true" /></h1>
 			<div class="tabs">
 				<div class="tab action" @click="front = !front">
 					<span>{{ front ? 'Face' : 'Dos' }}</span>
@@ -23,38 +23,20 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { LeekWars } from '@/model/leekwars'
-	import { store } from '@/model/store'
-	import { Options, Vue } from 'vue-property-decorator'
+<script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
+import { LeekWars } from '@/model/leekwars'
+import { store } from '@/model/store'
+import Breadcrumb from '@/component/forum/breadcrumb.vue'
 
-	@Options({})
-	export default class AdminHats extends Vue {
+const router = useRouter()
+if (!store.getters.admin) router.replace('/')
 
-		front: boolean = true
+const front = ref(true)
 
-		created() {
-			if (!this.$store.getters.admin) this.$router.replace('/')
-			// console.log("created", LeekWars.weapons, LeekWars.weapons[1 + Math.random() * 20 | 0].item)
-		}
-
-		mounted() {
-			LeekWars.large = true
-		}
-		beforeUnmount() {
-			LeekWars.large = false
-		}
-
-		get all_weapons() {
-			return Object.values(LeekWars.weapons)
-		}
-		random_weapon() {
-			return this.all_weapons[Math.random() * this.all_weapons.length | 0].item
-		}
-		random_skin() {
-			return 1 + Math.random() * Object.values(LeekWars.skins).length | 0
-		}
-	}
+onMounted(() => { LeekWars.large = true })
+onBeforeUnmount(() => { LeekWars.large = false })
 </script>
 
 <style lang="scss" scoped>

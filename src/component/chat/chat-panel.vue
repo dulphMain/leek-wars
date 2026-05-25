@@ -12,9 +12,9 @@
 			<div class="actions">
 				<v-menu v-if="$store.state.farmer?.public_chat_enabled" location="bottom">
 					<template #activator="{ props }">
-						<div v-bind="props" v-ripple class="language-button">
+						<div v-ripple v-bind="props" class="language-button">
 							<flag :code="LeekWars.languages[LeekWars.publicChats[chatID].language].country" :clickable="false" />
-							<div class="unread-circle" v-if="Object.values(LeekWars.publicChats).some(chat => $store.state.chat[chat.id] && !$store.state.chat[chat.id].read)"></div>
+							<div v-if="Object.values(LeekWars.publicChats).some(chat => $store.state.chat[chat.id] && !$store.state.chat[chat.id].read)" class="unread-circle"></div>
 						</div>
 					</template>
 					<v-list :dense="true">
@@ -23,7 +23,7 @@
 							<v-list-item v-for="(chat, i) in data.chats" :key="i" class="language" @click="setChatLanguage(chat)">
 								<v-icon>{{ LeekWars.publicChats[chat].icon }}</v-icon>
 								<span class="name">{{ LeekWars.publicChats[chat].name }}</span>
-								<span class="unread-circle" v-if="$store.state.chat[chat] && !$store.state.chat[chat].read"></span>
+								<span v-if="$store.state.chat[chat] && !$store.state.chat[chat].read" class="unread-circle"></span>
 							</v-list-item>
 						</div>
 					</v-list>
@@ -39,36 +39,36 @@
 	</panel>
 </template>
 
-<script lang="ts">
-const ChatElement = defineAsyncComponent(() => import(/* webpackChunkName: "chat" */ `@/component/chat/chat.vue`))
-import { Options, Prop, Vue } from 'vue-property-decorator'
-import { Language, LeekWars } from '@/model/leekwars'
-import { ChatType } from '@/model/chat'
+<script setup lang="ts">
+import { LeekWars } from '@/model/leekwars'
 import { store } from '@/model/store'
-import { defineAsyncComponent } from 'vue'
+import { defineAsyncComponent, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-@Options({ components: { chat: ChatElement, components: { ChatElement } } })
-export default class ChatPanel extends Vue {
+const Chat = defineAsyncComponent(() => import(/* webpackChunkName: "chat" */ `@/component/chat/chat.vue`))
 
-	@Prop({ required: true }) toggle!: string
-	@Prop({ required: true }) chat!: string
-	@Prop({ required: true }) height!: number
+defineOptions({ name: 'ChatPanel' })
 
-	ChatType = ChatType
-	chatID: number | null = null
+const props = defineProps<{
+	toggle: string
+	chat: string
+	height: number
+}>()
 
-	created() {
-		if (this.$store.state.farmer?.group && this.$store.state.farmer?.group.chat && !this.$store.state.farmer?.public_chat_enabled) {
-			this.chatID = this.$store.state.farmer.group.chat
-		} else if (this.$store.state.farmer?.public_chat_enabled) {
-			this.chatID = parseInt(localStorage.getItem('chat-panel/' + this.chat) || '0') || LeekWars.languages[this.$i18n.locale].chat
-		}
-	}
+const { locale } = useI18n()
 
-	setChatLanguage(chat: number) {
-		this.chatID = chat
-		localStorage.setItem('chat-panel/' + this.chat, '' + chat)
-	}
+const chatID = ref<number | null>(null)
+
+if (store.state.farmer?.group && store.state.farmer?.group.chat && !store.state.farmer?.public_chat_enabled) {
+	chatID.value = store.state.farmer.group.chat
+} else if (store.state.farmer?.public_chat_enabled) {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	chatID.value = parseInt(localStorage.getItem('chat-panel/' + props.chat) || '0') || (LeekWars.languages as any)[locale.value].chat
+}
+
+function setChatLanguage(chat: number) {
+	chatID.value = chat
+	localStorage.setItem('chat-panel/' + props.chat, '' + chat)
 }
 
 </script>

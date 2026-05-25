@@ -13,9 +13,9 @@
 							<div class="tab green">{{ $t('see_tournament') }}</div>
 						</router-link>
 					</template>
-					<v-tooltip v-if="$store.state.farmer.tournaments_enabled && leek.tournament" content-class="fluid" @update:model-value="loadTournamentRange">
+					<v-tooltip v-if="$store.state.farmer && $store.state.farmer.tournaments_enabled && leek.tournament" content-class="fluid" @update:model-value="loadTournamentRange">
 						<template #activator="{ props }">
-							<div class="tab" @click="registerTournament" v-bind="props">
+							<div class="tab" v-bind="props" @click="registerTournament">
 								<v-icon>mdi-trophy</v-icon>
 								<span v-if="!leek.tournament.registered" class="register">{{ $t('register_to_tournament') }}</span>
 								<span v-else class="unregister">{{ $t('unregister') }}</span>
@@ -33,7 +33,7 @@
 					</v-tooltip>
 					<v-tooltip>
 						<template #activator="{ props }">
-							<div class="tab" @click="updateGarden" v-bind="props">
+							<div class="tab" v-bind="props" @click="updateGarden">
 								<span>{{ $t('garden') }}</span>
 								<v-switch :model-value="leek.in_garden" hide-details />
 							</div>
@@ -74,7 +74,7 @@
 					<div class="leek-image">
 						<leek-image v-if="leek" :scale="0.95" :leek="leek" />
 						<loader v-else />
-						<lw-title v-if="leek && leek.title.length" :title="leek.title" :class="{pointer: my_leek}" @click.native="titleDialog = my_leek" />
+						<lw-title v-if="leek && leek.title.length" :title="leek.title" :class="{pointer: my_leek}" @click="titleDialog = my_leek" />
 					</div>
 				</template>
 			</panel>
@@ -105,12 +105,7 @@
 				</v-tooltip>
 
 				<div class="talent-wrapper">
-					<v-tooltip>
-						<template #activator="{ props }">
-							<talent :id="leek ? leek.id : 0" :talent="leek ? leek.talent : '...'" category="leek" v-bind="props" />
-						</template>
-						{{ $t('talent') }}
-					</v-tooltip>
+					<talent :id="leek ? leek.id : 0" :talent="leek ? leek.talent : '...'" :max_talent="leek?.max_talent" :label="$t('talent')" category="leek" />
 					<v-tooltip v-if="leek">
 						<template #activator="{ props }">
 							<div class="talent-more" v-bind="props">({{ leek.talent_more >= 0 ? '+' + leek.talent_more : leek.talent_more }})</div>
@@ -129,9 +124,9 @@
 					<template #activator="{ props }">
 						<table class="fights" v-bind="props">
 							<tr>
-								<td class="big">{{ $filters.number(leek ? leek.victories : '...') }}</td>
-								<td class="big">{{ $filters.number(leek ? leek.draws : '...') }}</td>
-								<td class="big">{{ $filters.number(leek ? leek.defeats : '...') }}</td>
+								<td class="big">{{ leek ? $filters.number(leek.victories) : '...' }}</td>
+								<td class="big">{{ leek ? $filters.number(leek.draws) : '...' }}</td>
+								<td class="big">{{ leek ? $filters.number(leek.defeats) : '...' }}</td>
 							</tr>
 							<tr>
 								<td class="grey">{{ $t('victories') }}</td>
@@ -144,13 +139,16 @@
 				</v-tooltip>
 
 				<template v-if="leek && leek.level >= 100">
-					<Line :data="chartData" :options="chartOptions" ratio="ct-major-eleventh" class="talent-history" />
+					<Line v-if="chartData && chartOptions" :data="chartData" :options="chartOptions" ratio="ct-major-eleventh" class="talent-history" />
 				</template>
 			</panel>
 
 			<panel :title="$t('characteristic.characteristics')">
-				<template v-if="leek && my_leek && leek.capital == 0 && $store.state.farmer.equipment_enabled" #actions>
-					<div class="button flat" @click="capitalDialog = true">
+				<template v-if="leek && my_leek && $store.state.farmer && $store.state.farmer.equipment_enabled" #actions>
+					<div class="button flat" @click="showLoadout = true">
+						<v-icon>mdi-package-variant-closed</v-icon>
+					</div>
+					<div v-if="leek.capital == 0" class="button flat" @click="showCapital = true">
 						<v-icon>mdi-star-outline</v-icon>
 					</div>
 				</template>
@@ -162,11 +160,11 @@
 								<span :class="'color-' + c">{{ leek ? leek['total_' + c] : '...' }}</span>
 							</div>
 						</characteristic-tooltip>
-						<div class="center" v-if="leek && my_leek">
+						<div v-if="leek && my_leek" class="center mt-3">
 							<span class="dida-element">
-								<v-btn v-if="(leek.capital > 0 || LeekWars.didactitial_step === 1) && $store.state.farmer.equipment_enabled" color="primary" @click="capitalDialog = true" :class="{bouncing: !capitalDialog && LeekWars.didactitial_step === 1}">{{ $t('main.n_capital', [leek.capital]) }}</v-btn>
+								<v-btn v-if="(leek.capital > 0 || LeekWars.didactitial_step === 1) && $store.state.farmer && $store.state.farmer.equipment_enabled" color="primary" :class="{bouncing: !showCapital && LeekWars.didactitial_step === 1}" @click="showCapital = true">{{ $t('main.n_capital', [leek.capital]) }}</v-btn>
 								<span v-if="LeekWars.didactitial_step === 1" class="dida-hint">
-									<i18n-t v-if="LeekWars.didactitial_step === 1" class="bubble" keypath="main.dida_2">
+									<i18n-t v-if="LeekWars.didactitial_step === 1" tag="div" class="bubble" keypath="main.dida_2">
 										<template #life><img height=18 src="/image/charac/life.png"></template>
 										<template #strength><img height=18 src="/image/charac/strength.png"></template>
 									</i18n-t>
@@ -186,7 +184,7 @@
 			<panel icon="mdi-sword">
 				<template #title>{{ $t('weapons') }} <span v-if="leek && leek.weapons" class="weapon-count">[{{ leek.weapons.length }}/{{ leek.max_weapons }}]</span></template>
 				<template v-if="leek && my_leek" #actions>
-					<div v-if="$store.state.farmer.equipment_enabled" class="button flat" @click="weaponsDialog = true">
+					<div v-if="$store.state.farmer && $store.state.farmer.equipment_enabled" class="button flat" @click="weaponsDialog = true">
 						<v-icon>mdi-pencil</v-icon>
 					</div>
 				</template>
@@ -195,9 +193,9 @@
 						<loader v-if="!leek" />
 						<div v-else-if="leek.weapons.length === 0" class="empty">{{ $t('no_weapons') }}</div>
 						<template v-else>
-							<div class="weapon" v-for="weapon in orderedWeapons" :key="weapon.id">
+							<div v-for="weapon in orderedWeapons" :key="weapon.id" class="weapon">
 								<rich-tooltip-item  v-slot="{ props }" :item="LeekWars.items[weapon.template]" :bottom="true" :leek="leek">
-									<img v-bind="props" :src="'/image/' + LeekWars.items[weapon.template].name.replace('_', '/') + '.png'" @click="setWeapon(weapon.template)" :width="WeaponsData[LeekWars.items[weapon.template].params].width">
+									<img v-bind="props" :src="'/image/' + LeekWars.items[weapon.template].name.replace('_', '/') + '.png'" :width="WeaponsData[LeekWars.items[weapon.template].params].width" @click="setWeapon(weapon.template)">
 								</rich-tooltip-item>
 							</div>
 						</template>
@@ -208,7 +206,7 @@
 			<panel icon="mdi-chip">
 				<template #title>{{ $t('main.chips') }} <span v-if="leek && leek.chips" class="chip-count">[{{ leek.chips.length }}/{{ leek.total_ram }}]</span></template>
 				<template v-if="leek && my_leek && (leek.chips.length + farmer_chips.length) > 0" #actions>
-					<div v-if="$store.state.farmer.equipment_enabled" class="button flat" @click="chipsDialog = true">
+					<div v-if="$store.state.farmer && $store.state.farmer.equipment_enabled" class="button flat" @click="chipsDialog = true">
 						<v-icon>mdi-pencil</v-icon>
 					</div>
 				</template>
@@ -238,21 +236,21 @@
 						<loader v-if="!leek" />
 						<template v-else>
 							<div class="components-grid">
-								<template v-for="(c, i) of 8">
+								<template v-for="(c, i) of 8" :key="i">
 									<div v-if="leek.components[i]" class="component" :class="{disabled: i >= max_components}">
-										<rich-tooltip-item v-slot="{ props }" :item="LeekWars.items[leek.components[i].template]" :bottom="true" :key="c">
+										<rich-tooltip-item v-slot="{ props }" :key="c" :item="LeekWars.items[leek.components[i].template]" :bottom="true">
 											<div v-bind="props">
 												<img :src="'/image/component/' + LeekWars.items[leek.components[i].template].name + '.png'">
 											</div>
 										</rich-tooltip-item>
 									</div>
-									<div v-else class="component" :key="c"></div>
+									<div v-else :key="c" class="component"></div>
 								</template>
 								<template v-if="leek.ai">
-									<router-link v-if="my_leek" :to="'/editor/' + leek.ai.id">
+									<router-link v-if="my_leek" :to="'/editor/' + (leek.ai.path || leek.ai.name)">
 										<ai :ai="leek.ai" :library="false" :small="false" />
 									</router-link>
-									<a v-else-if="$store.getters.admin" :href="LeekWars.API + 'ai/download/' + leek.ai.id" target="_blank">
+									<a v-else-if="$store.getters.admin" :href="LeekWars.API + 'ai/download/' + leek.ai.path" target="_blank">
 										<ai :ai="leek.ai" :library="false" :small="false" />
 									</a>
 									<ai v-else :ai="leek.ai" :library="false" :small="false" />
@@ -263,9 +261,10 @@
 					</div>
 				</template>
 			</panel>
+
 		</div>
 
-		<div class="center" v-if="leek && my_leek && leek.fights && leek.fights.length === 0">
+		<div v-if="leek && my_leek && leek.fights && leek.fights.length === 0" class="center">
 			<br>
 			<router-link to="/garden">
 				<v-btn color="primary">
@@ -316,7 +315,7 @@
 		<div class="page-footer page-bar">
 			<div class="tabs">
 				<template v-if="$store.state.connected && !my_leek">
-					<div class="tab" @click="reportDialog = true">
+					<div class="tab" @click="showReport = true">
 						<img src="/image/icon/flag.png">
 						<span class="report-button">{{ $t('report') }}</span>
 					</div>
@@ -327,33 +326,29 @@
 						{{ $t('rename_leek') }}
 					</div>
 				</template>
-				<v-tooltip v-if="leek && my_leek && leek.level >= 20 && $store.state.farmer?.br_enabled" @update:model-value="loadBRRange">
+				<v-tooltip v-if="leek && my_leek && leek.level >= 20 && $store.state.farmer?.br_enabled">
 					<template #activator="{ props }">
-						<div class="tab" @click="registerAutoBr" v-bind="props">
+						<div class="tab" v-bind="props" @click="registerAutoArena">
 							<v-icon>mdi-trophy</v-icon>
-							<span v-if="!leek.auto_br" class="register">{{ $t('register_to_br') }}</span>
+							<span v-if="!leek.auto_br" class="register">{{ $t('register_to_arena') }}</span>
 							<span v-else class="unregister">{{ $t('unregister') }}</span>
 						</div>
 					</template>
-					{{ $t('br_time') }}
-					<i18n-t v-if="brRange" tag="div" keypath="main.level_x_to_y">
-						<template #min><b>{{ brRange.min }}</b></template>
-						<template #max><b>{{ brRange.max }}</b></template>
-					</i18n-t>
+					{{ $t('arena_time') }}
 				</v-tooltip>
 				<template v-if="leek && leek.level > 1 && $store.state.connected">
 					<v-tooltip>
 						<template #activator="{ props }">
-							<div class="tab" @click="copyAsTest()" v-bind="props" icon="play_arrow">
+							<div class="tab" v-bind="props" icon="play_arrow" @click="copyAsTest()">
 								<v-icon class="list-icon">mdi-content-copy</v-icon><span>{{ $t('test') }}</span>
 							</div>
 						</template>
 						{{ $t('copy_as_test', [leek.name]) }}
 					</v-tooltip>
 				</template>
-				<v-tooltip v-if="leek && my_leek && (!$store.state.farmer.group || $store.state.farmer.group.supervisor === $store.state.farmer.id)">
+				<v-tooltip v-if="leek && my_leek && $store.state.farmer && (!$store.state.farmer.group || $store.state.farmer.group.supervisor === $store.state.farmer.id)">
 					<template #activator="{ props }">
-						<div class="tab" @click="updateXpBlocked" v-bind="props">
+						<div class="tab" v-bind="props" @click="updateXpBlocked">
 							<span>{{ $t('main.xp_blocked') }}</span>
 							<v-switch :model-value="leek.xp_blocked" hide-details />
 						</div>
@@ -370,6 +365,14 @@
 			<template #title>
 				{{ $t('weapons_of', [leek.name]) }}
 				<span class="weapon-count">[{{ leek.weapons.length }}/{{ leek.max_weapons }}]</span>
+			</template>
+			<template v-if="my_leek && $store.state.farmer && $store.state.farmer.equipment_enabled" #options>
+				<div class="option" @click="weaponsDialog = false; showLoadout = true">
+					<v-icon>mdi-package-variant-closed</v-icon>
+				</div>
+				<div class="option" @click="weaponsDialog = false">
+					<v-icon>mdi-close</v-icon>
+				</div>
 			</template>
 			<div class="weapons-popup">
 				<div :class="{dashed: draggedWeapon && draggedWeaponLocation === 'farmer'}" class="leek-weapons" @dragover="dragOver" @drop="weaponsDrop('leek', $event)">
@@ -426,9 +429,9 @@
 			</template>
 			<div class="farmer-potions">
 				<div class="potions-grid">
-					<v-tooltip v-for="(potion, id) in $store.state.farmer.potions" :key="id">
+					<v-tooltip v-for="(potion, id) in ($store.state.farmer ? $store.state.farmer.potions : [])" :key="id">
 						<template #activator="{ props }">
-							<div :quantity="potion.quantity" class="potion" @click="usePotion(potion)" v-bind="props">
+							<div :quantity="potion.quantity" class="potion" v-bind="props" @click="usePotion(potion)">
 								<img :src="'/image/potion/' + LeekWars.potions[potion.template].name + '.png'">
 							</div>
 						</template>
@@ -455,7 +458,7 @@
 				<div class="potions-grid">
 					<v-tooltip v-for="(potion, id) in skinPotions" :key="id">
 						<template #activator="{ props }">
-							<div :quantity="potion.quantity" class="potion" @click="usePotion(potion)" v-bind="props">
+							<div :quantity="potion.quantity" class="potion" v-bind="props" @click="usePotion(potion)">
 								<img :src="'/image/potion/' + LeekWars.potions[potion.template].name + '.png'">
 							</div>
 						</template>
@@ -470,7 +473,7 @@
 			</div>
 		</popup>
 
-		<report-dialog v-if="leek" v-model="reportDialog" :name="leek.farmer.name" :target="leek.farmer" :leek="leek" :reasons="reasons" :parameter="leek.id" />
+		<report-dialog v-if="leek" v-model="showReport" :name="leek.farmer.name" :target="leek.farmer" :leek="leek" :reasons="reasons" :parameter="leek.id" />
 
 		<popup v-model="hatDialog" :width="750">
 			<template #icon><v-icon>mdi-hat-fedora</v-icon></template>
@@ -479,7 +482,7 @@
 				<div class="hats">
 					<v-tooltip>
 						<template #activator="{ props }">
-							<div v-ripple :quantity="1" class="hat" @click="selectHat(null)" v-bind="props">
+							<div v-ripple :quantity="1" class="hat" v-bind="props" @click="selectHat(null)">
 								<img src="/image/hat/no_hat.png">
 							</div>
 						</template>
@@ -487,7 +490,7 @@
 					</v-tooltip>
 					<v-tooltip v-for="hat in farmer_hats" :key="hat.id">
 						<template #activator="{ props }">
-							<div v-ripple :quantity="hat.quantity" class="hat" @click="selectHat(hat)" v-bind="props">
+							<div v-ripple :quantity="hat.quantity" class="hat" v-bind="props" @click="selectHat(hat)">
 								<img :src="'/image/hat/' + hat.name + '.png'">
 							</div>
 						</template>
@@ -508,7 +511,7 @@
 				<div class="leek-weapons">
 					<v-tooltip>
 						<template #activator="{ props }">
-							<div v-ripple :quantity="1" class="weapon" @click="setWeapon(0)" v-bind="props">
+							<div v-ripple :quantity="1" class="weapon" v-bind="props" @click="setWeapon(0)">
 								<img src="/image/weapon/no_weapon.png">
 							</div>
 						</template>
@@ -615,7 +618,7 @@
 						</div>
 					</div>
 					<div v-if="leek" class="pomp column6">
-						<v-radio-group v-model="leek.face" @update:model-value="changeFace" hide-details>
+						<v-radio-group v-model="leek.face" hide-details @update:model-value="changeFace">
 							<v-radio :value="0">
 								<template #label>
           							{{ $t('neutral') }}
@@ -658,7 +661,7 @@
 			</div>
 			<template #actions>
 				<div v-ripple @click="titleDialog = false">{{ $t('main.cancel') }}</div>
-				<div v-ripple class="green" @click="pickTitle($refs.picker.getTitle())">{{ $t('validate') }}</div>
+				<div v-ripple class="green" @click="pickerRef && pickTitle(pickerRef.getTitle())">{{ $t('validate') }}</div>
 			</template>
 		</popup>
 
@@ -671,18 +674,26 @@
 			<template #title>
 				{{ $t('ai_of', [leek.name]) }}
 			</template>
+			<template v-if="$store.state.farmer && $store.state.farmer.equipment_enabled" #options>
+				<div class="option" @click="aiDialog = false; showLoadout = true">
+					<v-icon>mdi-package-variant-closed</v-icon>
+				</div>
+				<div class="option" @click="aiDialog = false">
+					<v-icon>mdi-close</v-icon>
+				</div>
+			</template>
 			<div class="ai-popup">
 				<div class="leek-ai-components components-grid">
 					<div v-for="(c, i) of 8" :key="i" class="component" :class="{dashed: draggedComponent, disabled: i >= max_components}" @dragover="dragOver" @drop="componentsDrop('leek', $event, i)">
-						<rich-tooltip-item v-if="leek.components[i]" v-slot="{ props }" :item="LeekWars.items[leek.components[i].template]" :key="i" :bottom="true" ref="componentTooltips">
+						<rich-tooltip-item v-if="leek.components[i]" v-slot="{ props }" :key="i" ref="componentTooltips" :item="LeekWars.items[leek.components[i].template]" :bottom="true">
 							<div :class="{dragging: draggedComponent && draggedComponent.template === leek.components[i].template && draggedComponentLocation === 'leek'}" draggable="true" v-bind="props" @dragstart="componentDragStart('leek', leek.components[i], $event)" @dragend="componentDragEnd(leek.components[0])" @click="removeComponent(leek.components[i])">
 								<img :src="'/image/component/' + LeekWars.items[leek.components[i].template].name + '.png'">
 							</div>
 						</rich-tooltip-item>
 						<div v-else><v-icon>mdi-sd</v-icon></div>
 					</div>
-					<div :class="{dashed: draggedAI && (!leek.ai || draggedAI.id !== leek.ai.id)}" class="leek-ai" @dragover="dragOver" @drop="aiDrop('leek', $event)">
-						<ai v-if="leek.ai" :ai="leek.ai" :library="true" :small="false" @click.native="removeAI()" @dragstart.native="aiDragStart(leek.ai, $event)" @dragend.native="aiDragEnd(leek.ai, $event)" />
+					<div :class="{dashed: draggedAI && (!leek.ai || draggedAI.path !== leek.ai.path)}" class="leek-ai" @dragover="dragOver" @drop="aiDrop('leek', $event)">
+						<ai v-if="leek.ai" :ai="leek.ai" :library="true" :small="false" @click="removeAI()" @dragstart="aiDragStart(leek.ai, $event)" @dragend="aiDragEnd(leek.ai, $event)" />
 					</div>
 				</div>
 				<div class="flex">
@@ -693,7 +704,7 @@
 							{{ $t('all_my_components') }} ({{ farmer_components.length }})
 						</div>
 						<div class="farmer-components" :class="{dashed: draggedComponent && draggedComponentLocation === 'leek'}" @dragover="dragOver" @drop="componentsDrop('farmer', $event)">
-							<rich-tooltip-item v-for="component in farmer_components" :key="component.id" v-slot="{ props }" :item="LeekWars.items[component.template]" :bottom="true" :nodge="true" ref="componentTooltips">
+							<rich-tooltip-item v-for="component in farmer_components" :key="component.id" v-slot="{ props }" ref="componentTooltips" :item="LeekWars.items[component.template]" :bottom="true" :nodge="true">
 								<div :quantity="component.quantity" :class="{dragging: draggedComponent && draggedComponent.template === component.template && draggedComponentLocation === 'farmer', locked: LeekWars.items[component.template].level > leek.level || leek.components.find(c => c && c.template === component.template) }" :draggable="LeekWars.items[component.template].level <= leek.level" class="component" v-bind="props" @dragstart="componentDragStart('farmer', component, $event)" @dragend="componentDragEnd(component)" @click="addComponent(component)">
 									<img :src="'/image/component/' + LeekWars.items[component.template].name + '.png'" draggable="false">
 								</div>
@@ -711,6 +722,14 @@
 
 		<popup v-if="leek && my_leek" v-model="chipsDialog" :width="816" icon="mdi-chip">
 			<template #title>{{ $t('chips_of', [leek.name]) }} <span class="chip-count">[{{ leek.chips.length }}/{{ leek.total_ram }}]</span></template>
+			<template v-if="$store.state.farmer && $store.state.farmer.equipment_enabled" #options>
+				<div class="option" @click="chipsDialog = false; showLoadout = true">
+					<v-icon>mdi-package-variant-closed</v-icon>
+				</div>
+				<div class="option" @click="chipsDialog = false">
+					<v-icon>mdi-close</v-icon>
+				</div>
+			</template>
 			<div class="chips-dialog">
 				<div :class="{dashed: draggedChip && draggedChipLocation === 'farmer'}" class="leek-chips" @dragover="dragOver" @drop="chipsDrop('leek', $event)">
 					<rich-tooltip-item v-for="chip in orderedChips" :key="chip.id" v-slot="{ props }" :item="LeekWars.items[chip.template]" :bottom="true" :nodge="true" :leek="leek">
@@ -736,823 +755,769 @@
 			</div>
 		</popup>
 
-		<capital-dialog v-if="leek && my_leek" v-model="capitalDialog" :leek="leek" :total-capital="leek.capital" />
+		<capital-dialog v-if="leek && my_leek" v-model="showCapital" :leek="leek" :total-capital="leek.capital" />
+		<loadout-dialog v-if="leek && my_leek" v-model="showLoadout" :leek="leek" @applied="refreshTotalCharacteristics" />
 	</div>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
 	import { locale } from '@/locale'
 	import { AI } from '@/model/ai'
 	import { Chip } from '@/model/chip'
-	import { Options } from '@/model/component'
 	import { Hat } from '@/model/hat'
-	import { mixins } from '@/model/i18n'
+	import { mixins , useNamespacedT } from '@/model/i18n'
 	import { ItemType } from '@/model/item'
 	import { Leek, Register } from '@/model/leek'
+	import { Component } from '@/model/component'
 	import { LeekWars } from '@/model/leekwars'
 	import { Warning } from '@/model/moderation'
 	import { Potion, PotionEffect } from '@/model/potion'
 	import { store } from '@/model/store'
 	import { Weapon, WeaponsData } from '@/model/weapon'
-	import { Options as VueComponent, Vue, Watch } from 'vue-property-decorator'
-	import CapitalDialog from './capital-dialog.vue'
 	import CharacteristicTooltip from './characteristic-tooltip.vue'
-	const LevelDialog = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/leek/level-dialog.${locale}.i18n`))
-	const Explorer = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/explorer/explorer.${locale}.i18n`))
 	import { fileSystem } from '@/model/filesystem'
 	import RichTooltipItem from '@/component/rich-tooltip/rich-tooltip-item.vue'
 	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 	import RichTooltipLeek from '@/component/rich-tooltip/rich-tooltip-leek.vue'
-	import FightsHistory from '@/component/history/fights-history.vue'
-	import TournamentsHistory from '@/component/history/tournaments-history.vue'
 	import TitlePicker from '@/component/title/title-picker.vue'
-	import ReportDialog from '@/component/moderation/report-dialog.vue'
 	import AIElement from '@/component/app/ai.vue'
-	import LWTitle from '@/component/title/title.vue'
+	import LwTitle from '@/component/title/title.vue'
 	import { COMPONENTS } from '@/model/components'
 	import { CHIPS } from '@/model/chips'
 	import { ORDERED_CHIPS } from '@/model/sorted_chips'
 	import LeekImage from '../leek-image.vue'
 	import LeekComponent from './leek-component.vue'
-	import { defineAsyncComponent, nextTick } from 'vue'
+	import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+	import { useI18n } from 'vue-i18n'
+	import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 	import { emitter } from '@/model/vue'
 	import { Line } from 'vue-chartjs'
-	import { ChartData, ChartOptions, plugins } from 'chart.js'
+	import type { ChartData, ChartOptions } from 'chart.js'
 
-	@VueComponent({ name: "leek", i18n: {}, mixins: [...mixins], components: {
-		CapitalDialog,
-		LevelDialog,
-		CharacteristicTooltip,
-		Explorer,
-		RichTooltipItem,
-		RichTooltipFarmer,
-		RichTooltipLeek,
-		FightsHistory,
-		TournamentsHistory,
-		TitlePicker,
-		ReportDialog,
-		ai: AIElement,
-		'lw-title': LWTitle,
-		LeekComponent,
-		Line,
+	const CapitalDialog = defineAsyncComponent(() => import('./capital-dialog.vue'))
+	const LoadoutDialog = defineAsyncComponent(() => import('./loadout-dialog.vue'))
+	const ReportDialog = defineAsyncComponent(() => import('@/component/moderation/report-dialog.vue'))
+	const FightsHistory = defineAsyncComponent(() => import('@/component/history/fights-history.vue'))
+	const TournamentsHistory = defineAsyncComponent(() => import('@/component/history/tournaments-history.vue'))
+	const LevelDialog = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/leek/level-dialog.${locale}.i18n`))
+	const Explorer = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/explorer/explorer.${locale}.i18n`))
+
+	defineOptions({ name: 'Leek', i18n: {}, mixins: [...mixins], components: {
+		CharacteristicTooltip, RichTooltipItem, RichTooltipFarmer, RichTooltipLeek, TitlePicker, ai: AIElement, 'lw-title': LwTitle, LeekComponent, Line,
 	} })
-	export default class LeekPage extends Vue {
-		CHIPS = CHIPS
-		COMPONENTS = COMPONENTS
-		WeaponsData = WeaponsData
-		leek: Leek | null = null
-		error: boolean = false
-		weaponsDialog: boolean = false
-		draggedWeapon: Weapon | null = null
-		draggedWeaponLocation: string | null = null
-		xp_bar: number = 0
-		renameDialog: boolean = false
-		rename_price_habs: number = 2000000
-		rename_price_crystals: number = 200
-		renameName: string = ''
-		renameSuccess: boolean = false
-		renameFailed: boolean = false
-		renameError: any = null
-		potionDialog: boolean = false
-		hatDialog: boolean = false
-		chartData: ChartData | null = null
-		chartOptions: ChartOptions | null = null
-		reportDialog: boolean = false
-		reasons = [Warning.INCORRECT_LEEK_NAME, Warning.INCORRECT_AI_NAME]
-		levelPopup: boolean = false
-		levelPopupData: any = null
-		aiDialog: boolean = false
-		draggedAI: AI | null = null
-		chipsDialog: boolean = false
-		draggedChip: Chip | null = null
-		draggedChipLocation: string | null = null
-		draggedComponent: Component | null = null
-		draggedComponentLocation: string | null = null
-		capitalDialog: boolean = false
-		customizeDialog: boolean = false
-		skinWeaponDialog: boolean = false
-		titleDialog: boolean = false
-		skinPotionDialog: boolean = false
-		tournamentRangeLoading: boolean = false
-		tournamentRange: any = null
-		brRangeLoading: boolean = false
-		brRange: any = null
-		request: any = null
-		MAX_COMPONENTS = 8
 
-		get id(): number {
-			return parseInt(this.$route.params.id, 10) || (this.$store.state.farmer && LeekWars.first(this.$store.state.farmer.leeks).id)
+	useI18n() // initialize local scope for <i18n-t>
+	const t = useNamespacedT('leek')
+	const route = useRoute()
+	const router = useRouter()
+	interface TooltipInstance { value: boolean; disabled: boolean }
+	interface LeekTournament { registered: boolean; current?: number }
+	const componentTooltipsRef = useTemplateRef<TooltipInstance[]>('componentTooltips')
+	const leekImageRef = useTemplateRef<InstanceType<typeof LeekImage>>('leekImage')
+	const pickerRef = useTemplateRef<InstanceType<typeof TitlePicker>>('picker')
+
+	const leek = ref<Leek | null>(null)
+	const error = ref(false)
+	const weaponsDialog = ref(false)
+	const draggedWeapon = ref<Weapon | null>(null)
+	const draggedWeaponLocation = ref<string | null>(null)
+	const renameDialog = ref(false)
+	const rename_price_habs = 10000000
+	const rename_price_crystals = 200
+	const renameName = ref('')
+	const renameSuccess = ref(false)
+	const renameFailed = ref(false)
+	const renameError = ref<{error: string, error_params?: unknown[]} | null>(null)
+	const potionDialog = ref(false)
+	const hatDialog = ref(false)
+	const chartData = ref<ChartData<'line'> | null>(null)
+	const chartOptions = ref<ChartOptions<'line'> | null>(null)
+	const showReport = ref(false)
+	const reasons = [Warning.INCORRECT_LEEK_NAME, Warning.INCORRECT_AI_NAME]
+	const levelPopup = ref(false)
+	const levelPopupData = ref<unknown>(null)
+	const aiDialog = ref(false)
+	const draggedAI = ref<AI | null>(null)
+	const chipsDialog = ref(false)
+	const draggedChip = ref<Chip | null>(null)
+	const draggedChipLocation = ref<string | null>(null)
+	const draggedComponent = ref<Component | null>(null)
+	const draggedComponentLocation = ref<string | null>(null)
+	const showCapital = ref(false)
+	const showLoadout = ref(false)
+	const customizeDialog = ref(false)
+	const skinWeaponDialog = ref(false)
+	const titleDialog = ref(false)
+	const skinPotionDialog = ref(false)
+	const tournamentRangeLoading = ref(false)
+	const tournamentRange = ref<{min: number, max: number} | null>(null)
+	let request: ReturnType<typeof LeekWars.get> | null = null
+	const MAX_COMPONENTS = 8
+	type DragArea = 'farmer' | 'leek'
+
+	const id = computed<number>(() => {
+		const routeId = parseInt(route.params.id as string, 10)
+		if (routeId) return routeId
+		if (!store.state.farmer) return 0
+		const first = LeekWars.first(store.state.farmer.leeks)
+		return first ? first.id : 0
+	})
+
+	const my_leek = computed(() => {
+		if (!route.params.id) return true
+		if (store.state.farmer) {
+			for (const k in store.state.farmer.leeks) {
+				if (parseInt(k, 10) === id.value) return true
+			}
 		}
-		get my_leek(): boolean {
-			if (!this.$route.params.id) { return true }
-			if (this.$store.state.farmer) {
-				for (const id in this.$store.state.farmer.leeks) {
-					if (parseInt(id, 10) === this.id) { return true }
+		return false
+	})
+
+	const xp_bar_width = computed(() => {
+		if (!leek.value) return 0
+		return leek.value.level === 301 ? 100 : Math.min(100, Math.floor(100 * (leek.value.xp - leek.value.down_xp) / (leek.value.up_xp - leek.value.down_xp)))
+	})
+
+	const blue_xp_bar = computed(() => leek.value ? leek.value.level === 301 : false)
+
+	const farmer_weapons = computed(() => {
+		if (store.state.farmer) {
+			return store.state.farmer.weapons.sort((a, b) => LeekWars.items[a.template].level - LeekWars.items[b.template].level)
+		}
+		return []
+	})
+
+	const farmer_chips = computed(() => {
+		if (store.state.farmer) {
+			return store.state.farmer.chips.sort((a, b) => ORDERED_CHIPS[a.template] - ORDERED_CHIPS[b.template])
+		}
+		return []
+	})
+
+	const orderedChips = computed(() => {
+		if (!leek.value) return []
+		return [...leek.value.chips].sort((a, b) => ORDERED_CHIPS[a.template] - ORDERED_CHIPS[b.template])
+	})
+
+	const orderedWeapons = computed(() => {
+		if (!leek.value) return []
+		return [...leek.value.weapons].sort((a, b) => LeekWars.items[a.template].level - LeekWars.items[b.template].level)
+	})
+
+	const farmer_hats = computed(() => store.state.farmer ? store.state.farmer.hats : [])
+	const farmer_components = computed(() => store.state.farmer ? store.state.farmer.components : [])
+
+	const hasForgottenWeapon = computed(() => {
+		if (!leek.value) return false
+		for (const w of leek.value.weapons) {
+			if (LeekWars.weapons[LeekWars.items[w.template].params].forgotten) return true
+		}
+		return false
+	})
+
+	const holdWeaponEnabled = computed(() => !!(store.state.farmer && LeekWars.selectWhere(store.state.farmer.pomps, 'template', 123) !== null))
+	const leekTitleEnabled = computed(() => !!(store.state.farmer && LeekWars.selectWhere(store.state.farmer.pomps, 'template', 125) !== null))
+	const showAiLinesEnabled = computed(() => !!(store.state.farmer && LeekWars.selectWhere(store.state.farmer.pomps, 'template', 124) !== null))
+	const metalEnabled = computed(() => !!(store.state.farmer && LeekWars.selectWhere(store.state.farmer.pomps, 'template', 242) !== null))
+	const skinPotions = computed(() => store.state.farmer!.potions.filter(p => LeekWars.potions[p.template].effects.some((e) => e.type === PotionEffect.CHANGE_SKIN)))
+	const angryEnabled = computed(() => !!(store.state.farmer && LeekWars.selectWhere(store.state.farmer.pomps, 'template', 240) !== null))
+	const happyEnabled = computed(() => !!(store.state.farmer && LeekWars.selectWhere(store.state.farmer.pomps, 'template', 241) !== null))
+
+	const max_components = computed(() => {
+		let n = 8
+		if (leek.value) {
+			for (const c of leek.value.components) {
+				if (c) {
+					if (c.template === 406 || c.template === 407) n -= 2
 				}
 			}
-			return false
 		}
-		get xp_bar_width() {
-			if (!this.leek) {
-				return this.xp_bar
-			}
-			return this.xp_bar = this.leek.level === 301 ? 100 : Math.min(100, Math.floor(100 * (this.leek.xp - this.leek.down_xp) / (this.leek.up_xp - this.leek.down_xp)))
-		}
-		get blue_xp_bar() {
-			if (!this.leek) {
-				return false
-			}
-			return this.leek.level === 301
-		}
-		get farmer_weapons() {
-			if (store.state.farmer) {
-				return store.state.farmer.weapons.sort((weaponA, weaponB) => {
-					return LeekWars.items[weaponA.template].level - LeekWars.items[weaponB.template].level
-				})
-			}
-			return []
-		}
-		get farmer_chips() {
-			if (store.state.farmer) {
-				return store.state.farmer.chips.sort((chipA, chipB) => {
-					return ORDERED_CHIPS[chipA.template] - ORDERED_CHIPS[chipB.template]
-				})
-			}
-			return []
-		}
-		get orderedChips() {
-			if (!this.leek) return []
-			return [...this.leek.chips].sort((chipA, chipB) => {
-				return ORDERED_CHIPS[chipA.template] - ORDERED_CHIPS[chipB.template]
-			})
-		}
-		get orderedWeapons() {
-			if (!this.leek) return []
-			return [...this.leek.weapons].sort((weaponA, weaponB) => {
-				return LeekWars.items[weaponA.template].level - LeekWars.items[weaponB.template].level
-			})
-		}
-		get farmer_hats() {
-			return store.state.farmer ? store.state.farmer!.hats : []
-		}
-		get farmer_components() {
-			if (store.state.farmer) {
-				return store.state.farmer.components
-				// .sort((chipA, chipB) => {
-				// 	return ORDERED_CHIPS[chipA.template] - ORDERED_CHIPS[chipB.template]
-				// })
-			}
-			return []
-		}
-		get hasForgottenWeapon() {
-			if (!this.leek) { return false }
-			for (const weapon of this.leek.weapons) {
-				if (LeekWars.weapons[LeekWars.items[weapon.template].params].forgotten) { return true }
-			}
-			return false
-		}
-		get holdWeaponEnabled() {
-			return this.$store.state.farmer && LeekWars.selectWhere(this.$store.state.farmer.pomps, 'template', 123) !== null
-		}
-		get leekTitleEnabled() {
-			return this.$store.state.farmer && LeekWars.selectWhere(this.$store.state.farmer.pomps, 'template', 125) !== null
-		}
-		get showAiLinesEnabled() {
-			return this.$store.state.farmer && LeekWars.selectWhere(this.$store.state.farmer.pomps, 'template', 124) !== null
-		}
-		get metalEnabled() {
-			return this.$store.state.farmer && LeekWars.selectWhere(this.$store.state.farmer.pomps, 'template', 242) !== null
-		}
-		get skinPotions() {
-			return store.state.farmer!.potions.filter(p => LeekWars.potions[p.template].effects.some(e => e.type === PotionEffect.CHANGE_SKIN))
-		}
-		get angryEnabled() {
-			return this.$store.state.farmer && LeekWars.selectWhere(this.$store.state.farmer.pomps, 'template', 240) !== null
-		}
-		get happyEnabled() {
-			return this.$store.state.farmer && LeekWars.selectWhere(this.$store.state.farmer.pomps, 'template', 241) !== null
-		}
-		get max_components() {
-			let n = 8
-			if (this.leek) {
-				for (const component of this.leek.components) {
-					if (component) {
-						if (component.template === 406 || component.template === 407) n -= 2
-					}
-				}
-			}
-			return n
-		}
-		get remaining_xp() {
-			return this.leek ? this.leek.up_xp - this.leek.xp : 0
-		}
+		return n
+	})
 
-		mounted() {
-			emitter.on('update-leek-talent', (message: any) => {
-				if (this.leek && message.leek === this.leek.id) {
-					this.leek.talent += message.talent
-				}
-			})
-			emitter.on('update-leek-xp', (message: any) => {
-				if (this.leek && message.leek === this.leek.id) {
-					this.leek.xp += message.xp
-				}
-			})
-		}
+	const remaining_xp = computed(() => leek.value ? leek.value.up_xp - leek.value.xp : 0)
 
-		@Watch('id', {immediate: true})
-		update() {
-			this.leek = null
-			this.tournamentRange = null
-			this.tournamentRangeLoading = false
-			this.brRange = null
-			this.brRangeLoading = false
-			this.error = false
-			if (!this.id) { return }
-			const method = this.my_leek ? 'leek/get-private/' + this.id : 'leek/get/' + this.id
-			this.request = LeekWars.get<Leek>(method)
-			this.request.then((leek: Leek) => {
-				this.leek = new Leek(leek)
-				if (this.leek) {
-					LeekWars.setTitle(this.leek.name, this.$t('main.level_n', [this.leek.level]))
-					if (this.my_leek) {
-						LeekWars.setActions([
-							{icon: 'mdi-auto-fix', click: () => this.customize()},
-							{image: 'icon/potion.png', click: () => this.potion()},
-						])
-					} else {
-						LeekWars.setActions([
-							{image: 'icon/garden.png', click: () => this.$router.push('/garden/challenge/leek/' + this.id)}
-						])
-					}
-					this.renameName = this.leek.name
-					this.chart()
-					if (this.leek.level_seen < this.leek.level) {
-						this.showLevelPopup()
-					}
-					if (this.$store.state.farmer) {
-						for (const ai of this.$store.state.farmer.ais) {
-							ai.dragging = false
-						}
-					}
-					if (this.my_leek) {
-						this.$store.commit('update-capital', {leek: this.leek.id, capital: this.leek.capital})
-					}
-					emitter.emit('loaded')
-				}
-			}).error((error: any) => {
-				this.error = true
-			})
+	const onUpdateLeekTalent = (message: unknown) => {
+		const msg = message as { leek: number, talent: number }
+		if (leek.value && msg.leek === leek.value.id) {
+			leek.value.talent += msg.talent
 		}
-
-		beforeUnmount() {
-			emitter.off('update-leek-talent')
-			emitter.off('update-leek-xp')
-			if (this.request) { this.request.abort() }
+	}
+	const onUpdateLeekXp = (message: unknown) => {
+		const msg = message as { leek: number, xp: number }
+		if (leek.value && msg.leek === leek.value.id) {
+			leek.value.xp += msg.xp
 		}
+	}
 
-		rename(currency: string) {
-			if (!this.leek) { return }
-			const method = currency === 'habs' ? 'leek/rename-habs' : 'leek/rename-crystals'
-			LeekWars.post(method, {leek_id: this.leek.id, new_name: this.renameName}).then(data => {
-				if (this.leek) {
-					this.leek.name = this.renameName
-					store.commit('rename-leek', {leek: this.leek.id, name: this.renameName})
-					if (currency === 'habs') {
-						store.commit('update-habs', -this.rename_price_habs)
-					} else {
-						store.commit('update-crystals', -this.rename_price_crystals)
-					}
-					this.renameDialog = false
-					this.renameSuccess = true
-				}
-			}).error(error => {
-				this.renameFailed = true
-				this.renameError = error
-			})
-		}
+	onMounted(() => {
+		emitter.on('update-leek-talent', onUpdateLeekTalent)
+		emitter.on('update-leek-xp', onUpdateLeekXp)
+	})
 
-		usePotion(potion: Potion) {
-			const template = LeekWars.potions[potion.template]
-			if (this.leek) {
-				let update = false
-				for (const effect of template.effects) {
-					if (effect.type === 1) { // Restat
-						update = true
-					} else if (effect.type === 2) { // Skin
-						const skin = effect.params[0]
-						this.leek.skin = skin
-						store.commit('change-skin', {leek: this.leek.id, skin})
-					} else if (effect.type === 3) {
-						// this.leek.fish = !this.leek.fish
-						// store.commit('change-fish', {leek: this.leek.id, fish: this.leek.fish})
-					}
-				}
-				this.potionDialog = false
-				this.skinPotionDialog = false
-				LeekWars.post('leek/use-potion', {leek_id: this.leek.id, potion_id: potion.id}).then(data => {
-					if (template.consumable && template.id !== 176) {
-						this.$store.commit('remove-inventory', {type: ItemType.POTION, item_template: potion.template})
-					}
-					if (update) { this.update() }
-				})
-			}
-		}
+	// Le computed `id` retombe sur le 1er leek du farmer quand route.params.id
+	// devient undefined (sortie de /leek/:x), ce qui fire le watch et swappe les
+	// v-if/Teleport pendant le patch router-view → parentNode null. `if (!id.value)`
+	// ne suffit pas : l'id est valide via fallback. onBeforeRouteLeave ne fire pas
+	// sur /leek/A → /leek/B (même composant), le watch reste opérant pour ce cas.
+	let leaving = false
+	onBeforeRouteLeave(() => { leaving = true })
 
-		registerTournament() {
-			if (this.leek) {
-				if (this.leek.tournament.registered) {
-					this.leek.tournament.registered = false
-					LeekWars.post('leek/unregister-tournament', {leek_id: this.leek.id})
+	watch(id, () => update(), { immediate: true })
+
+	function update() {
+		if (leaving) return
+		if (!id.value) return
+		leek.value = null
+		tournamentRange.value = null
+		tournamentRangeLoading.value = false
+		error.value = false
+		const method = my_leek.value ? 'leek/get-private/' + id.value : 'leek/get/' + id.value
+		request = LeekWars.get<Leek>(method)
+		request.then((l: Leek) => {
+			leek.value = new Leek(l)
+			if (leek.value) {
+				LeekWars.setTitle(leek.value.name, t('main.level_n', [leek.value.level]))
+				if (my_leek.value) {
+					LeekWars.setActions([
+						{icon: 'mdi-auto-fix', click: () => customize()},
+						{image: 'icon/potion.png', click: () => potion()},
+					])
 				} else {
-					this.leek.tournament.registered = true
-					LeekWars.post('leek/register-tournament', {leek_id: this.leek.id})
+					LeekWars.setActions([
+						{image: 'icon/garden.png', click: () => router.push('/garden/challenge/leek/' + id.value)}
+					])
 				}
+				renameName.value = leek.value.name
+				chart()
+				if (leek.value.level_seen < leek.value.level) {
+					showLevelPopup()
+				}
+				for (const path in fileSystem.ais) {
+					const ai = fileSystem.ais[path]
+					if (ai.dragging) ai.dragging = false
+				}
+				if (my_leek.value) {
+					store.commit('update-capital', {leek: leek.value.id, capital: leek.value.capital})
+				}
+				emitter.emit('loaded')
 			}
-		}
+		}).error(() => {
+			error.value = true
+		})
+	}
 
-		registerAutoBr() {
-			if (this.leek) {
-				if (this.leek.auto_br) {
-					this.leek.auto_br = false
-					LeekWars.post('leek/unregister-auto-br', {leek_id: this.leek.id})
+	onBeforeUnmount(() => {
+		emitter.off('update-leek-talent', onUpdateLeekTalent)
+		emitter.off('update-leek-xp', onUpdateLeekXp)
+		if (request) request.abort()
+		renameSuccess.value = false // évite les nœuds Teleport orphelins (cf. popup.vue)
+		renameFailed.value = false
+	})
+
+	function rename(currency: string) {
+		if (!leek.value) return
+		const method = currency === 'habs' ? 'leek/rename-habs' : 'leek/rename-crystals'
+		LeekWars.post(method, {leek_id: leek.value.id, new_name: renameName.value}).then(() => {
+			if (leek.value) {
+				leek.value.name = renameName.value
+				store.commit('rename-leek', {leek: leek.value.id, name: renameName.value})
+				if (currency === 'habs') {
+					store.commit('update-habs', -rename_price_habs)
 				} else {
-					this.leek.auto_br = true
-					LeekWars.post('leek/register-auto-br', {leek_id: this.leek.id})
+					store.commit('update-crystals', -rename_price_crystals)
+				}
+				renameDialog.value = false
+				renameSuccess.value = true
+			}
+		}).error(err => {
+			renameFailed.value = true
+			renameError.value = err
+		})
+	}
+
+	function usePotion(p: Potion) {
+		const template = LeekWars.potions[p.template]
+		if (leek.value) {
+			potionDialog.value = false
+			skinPotionDialog.value = false
+			const isClover = template.effects.some((e) => e.type >= PotionEffect.CLOVER_PASSED && e.type <= PotionEffect.CLOVER_SECOND)
+			if (isClover) {
+				LeekWars.post('potion/use', {item_id: p.id}).then((data) => {
+					if (template.consumable) {
+						store.commit('remove-inventory', {type: ItemType.POTION, item_template: p.template})
+					}
+					if (data.clover) {
+						LeekWars.showCloverResult(data.clover)
+					}
+				})
+				return
+			}
+			let up = false
+			for (const effect of template.effects) {
+				if (effect.type === PotionEffect.RESTAT) {
+					up = true
+				} else if (effect.type === PotionEffect.CHANGE_SKIN) {
+					const skin = effect.params[0]
+					leek.value.skin = skin
+					store.commit('change-skin', {leek: leek.value.id, skin})
 				}
 			}
+			LeekWars.post('leek/use-potion', {leek_id: leek.value.id, potion_id: p.id}).then(() => {
+				if (template.consumable && template.id !== 176) {
+					store.commit('remove-inventory', {type: ItemType.POTION, item_template: p.template})
+				}
+				if (up) update()
+			})
 		}
+	}
 
-		updateGarden() {
-			if (this.leek) {
-				this.leek.in_garden = !this.leek.in_garden
-				LeekWars.post('leek/set-in-garden', {leek_id: this.leek.id, in_garden: this.leek.in_garden})
-			}
-		}
-		updateXpBlocked() {
-			if (this.leek) {
-				this.leek.xp_blocked = !this.leek.xp_blocked
-				LeekWars.put('leek/set-xp-blocked', {leek_id: this.leek.id, xp_blocked: this.leek.xp_blocked})
-			}
-		}
-
-		chart() {
-			if (!this.leek || this.leek.level < 100) { return }
-			const labels = []
-			const time = LeekWars.time
-			for (let i = 1; i <= 7; ++i) {
-				labels.push(LeekWars.formatDayMonthShort(time - i * 24 * 3600))
-			}
-			this.chartData = {
-				labels: labels.reverse(),
-				datasets: [
-					{
-						tension: 0.2,
-						data: this.leek.talent_history,
-						borderColor: '#5fad1b',
-						pointBackgroundColor: '#5fad1b',
-						borderWidth: 2,
-						fill: {
-							target: 'origin',
-							above: '#5fad1b30',
-						},
-					}
-				]
-			}
-			this.chartOptions = {
-				aspectRatio: 2.5,
-				plugins: { legend: { display: false } },
-				elements: {
-					point: {
-						radius: 4,
-						hoverRadius: 6,
-					}
-				},
-			}
-		}
-
-		hat() {
-			this.hatDialog = true
-		}
-
-		selectHat(hat: Hat) {
-			if (!this.leek) { return }
-			this.hatDialog = false
-			if (hat === null) {
-				this.leek.hat = null
-				LeekWars.delete('leek/remove-hat', {leek_id: this.leek.id}).then(data => {
-					if (this.leek) {
-						store.commit('change-hat', {leek: this.leek.id, hat: null})
-					}
-				}).error(error => {
-					LeekWars.toast(error)
-				})
+	function registerTournament() {
+		if (leek.value) {
+			const t = leek.value.tournament as LeekTournament | null
+			if (!t) return
+			if (t.registered) {
+				t.registered = false
+				LeekWars.post('leek/unregister-tournament', {leek_id: leek.value.id})
 			} else {
-				if (this.leek.hat && this.leek.hat.template === hat.template) {
-					this.hatDialog = false
-					return
+				t.registered = true
+				LeekWars.post('leek/register-tournament', {leek_id: leek.value.id})
+			}
+		}
+	}
+
+	function registerAutoArena() {
+		if (leek.value) {
+			if (leek.value.auto_br) {
+				leek.value.auto_br = false
+				LeekWars.post('leek/unregister-auto-br', {leek_id: leek.value.id})
+			} else {
+				leek.value.auto_br = true
+				LeekWars.post('leek/register-auto-br', {leek_id: leek.value.id})
+			}
+		}
+	}
+
+	function updateGarden() {
+		if (leek.value) {
+			leek.value.in_garden = !leek.value.in_garden
+			LeekWars.post('leek/set-in-garden', {leek_id: leek.value.id, in_garden: leek.value.in_garden})
+		}
+	}
+
+	function updateXpBlocked() {
+		if (leek.value) {
+			leek.value.xp_blocked = !leek.value.xp_blocked
+			LeekWars.put('leek/set-xp-blocked', {leek_id: leek.value.id, xp_blocked: leek.value.xp_blocked})
+		}
+	}
+
+	function chart() {
+		if (!leek.value || leek.value.level < 100) return
+		const labels = []
+		const time = LeekWars.time
+		for (let i = 1; i <= 7; ++i) {
+			labels.push(LeekWars.formatDayMonthShort(time - i * 24 * 3600))
+		}
+		chartData.value = {
+			labels: labels.reverse(),
+			datasets: [{
+				tension: 0.2,
+				data: leek.value.talent_history,
+				borderColor: '#5fad1b',
+				pointBackgroundColor: '#5fad1b',
+				borderWidth: 2,
+				fill: { target: 'origin', above: '#5fad1b30' },
+			}]
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		} as any
+		chartOptions.value = {
+			aspectRatio: 2.5,
+			plugins: { legend: { display: false } },
+			elements: { point: { radius: 4, hoverRadius: 6 } },
+		}
+	}
+
+	function selectHat(h: Hat | null) {
+		if (!leek.value) return
+		hatDialog.value = false
+		if (h === null) {
+			leek.value.hat = null
+			LeekWars.delete('leek/remove-hat', {leek_id: leek.value.id}).then(() => {
+				if (leek.value) {
+					store.commit('change-hat', {leek: leek.value.id, hat: null})
 				}
-				this.leek.hat = hat
-				LeekWars.post('leek/set-hat', {leek_id: this.leek.id, hat_id: hat.template}).then(data => {
-					if (this.leek) {
-						store.commit('change-hat', { leek: this.leek.id, hat })
-					}
-				}).error(error => {
-					LeekWars.toast(error)
-				})
+			}).error(err => LeekWars.toast(err))
+		} else {
+			if (leek.value.hat && leek.value.hat.template === h.template) {
+				hatDialog.value = false
+				return
 			}
-		}
-
-		potion() {
-			this.potionDialog = true
-		}
-
-		customize() {
-			this.customizeDialog = true
-		}
-
-		showLevelPopup() {
-			if (!this.leek) { return }
-			LeekWars.get('leek/get-level-popup/' + this.leek.id).then(data => {
-				this.levelPopupData = data.popup
-				nextTick(() => this.levelPopup = true)
-			})
-		}
-
-		removeAI() {
-			if (!this.leek) { return }
-			this.leek.ai = null
-			LeekWars.delete('leek/remove-ai', {leek_id: this.leek.id})
-		}
-
-		selectAI(ai: AI) {
-			if (!this.leek) { return }
-			this.leek.ai = ai
-			LeekWars.post('leek/set-ai', {leek_id: this.leek.id, ai_id: ai.id})
-			// this.aiDialog = false
-		}
-
-		aiDragStart(ai: AI, e: DragEvent) {
-			e.dataTransfer!.setData('text/plain', 'drag !!!')
-			this.draggedAI = ai
-			ai.dragging = true
-			return true
-		}
-
-		aiDragEnd(ai: AI, e: DragEvent) {
-			if (ai) {
-				ai.dragging = false
-			}
-			this.draggedAI = null
-			e.preventDefault()
-			return false
-		}
-
-		aiDrop(area: string, e: DragEvent) {
-			if (!this.draggedAI || !this.leek) { return }
-			if (this.leek.ai && this.draggedAI.id === this.leek.ai.id && area === 'farmer') {
-				this.removeAI()
-			} else if (area === 'leek') {
-				this.selectAI(this.draggedAI)
-			}
-			this.draggedAI = null
-			e.preventDefault()
-			return false
-		}
-
-		dragOver(e: DragEvent) {
-			e.preventDefault()
-		}
-
-		registerFocusout(register: Register, e: Event) {
-			if (!this.leek) { return }
-			const value = (e.target as HTMLElement).textContent || ''
-			if (register.value !== value) {
-				register.value = value
-				LeekWars.post('leek/set-register', {leek_id: this.leek.id, key: register.key, value}).then(data => {
-					LeekWars.toast(this.$i18n.t('register_saved'))
-				})
-			}
-		}
-
-		registerDelete(register: Register) {
-			if (!this.leek) { return }
-			this.leek.registers.splice(this.leek.registers.indexOf(register), 1)
-			LeekWars.delete('leek/delete-register', {leek_id: this.leek.id, key: register.key}).then(data => {
-				LeekWars.toast(this.$i18n.t('register_deleted'))
-			})
-		}
-
-		weaponDragStart(location: string, weapon: Weapon, e: DragEvent) {
-			if (this.leek && LeekWars.items[weapon.template].level > this.leek.level) { return }
-			const forgotten = LeekWars.weapons[LeekWars.items[weapon.template].params].forgotten
-			if (location === 'farmer' && this.hasForgottenWeapon && forgotten) { return }
-			this.draggedWeapon = weapon
-			this.draggedWeaponLocation = location
-		}
-
-		weaponDragEnd(weapon: Weapon) {
-			this.draggedWeapon = null
-		}
-
-		addWeapon(weapon: Weapon) {
-			if (!this.leek) { return }
-			const template = LeekWars.items[weapon.template]
-			if (this.leek.weapons.length >= this.leek.max_weapons) {
-				return LeekWars.toast(this.$i18n.t('error_max_weapon', [this.leek.name]))
-			}
-			if (template.level > this.leek.level) {
-				return LeekWars.toast(this.$i18n.t('error_under_required_level_weapon', [this.leek.name]))
-			}
-			if (this.leek.weapons.some((w) => w.template === template.id)) {
-				return LeekWars.toast(this.$i18n.t('error_weapon_already_equipped', [this.leek.name]))
-			}
-			if (this.hasForgottenWeapon && LeekWars.weapons[LeekWars.items[weapon.template].params].forgotten) {
-				return LeekWars.toast(this.$i18n.t('error_weapon_two_forgotten', [this.leek.name]))
-			}
-			LeekWars.post('leek/add-weapon', {leek_id: this.leek.id, weapon_id: weapon.id}).then(data => {
-				if (this.leek) {
-					this.leek.weapons.push({id: data.id, template: weapon.template, quantity: 1})
-					this.$store.commit('remove-weapon', weapon)
+			leek.value.hat = h
+			LeekWars.post('leek/set-hat', {leek_id: leek.value.id, hat_id: h.template}).then(() => {
+				if (leek.value) {
+					store.commit('change-hat', { leek: leek.value.id, hat: h })
 				}
-			}).error(error => {
-				LeekWars.toast(error)
+			}).error(err => LeekWars.toast(err))
+		}
+	}
+
+	function potion() { potionDialog.value = true }
+	function customize() { customizeDialog.value = true }
+
+	function showLevelPopup() {
+		if (!leek.value) return
+		LeekWars.get('leek/get-level-popup/' + leek.value.id).then(data => {
+			levelPopupData.value = data.popup
+			nextTick(() => levelPopup.value = true)
+		})
+	}
+
+	function removeAI() {
+		if (!leek.value) return
+		leek.value.ai = null
+		LeekWars.delete('leek/remove-ai', {leek_id: leek.value.id})
+	}
+
+	function selectAI(ai: AI) {
+		if (!leek.value) return
+		leek.value.ai = ai
+		LeekWars.post('leek/set-ai', {leek_id: leek.value.id, ai_path: ai.path})
+	}
+
+	function aiDragStart(ai: AI, e: DragEvent) {
+		e.dataTransfer!.setData('text/plain', 'drag !!!')
+		draggedAI.value = ai
+		ai.dragging = true
+		return true
+	}
+
+	function aiDragEnd(ai: AI, e: DragEvent) {
+		if (ai) ai.dragging = false
+		draggedAI.value = null
+		e.preventDefault()
+		return false
+	}
+
+	function aiDrop(area: string, e: DragEvent) {
+		if (!draggedAI.value || !leek.value) return
+		if (leek.value.ai && draggedAI.value.path === leek.value.ai.path && area === 'farmer') {
+			removeAI()
+		} else if (area === 'leek') {
+			selectAI(draggedAI.value)
+		}
+		draggedAI.value = null
+		e.preventDefault()
+		return false
+	}
+
+	function dragOver(e: DragEvent) { e.preventDefault() }
+
+	function registerFocusout(reg: Register, e: Event) {
+		if (!leek.value) return
+		const value = (e.target as HTMLElement).textContent || ''
+		if (reg.value !== value) {
+			reg.value = value
+			LeekWars.post('leek/set-register', {leek_id: leek.value.id, key: reg.key, value}).then(() => {
+				LeekWars.toast(t('register_saved'))
 			})
 		}
+	}
 
-		removeWeapon(weapon: Weapon) {
-			if (!this.leek) { return }
-			this.leek.weapons.splice(this.leek.weapons.indexOf(weapon), 1)
-			this.$store.commit('add-weapon', weapon)
-			LeekWars.delete('leek/remove-weapon', {weapon_id: weapon.id}).error((error) => LeekWars.toast(error))
+	function registerDelete(reg: Register) {
+		if (!leek.value) return
+		leek.value.registers.splice(leek.value.registers.indexOf(reg), 1)
+		LeekWars.delete('leek/delete-register', {leek_id: leek.value.id, key: reg.key}).then(() => {
+			LeekWars.toast(t('register_deleted'))
+		})
+	}
+
+	function weaponDragStart(location: DragArea, w: Weapon, _e: DragEvent) {
+		if (leek.value && LeekWars.items[w.template].level > leek.value.level) return
+		const forgotten = LeekWars.weapons[LeekWars.items[w.template].params].forgotten
+		if (location === 'farmer' && hasForgottenWeapon.value && forgotten) return
+		draggedWeapon.value = w
+		draggedWeaponLocation.value = location
+	}
+
+	function weaponDragEnd(_w: Weapon) { draggedWeapon.value = null }
+
+	function addWeapon(w: Weapon) {
+		if (!leek.value) return
+		const template = LeekWars.items[w.template]
+		if (leek.value.weapons.length >= leek.value.max_weapons) {
+			return LeekWars.toast(t('error_max_weapon', [leek.value.name]))
 		}
-
-		weaponsDrop(location: string, e: DragEvent) {
-			if (!this.draggedWeapon) { return }
-			if (location === 'farmer' && this.draggedWeaponLocation === 'leek') {
-				this.removeWeapon(this.draggedWeapon)
-			} else if (location === 'leek' && this.draggedWeaponLocation === 'farmer') {
-				this.addWeapon(this.draggedWeapon)
+		if (template.level > leek.value.level) {
+			return LeekWars.toast(t('error_under_required_level_weapon', [leek.value.name]))
+		}
+		if (leek.value.weapons.some(x => x.template === template.id)) {
+			return LeekWars.toast(t('error_weapon_already_equipped', [leek.value.name]))
+		}
+		if (hasForgottenWeapon.value && LeekWars.weapons[LeekWars.items[w.template].params].forgotten) {
+			return LeekWars.toast(t('error_weapon_two_forgotten', [leek.value.name]))
+		}
+		LeekWars.post('leek/add-weapon', {leek_id: leek.value.id, weapon_id: w.id}).then(data => {
+			if (leek.value) {
+				leek.value.weapons.push({id: data.id, template: w.template, quantity: 1} as Weapon)
+				store.commit('remove-weapon', w)
 			}
-			this.draggedWeapon = null
-			e.preventDefault()
-			return false
-		}
+		}).error(err => LeekWars.toast(err))
+	}
 
-		chipDragStart(location: string, chip: Chip, e: DragEvent) {
-			if (this.leek && CHIPS[chip.template].level > this.leek.level) { return }
-			this.draggedChip = chip
-			this.draggedChipLocation = location
-		}
+	function removeWeapon(w: Weapon) {
+		if (!leek.value) return
+		leek.value.weapons.splice(leek.value.weapons.indexOf(w), 1)
+		store.commit('add-weapon', w)
+		LeekWars.delete('leek/remove-weapon', {weapon_id: w.id}).error(err => LeekWars.toast(err))
+	}
 
-		chipDragEnd(chip: Chip) {
-			this.draggedChip = null
+	function weaponsDrop(location: DragArea, e: DragEvent) {
+		if (!draggedWeapon.value) return
+		if (location === 'farmer' && draggedWeaponLocation.value === 'leek') {
+			removeWeapon(draggedWeapon.value)
+		} else if (location === 'leek' && draggedWeaponLocation.value === 'farmer') {
+			addWeapon(draggedWeapon.value)
 		}
+		draggedWeapon.value = null
+		e.preventDefault()
+		return false
+	}
 
-		addChip(chip: Chip) {
-			if (!this.leek) { return }
-			const template = CHIPS[chip.template]
-			if (this.leek.chips.length >= this.leek.total_ram) {
-				return LeekWars.toast(this.$i18n.t('error_max_chip', [this.leek.name]))
+	function chipDragStart(location: DragArea, c: Chip, _e: DragEvent) {
+		if (leek.value && CHIPS[c.template].level > leek.value.level) return
+		draggedChip.value = c
+		draggedChipLocation.value = location
+	}
+
+	function chipDragEnd(_c: Chip) { draggedChip.value = null }
+
+	function addChip(c: Chip) {
+		if (!leek.value) return
+		const template = CHIPS[c.template]
+		if (leek.value.chips.length >= leek.value.total_ram) {
+			return LeekWars.toast(t('error_max_chip', [leek.value.name]))
+		}
+		if (template.level > leek.value.level) {
+			return LeekWars.toast(t('error_under_required_level_chip', [leek.value.name]))
+		}
+		if (leek.value.chips.some(x => x.template === template.id)) {
+			return LeekWars.toast(t('error_chip_already_equipped', [leek.value.name]))
+		}
+		LeekWars.post('leek/add-chip', {leek_id: leek.value.id, chip_id: c.id}).then(data => {
+			if (leek.value) {
+				leek.value.chips.push({id: data.id, template: c.template, quantity: 1} as Chip)
+				store.commit('remove-chip', c)
 			}
-			if (template.level > this.leek.level) {
-				return LeekWars.toast(this.$i18n.t('error_under_required_level_chip', [this.leek.name]))
-			}
-			if (this.leek.chips.some((c) => c.template === template.id)) {
-				return LeekWars.toast(this.$i18n.t('error_chip_already_equipped', [this.leek.name]))
-			}
-			LeekWars.post('leek/add-chip', {leek_id: this.leek.id, chip_id: chip.id}).then(data => {
-				if (this.leek) {
-					this.leek.chips.push({id: data.id, template: chip.template, quantity: 1})
-					this.$store.commit('remove-chip', chip)
-				}
-			}).error(error => {
-				LeekWars.toast(error)
-			})
-		}
+		}).error(err => LeekWars.toast(err))
+	}
 
-		removeChip(chip: Chip) {
-			if (!this.leek) { return }
-			this.leek.chips.splice(this.leek.chips.indexOf(chip), 1)
-			this.$store.commit('add-chip', chip)
-			LeekWars.delete('leek/remove-chip', {chip_id: chip.id}).error((error) => LeekWars.toast(error))
-		}
+	function removeChip(c: Chip) {
+		if (!leek.value) return
+		leek.value.chips.splice(leek.value.chips.indexOf(c), 1)
+		store.commit('add-chip', c)
+		LeekWars.delete('leek/remove-chip', {chip_id: c.id}).error(err => LeekWars.toast(err))
+	}
 
-		chipsDrop(location: string, e: DragEvent) {
-			if (!this.draggedChip) { return }
-			if (location === 'farmer' && this.draggedChipLocation === 'leek') {
-				this.removeChip(this.draggedChip)
-			} else if (location === 'leek' && this.draggedChipLocation === 'farmer') {
-				this.addChip(this.draggedChip)
-			}
-			this.draggedChip = null
-			e.preventDefault()
-			return false
+	function chipsDrop(location: DragArea, e: DragEvent) {
+		if (!draggedChip.value) return
+		if (location === 'farmer' && draggedChipLocation.value === 'leek') {
+			removeChip(draggedChip.value)
+		} else if (location === 'leek' && draggedChipLocation.value === 'farmer') {
+			addChip(draggedChip.value)
 		}
+		draggedChip.value = null
+		e.preventDefault()
+		return false
+	}
 
-		componentDragStart(location: string, component: Component, e: DragEvent) {
-			console.log("componentDragStart", component)
-			if (this.leek && LeekWars.items[component.template].level > this.leek.level) { return }
-			this.draggedComponent = component
-			this.draggedComponentLocation = location
-			for (const tooltip of this.$refs.componentTooltips as RichTooltipItem[]) {
+	function componentDragStart(location: DragArea, c: Component, _e: DragEvent) {
+		if (leek.value && LeekWars.items[c.template].level > leek.value.level) return
+		draggedComponent.value = c
+		draggedComponentLocation.value = location
+		const tooltips = componentTooltipsRef.value
+		if (tooltips) {
+			for (const tooltip of tooltips) {
 				tooltip.value = false
 				tooltip.disabled = true
 			}
 		}
+	}
 
-		componentDragEnd(component: Component) {
-			console.log("componentDragEnd")
-			this.draggedComponent = null
-			this.enableComponentsTooltips()
+	function componentDragEnd(_c: Component) {
+		draggedComponent.value = null
+		enableComponentsTooltips()
+	}
+
+	function addComponent(c: Component, index: number = -1) {
+		if (!leek.value) return
+		const template = LeekWars.items[c.template]
+		if (template.level > leek.value.level) {
+			return LeekWars.toast(t('error_under_required_level_component', [leek.value.name]))
+		}
+		if (leek.value.components.some(x => x && x.template === template.id)) {
+			return LeekWars.toast(t('error_component_already_equipped', [leek.value.name]))
+		}
+		if (index === -1) {
+			for (let i = 0; i < 8; i++) { if (leek.value.components[i] === null) { index = i; break } }
+		}
+		if (index === -1) {
+			return LeekWars.toast(t('error_max_component', [leek.value.name]))
 		}
 
-		get leek_components() {
-			return this.leek ? this.leek.components.reduce((s, c) => s + (c ? 1 : 0), 0) : 0
+		LeekWars.post('leek/add-component', { leek_id: leek.value.id, component_id: c.id, index }).then(data => {
+			if (leek.value) {
+				const old = leek.value.components[index]
+				if (old) store.commit('add-component', old)
+				leek.value.components[index] = {id: data.id, template: c.template, quantity: 1} as Component
+				store.commit('remove-inventory', { ...c, item_template: c.template, quantity: 1, type: ItemType.COMPONENT })
+				refreshTotalCharacteristics()
+			}
+		}).error(err => LeekWars.toast(err))
+	}
+
+	function moveComponent(c: Component, index: number | undefined) {
+		if (index === undefined) return
+		if (!leek.value) return
+		const old = leek.value.components[index]
+		const old_index = leek.value.components.indexOf(c)
+		leek.value.components[index] = c
+		leek.value.components[old_index] = old
+		LeekWars.post('leek/move-component', { component_id: c.id, index }).error(err => LeekWars.toast(err))
+		refreshTotalCharacteristics()
+	}
+
+	function removeComponent(c: Component) {
+		if (!leek.value) return
+		const index = leek.value.components.indexOf(c)
+		leek.value.components[index] = null
+		store.commit('add-component', c)
+		LeekWars.delete('leek/remove-component', {component_id: c.id}).error(err => LeekWars.toast(err))
+		refreshTotalCharacteristics()
+	}
+
+	function componentsDrop(location: DragArea, e: DragEvent, index?: number) {
+		if (!draggedComponent.value) return
+		if (location === 'farmer' && draggedComponentLocation.value === 'leek') {
+			removeComponent(draggedComponent.value)
+		} else if (location === 'leek' && draggedComponentLocation.value === 'farmer') {
+			addComponent(draggedComponent.value, index)
+		} else if (location === 'leek' && draggedComponentLocation.value === 'leek') {
+			moveComponent(draggedComponent.value, index)
 		}
+		draggedComponent.value = null
+		enableComponentsTooltips()
+		e.preventDefault()
+		return false
+	}
 
-		addComponent(component: Component, index: number = -1) {
-			if (!this.leek) { return }
-			const template = LeekWars.items[component.template]
-			if (template.level > this.leek.level) {
-				return LeekWars.toast(this.$i18n.t('error_under_required_level_component', [this.leek.name]))
-			}
-			if (this.leek.components.some((c) => c && c.template === template.id)) {
-				return LeekWars.toast(this.$i18n.t('error_component_already_equipped', [this.leek.name]))
-			}
-			if (index === -1) {
-				for (let i = 0; i < 8; i++) { if (this.leek.components[i] === null) { index = i; break; } }
-			}
-			if (index === -1) {
-				return LeekWars.toast(this.$i18n.t('error_max_component', [this.leek.name]))
-			}
+	function enableComponentsTooltips() {
+		const tooltips = componentTooltipsRef.value
+		if (tooltips) {
+			for (const tooltip of tooltips) tooltip.disabled = false
+		}
+	}
 
-			LeekWars.post('leek/add-component', { leek_id: this.leek.id, component_id: component.id, index }).then(data => {
-				if (this.leek) {
-					// On enlève le précédent
-					const old = this.leek.components[index]
-					if (old) {
-						this.$store.commit('add-component', old)
-					}
-					this.leek.components[index] = {id: data.id, template: component.template, quantity: 1}
-					this.$store.commit('remove-inventory', { ...component, item_template: component.template, quantity: 1, type: ItemType.COMPONENT })
-					this.refreshTotalCharacteristics()
+	function refreshTotalCharacteristics() {
+		if (!leek.value) return
+		const l = leek.value as Leek & Record<string, number>
+		for (const charac of LeekWars.characteristics) {
+			l['total_' + charac] = l[charac]
+		}
+		for (let c = 0; c < 8; ++c) {
+			const component = leek.value.components[c]
+			if (component && c < max_components.value) {
+				for (const charac of LeekWars.components[LeekWars.items[component.template].params].stats) {
+					l['total_' + charac[0]] += charac[1]
 				}
-			}).error(error => {
-				LeekWars.toast(error)
-			})
-		}
-
-		moveComponent(component: Component, index: number) {
-			if (!this.leek) { return }
-
-			const old = this.leek.components[index]
-			const old_index = this.leek.components.indexOf(component)
-			this.leek.components[index] = component
-			this.leek.components[old_index] = old
-
-			LeekWars.post('leek/move-component', { component_id: component.id, index })
-			.error(error => {
-				LeekWars.toast(error)
-			})
-			this.refreshTotalCharacteristics()
-		}
-
-		removeComponent(component: Component) {
-			if (!this.leek) { return }
-			const index = this.leek.components.indexOf(component)
-			this.leek.components[index] = null
-			this.$store.commit('add-component', component)
-			LeekWars.delete('leek/remove-component', {component_id: component.id}).error((error) => LeekWars.toast(error))
-			this.refreshTotalCharacteristics()
-		}
-
-		componentsDrop(location: string, e: DragEvent, index: number) {
-			if (!this.draggedComponent) { return }
-			if (location === 'farmer' && this.draggedComponentLocation === 'leek') {
-				this.removeComponent(this.draggedComponent)
-			} else if (location === 'leek' && this.draggedComponentLocation === 'farmer') {
-				this.addComponent(this.draggedComponent, index)
-			} else if (location === 'leek' && this.draggedComponentLocation === 'leek') {
-				this.moveComponent(this.draggedComponent, index)
-			}
-			this.draggedComponent = null
-			this.enableComponentsTooltips()
-			e.preventDefault()
-			return false
-		}
-
-		enableComponentsTooltips() {
-			for (const tooltip of this.$refs.componentTooltips as RichTooltipItem[]) {
-				tooltip.disabled = false
-			}
-		}
-
-		refreshTotalCharacteristics() {
-			if (!this.leek) return
-			const all = {} as {[key: string]: number}
-			for (const charac of LeekWars.characteristics) {
-				(this.leek as any)['total_' + charac] = (this.leek as any)[charac]
-			}
-			if (this.leek) {
-				for (let c = 0; c < 8; ++c) {
-					const component = this.leek.components[c]
-					if (component && c < this.max_components) {
-						for (const charac of LeekWars.components[LeekWars.items[component.template].params].stats) {
-							(this.leek as any)['total_' + charac[0]] += charac[1]
-						}
-					}
-				}
-			}
-			return all
-		}
-
-		setWeapon(weapon: number) {
-			this.skinWeaponDialog = false
-			if (!this.leek || !this.my_leek) { return }
-			if (this.holdWeaponEnabled) {
-				LeekWars.put('leek/set-weapon', {leek_id: this.leek.id, weapon})
-				this.leek.weapon = weapon
-				store.commit('set-leek-weapon', {leek: this.leek.id, weapon})
-			}
-		}
-
-		pickTitle(title: number[]) {
-			this.leek!.title = title
-			this.titleDialog = false
-			LeekWars.put('leek/set-title', {leek_id: this.leek!.id, icon: title[0] || 0, noun: title[1] || 0, gender: title[2] || 0, adjective: title[3] || 0})
-			this.$store.commit('set-leek-title', {leek: this.leek!.id, title})
-		}
-
-		changeShowAiLines() {
-			store.commit('toggle-show-ai-lines')
-			LeekWars.put('farmer/set-show-ai-lines', {show_ai_lines: store.state.farmer!.show_ai_lines})
-		}
-
-		changeMetal() {
-			if (this.leek) {
-				this.leek.metal = !this.leek.metal
-				store.commit('toggle-metal', this.leek.id)
-				LeekWars.put('leek/set-metal', {leek_id: this.leek.id, metal: this.leek.metal})
-			}
-		}
-
-		changeFace(face: number) {
-			if (this.leek) {
-				this.leek.face = face
-				store.commit('set-face', {leek: this.leek.id, face})
-				LeekWars.put('leek/set-face', {leek_id: this.leek.id, face})
-			}
-		}
-
-		loadTournamentRange() {
-			if (!this.leek || this.tournamentRange || this.tournamentRangeLoading) { return }
-			this.tournamentRangeLoading = true
-			LeekWars.get('tournament/range-leek/' + this.leek.level).then(d => this.tournamentRange = d)
-		}
-
-		loadBRRange() {
-			if (!this.leek || this.brRange || this.brRangeLoading) { return }
-			this.brRangeLoading = true
-			LeekWars.get('tournament/range-br/' + this.leek.level).then(d => this.brRange = d)
-		}
-
-		copyAsTest() {
-			if (!this.leek) { return }
-
-			LeekWars.post('test-leek/new', {name: this.leek.name}).then(data => {
-				if (!this.leek) { return }
-				const newLeek = new Leek({
-					id: data.id,
-					name: this.leek.name,
-					level: this.leek.level,
-					weapons: this.leek.weapons.map(w => w.template),
-					chips: this.leek.chips.map(c => c.template)
-				})
-				for (const charac of LeekWars.characteristics) {
-					(newLeek as any)[charac] = (this.leek as any)['total_' + charac]
-				}
-				LeekWars.post('test-leek/update', {id: newLeek.id, data: JSON.stringify(newLeek)})
-				.then(_ => this.$router.push('/editor#leek-' + newLeek.id))
-				.error(error => LeekWars.toast(this.$t('error_' + error.error, error.params)))
-			})
-			.error(error => LeekWars.toast(this.$t('error_' + error.error, error.params)))
-		}
-
-		downloadLeekImage() {
-			let leekImage = this.$refs.leekImage! as LeekImage
-			const canvas = leekImage.drawOnCanvas()
-			if (canvas) {
-				let png = canvas.toDataURL()
-				var link = document.createElement('a')
-				link.download = this.leek!.name + ".png"
-				link.style.opacity = "0"
-				link.href = png
-				link.click()
 			}
 		}
 	}
+
+	function setWeapon(w: number) {
+		skinWeaponDialog.value = false
+		if (!leek.value || !my_leek.value) return
+		if (holdWeaponEnabled.value) {
+			LeekWars.put('leek/set-weapon', {leek_id: leek.value.id, weapon: w})
+			leek.value.weapon = w
+			store.commit('set-leek-weapon', {leek: leek.value.id, weapon: w})
+		}
+	}
+
+	function pickTitle(title: number[]) {
+		leek.value!.title = title
+		titleDialog.value = false
+		LeekWars.put('leek/set-title', {leek_id: leek.value!.id, icon: title[0] || 0, noun: title[1] || 0, gender: title[2] || 0, adjective: title[3] || 0})
+		store.commit('set-leek-title', {leek: leek.value!.id, title})
+	}
+
+	function changeShowAiLines() {
+		store.commit('toggle-show-ai-lines')
+		LeekWars.put('farmer/set-show-ai-lines', {show_ai_lines: store.state.farmer!.show_ai_lines})
+	}
+
+	function changeMetal() {
+		if (leek.value) {
+			leek.value.metal = !leek.value.metal
+			store.commit('toggle-metal', leek.value.id)
+			LeekWars.put('leek/set-metal', {leek_id: leek.value.id, metal: leek.value.metal})
+		}
+	}
+
+	function changeFace(face: number | null) {
+		if (face === null) return
+		if (leek.value) {
+			leek.value.face = face
+			store.commit('set-face', {leek: leek.value.id, face})
+			LeekWars.put('leek/set-face', {leek_id: leek.value.id, face})
+		}
+	}
+
+	function loadTournamentRange() {
+		if (!leek.value || tournamentRange.value || tournamentRangeLoading.value) return
+		tournamentRangeLoading.value = true
+		LeekWars.get('tournament/range-leek/' + leek.value.level).then(d => tournamentRange.value = d)
+	}
+
+	function copyAsTest() {
+		if (!leek.value) return
+		LeekWars.post('test-leek/new', {name: leek.value.name}).then(data => {
+			if (!leek.value) return
+			const newLeek = new Leek({
+				id: data.id,
+				name: leek.value.name,
+				level: leek.value.level,
+				weapons: leek.value.weapons.map(w => w.template),
+				chips: leek.value.chips.map(c => c.template),
+				skin: leek.value.skin
+			} as Record<string, unknown>)
+			const nl = newLeek as Leek & Record<string, number>
+			const lv = leek.value as Leek & Record<string, number>
+			for (const charac of LeekWars.characteristics) {
+				nl[charac] = lv['total_' + charac]
+			}
+			LeekWars.post('test-leek/update', {id: newLeek.id, data: JSON.stringify(newLeek)})
+				.then(() => router.push('/editor#leek-' + newLeek.id))
+				.error(err => LeekWars.toast(t('error_' + err.error, err.params)))
+		})
+		.error(err => LeekWars.toast(t('error_' + err.error, err.params)))
+	}
+
+	function downloadLeekImage() {
+		const li = leekImageRef.value
+		if (!li) return
+		const canvas = li.drawOnCanvas()
+		if (canvas) {
+			const png = canvas.toDataURL()
+			const link = document.createElement('a')
+			link.download = leek.value!.name + ".png"
+			link.style.opacity = "0"
+			link.href = png
+			link.click()
+		}
+	}
 </script>
+
 
 <style lang="scss" scoped>
 	.page {
@@ -1762,18 +1727,23 @@
 		}
 	}
 	.chips-dialog .chip {
-		display: inline-block;
-		margin: 5px;
+		width: 60px;
+		height: 60px;
 		cursor: move;
 	}
 	.chips-dialog .chip img {
 		width: 60px;
+		height: 60px;
 		vertical-align: bottom;
 	}
 	.chips-dialog .leek-chips, .chips-dialog .farmer-chips {
 		min-height: 80px;
 		border: 3px solid transparent;
 		padding: 5px;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+		gap: 6px;
+		justify-items: center;
 	}
 	.leek-ai-components {
 		flex: 1;
@@ -1851,17 +1821,23 @@
 			border: 3px solid transparent;
 			padding: 5px;
 			min-height: 160px;
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+			gap: 6px;
+			justify-items: center;
 			.component {
 				cursor: move;
+				width: 60px;
+				height: 60px;
 				img {
-					margin: 5px;
+					width: 60px;
+					height: 60px;
 				}
 			}
 		}
 	}
 
 	.potions-button {
-		margin-top: 12px;
 		img {
 			height: 22px;
 			margin-right: 4px;

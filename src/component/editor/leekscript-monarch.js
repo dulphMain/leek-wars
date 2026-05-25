@@ -1,5 +1,5 @@
 import { FUNCTIONS } from '@/model/functions'
-import { CONSTANTS } from '@/model/constants'
+import { LeekWars } from '@/model/leekwars'
 
 export default {
 
@@ -7,11 +7,11 @@ export default {
 	tokenPostfix: '.js',
 
 	keywords: [
-		'break', 'class', 'continue',
-		'constructor', 'do', 'else',
+		'break', 'case', 'class', 'continue',
+		'constructor', 'default', 'do', 'else',
 		'extends', 'for', 'function',
 		'if', 'in', 'new',
-		'return', 'super', 'this',
+		'return', 'super', 'switch', 'this',
 		'var', 'void', 'while',
 		'private', 'public', 'protected', 'static',
 		'not', 'global', 'and', 'or', 'xor', 'instanceof',
@@ -22,7 +22,7 @@ export default {
 		'true', 'false', 'null', 'NaN', 'Infinity'
 	],
 
-	lsConstants: CONSTANTS.map(c => c.name),
+	lsConstants: LeekWars.constants.map(c => c.name),
 	lsFunctions: FUNCTIONS.filter(f => !f.deprecated).map(f => f.name),
 	lsFunctionsDeprecated: FUNCTIONS.filter(f => f.deprecated).map(f => f.name),
 
@@ -40,15 +40,15 @@ export default {
 	],
 
 	// we include these common regular expressions
-	symbols: /[=><!~?:&|+\-*\/\^%\\]+/,
+	symbols: /[=><!~?:&|+\-*/^%\\]+/,
 	escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 	digits: /\d+(_+\d+)*/,
 	octaldigits: /[0-7]+(_+[0-7]+)*/,
 	binarydigits: /[0-1]+(_+[0-1]+)*/,
-	hexdigits: /[[0-9a-fA-F]+(_+[0-9a-fA-F]+)*/,
+	hexdigits: /[0-9a-fA-F]+(_+[0-9a-fA-F]+)*/,
 
-	regexpctl: /[(){}\[\]\$\^|\-*+?\.]/,
-	regexpesc: /\\(?:[bBdDfnrstvwWn0\\\/]|@regexpctl|c[A-Z]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4})/,
+	regexpctl: /[(){}[\]$^|\-*+?.]/,
+	regexpesc: /\\(?:[bBdDfnrstvwWn0\\/]|@regexpctl|c[A-Z]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4})/,
 
 	// The main tokenizer for our languages
 	tokenizer: {
@@ -69,7 +69,7 @@ export default {
 					'@default': 'identifier'
 				}
 			}],
-			[/[A-Z][\w\$]*/, {
+			[/[A-Z][\w$]*/, {
 				cases: {
 					'@lsConstants': 'lsconstant',
 					'@default': 'type.identifier'
@@ -84,7 +84,7 @@ export default {
 			// [/\/(?=([^\\\/]|\\.)+\/([gimsuy]*)(\s*)(\.|;|\/|,|\)|\]|\}|$))/, { token: 'regexp', bracket: '@open', next: '@regexp' }],
 
 			// delimiters and operators
-			[/[()\[\]]/, '@brackets'],
+			[/[()[\]]/, '@brackets'],
 			[/[<>](?!@symbols)/, '@brackets'],
 			[/@symbols/, {
 				cases: {
@@ -94,8 +94,8 @@ export default {
 			}],
 
 			// numbers
-			[/(@digits)[eE]([\-+]?(@digits))?/, 'number.float'],
-			[/(@digits)\.(@digits)([eE][\-+]?(@digits))?/, 'number.float'],
+			[/(@digits)[eE]([-+]?(@digits))?/, 'number.float'],
+			[/(@digits)\.(@digits)([eE][-+]?(@digits))?/, 'number.float'],
 			[/0[xX](@hexdigits)/, 'number.hex'],
 			[/0[oO]?(@octaldigits)/, 'number.octal'],
 			[/0[bB](@binarydigits)/, 'number.binary'],
@@ -120,15 +120,15 @@ export default {
 		],
 
 		comment: [
-			[/[^\/*]+/, 'comment'],
+			[/[^/*]+/, 'comment'],
 			[/\*\//, 'comment', '@pop'],
-			[/[\/*]/, 'comment']
+			[/[/*]/, 'comment']
 		],
 
 		jsdoc: [
-			[/[^\/*]+/, 'comment.doc'],
+			[/[^/*]+/, 'comment.doc'],
 			[/\*\//, 'comment.doc', '@pop'],
-			[/[\/*]/, 'comment.doc']
+			[/[/*]/, 'comment.doc']
 		],
 
 		// We match regular expression quite precisely

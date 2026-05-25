@@ -7,9 +7,14 @@
 	"date": "Datum",
 	"all": "Alla",
 	"weapons": "Vapen",
-	"chips": "Loppor",
+	"chips": "Chips",
 	"potions": "Trolldrycker",
 	"hats": "Hattar",
 	"pomps": "Framträdanden",
-	"resources": "Resurser"
+	"resources": "Resurser",
+	"no_group": "Ingen grupp",
+	"type": "Type",
+	"rarity": "Sällsynthet",
+	"craftable": "Tillverkningsbar",
+	"ingredient_count": "Antal ingredienser"
 }

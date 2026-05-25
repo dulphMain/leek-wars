@@ -22,12 +22,12 @@
 	"money": "Soldi",
 	"my_farmer": "Il mio allevatore",
 	"my_leek": "Il mio porro",
-	"my_team": "Il mio gruppo",
+	"my_team": "La mia squadra",
 	"place": "Posto",
 	"results": "Risultati",
 	"richest_title": "Soldi guadagnati",
 	"search_in_ranking": "Ricerca classifica",
-	"search_name": "Nome",
+	"search_name": "Nome o ID",
 	"shots": "Colpi",
 	"shots_title": "Numero totale di colpi",
 	"summons": "Invocazioni",
@@ -51,5 +51,10 @@
 	"boss_killed_title": "Boss uccisi",
 	"boss_killed": "Boss",
 	"turrets_killed": "Torrette",
-	"turrets_killed_title": "Torrette distrutte"
+	"turrets_killed_title": "Torrette distrutte",
+	"damage": "Danni",
+	"damage_title": "Danni inflitti",
+	"compositions": "Composizioni",
+	"composition": "Composizione",
+	"won": "Vittorie"
 }

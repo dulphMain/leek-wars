@@ -2,13 +2,12 @@
 	<div></div>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue } from 'vue-property-decorator'
+<script setup lang="ts">
+defineOptions({ name: 'ResourcePreview' })
 
-	@Options({ name: 'resource-preview' })
-	export default class ResourcePreview extends Vue {
-		@Prop() resource!: any
-	}
+defineProps<{
+	resource?: Record<string, unknown>
+}>()
 </script>
 
 <style src='./item-preview.scss' lang='scss'></style>

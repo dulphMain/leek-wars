@@ -9,7 +9,7 @@
 			<router-link to="/statistics" class="item">{{ $t('main.statistics') }}</router-link>
 			<router-link to="/app" class="item">{{ $t('main.app') }}</router-link>
 			<router-link to="/dev-blog" class="item">{{ $t('main.dev-blog') }}</router-link>
-			<router-link to="/bank" class="item">
+			<router-link to="/bank?ref=footer" class="item">
 				{{ $t('main.donation') }} <v-icon>mdi-currency-eur</v-icon>
 			</router-link>
 		</div>
@@ -68,6 +68,7 @@
 					<v-icon>mdi-email-outline</v-icon>
 				</a>
 			</div>
+			<v-icon class="theme-toggle" @click="toggleTheme">{{ LeekWars.darkMode ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
 		</div>
 		<div class="column">
 			<h4>{{ $t('main.legal') }}</h4>
@@ -88,33 +89,29 @@
 	</footer>
 </template>
 
-<script lang="ts">
-	import { locale } from '@/locale'
-	import { LeekWars } from '@/model/leekwars'
-	import { defineAsyncComponent } from 'vue'
-	import { Options, Vue } from 'vue-property-decorator'
-	const Didactitiel = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/didactitiel/didactitiel.${locale}.i18n`))
+<script setup lang="ts">
+import { ref, defineAsyncComponent } from 'vue'
+import { locale } from '@/locale'
+import { LeekWars } from '@/model/leekwars'
 
-	@Options({ name: 'lw-footer', components: { Didactitiel } })
-	export default class Footer extends Vue {
+const Didactitiel = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/didactitiel/didactitiel.${locale}.i18n`))
 
-		didactitiel: boolean = false
-		didactitiel_enabled: boolean = false
-		didactitiel_new_enabled: boolean = false
-		cookies: any[] = []
+defineOptions({ name: 'LwFooter' })
 
-		created() {
-			// this.throwCookies()
-			// LeekWars.didactitial = true
-		}
+const cookies = ref<[number, number, number, number][]>([])
 
-		throwCookies() {
-			for (let i = 0; i < 10; ++i) {
-				this.cookies.push([-50 + Math.random() * (window.innerWidth + 100), -100 - Math.random() * 100, 20 + Math.random() * 60, Math.random() * 360])
-			}
-			setTimeout(() => document.querySelectorAll(".cookies .cookie").forEach(e => e.classList.add("fall")), 100)
-		}
+function toggleTheme() {
+	LeekWars.themeSetting = LeekWars.darkMode ? 'light' : 'dark'
+	localStorage.setItem('theme', LeekWars.themeSetting)
+	LeekWars.darkMode = LeekWars.themeSetting === 'dark'
+}
+
+function throwCookies() {
+	for (let i = 0; i < 10; ++i) {
+		cookies.value.push([-50 + Math.random() * (window.innerWidth + 100), -100 - Math.random() * 100, 20 + Math.random() * 60, Math.random() * 360])
 	}
+	setTimeout(() => document.querySelectorAll('.cookies .cookie').forEach(e => e.classList.add('fall')), 100)
+}
 </script>
 
 <style lang="scss" scoped>
@@ -135,9 +132,20 @@
 			transition: color 0.15s ease;
 			.v-icon {
 				font-size: 16px;
-				// transition: none;
 				vertical-align: top;
 			}
+		}
+		#app.xp & {
+			color: #222;
+		}
+		#app.xp & a, #app.xp & .item, #app.xp & .v-icon {
+			color: #222;
+			&:hover {
+				color: #316ac5;
+			}
+		}
+		#app.xp & h4 {
+			color: #222;
 		}
 		h4.version {
 			color: #999;
@@ -226,6 +234,14 @@
 		gap: 10px;
 		a .v-icon {
 			font-size: 20px;
+		}
+	}
+	.theme-toggle {
+		margin-top: 12px;
+		cursor: pointer;
+		font-size: 20px;
+		&:hover {
+			color: #5fad1b !important;
 		}
 	}
 </style>

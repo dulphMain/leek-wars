@@ -1,17 +1,23 @@
 <template lang="html">
 	<div class="loader">
-		<div :style="{width: s + 'px', height: s + 'px', 'border-width': w + 'px'}" class="sbl-circ-path"></div>
+		<div v-if="LeekWars.xpTheme" class="xp-progress" :style="{width: s + 'px'}">
+			<div class="xp-progress-bar"></div>
+		</div>
+		<div v-else :style="{width: s + 'px', height: s + 'px', 'border-width': w + 'px'}" class="sbl-circ-path"></div>
 	</div>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	@Options({ name: "loader" })
-	export default class LWLoader extends Vue {
-		@Prop() size!: number
-		get s() { return this.size || 60 }
-		get w() { return Math.max(3, this.s / 14) }
-	}
+<script setup lang="ts">
+import { computed } from 'vue'
+
+defineOptions({ name: 'Loader' })
+
+const props = defineProps<{
+	size?: number
+}>()
+
+const s = computed(() => props.size || 60)
+const w = computed(() => Math.max(3, s.value / 14))
 </script>
 
 <style lang="scss" scoped>
@@ -37,5 +43,35 @@
 	100% {
 		transform: rotate(360deg);
 	}
+}
+.xp-progress {
+	display: inline-block;
+	height: 18px;
+	border: 1px solid #686868;
+	border-radius: 4px;
+	background: #fff;
+	box-shadow: inset 0 0 1px rgba(104, 104, 104, 1);
+	overflow: hidden;
+	padding: 1px 2px;
+}
+.xp-progress-bar {
+	height: 100%;
+	border-radius: 2px;
+	background: repeating-linear-gradient(
+		to right,
+		#fff 0px, #fff 2px,
+		transparent 2px, transparent 10px
+	),
+	linear-gradient(
+		to bottom,
+		#acedad 0%, #7be47d 14%, #4cda50 28%, #2ed330 42%,
+		#42d845 57%, #76e275 71%, #8fe791 85%, #fff 100%
+	);
+	animation: xp-loading 2s ease-in-out infinite;
+}
+@keyframes xp-loading {
+	0% { width: 0%; }
+	50% { width: 100%; }
+	100% { width: 0%; }
 }
 </style>

@@ -60,6 +60,7 @@ enum EffectType {
 	ADD_STATE = 59,
 	TOTAL_DEBUFF = 60,
 	STEAL_LIFE = 61,
+	MULTIPLY_STATS = 62,
 }
 
 enum EffectModifier {
@@ -68,6 +69,15 @@ enum EffectModifier {
 	ON_CASTER = 4,
 	NOT_REPLACEABLE = 8,
 	IRREDUCTIBLE = 16,
+}
+
+// Bitmask de Effect.targets (mirror des constants serveur EFFECT_TARGET_*).
+enum EffectTarget {
+	ENEMIES = 1,
+	ALLIES = 2,
+	CASTER = 4,
+	NON_SUMMONS = 8,
+	SUMMONS = 16,
 }
 
 enum EffectTypeMarket {
@@ -112,4 +122,4 @@ class EntityEffect {
 	public modifiers!: number
 }
 
-export { Effect, EffectModifier, EffectType, EffectTypeMarket, EntityEffect, State }
+export { Effect, EffectModifier, EffectTarget, EffectType, EffectTypeMarket, EntityEffect, State }

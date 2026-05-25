@@ -14,10 +14,9 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { Options, Vue } from 'vue-property-decorator'
-	@Options({})
-	export default class FormattingRules extends Vue {}
+<script setup lang="ts">
+	import { mixins } from '@/model/i18n'
+	defineOptions({ name: 'ForumFormattingRules', i18n: {}, mixins: [...mixins] })
 </script>
 
 <style lang="scss" scoped>

@@ -1,6 +1,6 @@
 <template lang="html">
-	<div class="console" :class="'theme-' + theme">
-		<div ref="scroll" class="scroll" v-autostopscroll >
+	<div class="console" :class="'theme-' + cssTheme">
+		<div ref="scroll" v-autostopscroll class="scroll" >
 			<div class="lines">
 				<div v-for="(line, l) in lines" :key="l" class="line">
 					<template v-if="line.type === 'code'">
@@ -31,161 +31,179 @@
 			</div>
 			<div class="input" @click="focus()">
 				<v-icon class="arrow">mdi-chevron-right</v-icon>
-				<ai-view-monaco class="editor" ref="editor" :ai="ai" :ais="{}" :visible="true" :line-numbers="false" :font-size="17" :line-height="20" @enter="enter" :autocomplete-option="true" :popups="true" :console="true" :theme="theme" @down="down" @up="up" />
+				<ai-view-monaco ref="editor" class="editor" :ai="ai" :ais="{}" :visible="true" :line-numbers="false" :font-size="17" :line-height="20" :autocomplete-option="true" :popups="true" :console="true" :theme="theme" @enter="enter" @down="down" @up="up" />
 			</div>
 		</div>
 	</div>
 </template>
 
-<script lang="ts">
-	import { locale } from '@/locale'
-	import { LeekWars } from '@/model/leekwars'
-	import { SocketMessage } from '@/model/socket'
-	import { Options, Vue, Watch } from 'vue-property-decorator'
-	import { AI } from '@/model/ai'
-	import { emitter } from '@/model/vue'
-	import { i18n } from '@/model/i18n'
-	import AIViewMonaco from '../editor/ai-view-monaco.vue'
-	import { FileSystem, fileSystem } from '@/model/filesystem'
+<script setup lang="ts">
+import { locale } from '@/locale'
+import { AI } from '@/model/ai'
+import { FileSystem, fileSystem } from '@/model/filesystem'
+import { i18n } from '@/model/i18n'
+import { LeekWars } from '@/model/leekwars'
+import { SocketMessage } from '@/model/socket'
+import { emitter } from '@/model/vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, useTemplateRef, watch } from 'vue'
+import AIViewMonaco from '../editor/ai-view-monaco.vue'
 
-	@Options({ components: { 'ai-view-monaco': AIViewMonaco } })
-	export default class Console extends Vue {
+defineOptions({ name: 'Console', components: { 'ai-view-monaco': AIViewMonaco } })
 
-		editor!: AIViewMonaco
-		lines: any[] = []
-		history: string[] = []
-		historyPos: number = 0
-		ai: any = new AI({ id: 0, code: '', path: FileSystem.CONSOLE_MAGIC_KEY + Math.random() + '.leek' })
-		theme: string = 'leekwars'
-		leekscript = {
-			version: 4,
-			strict: false,
-		}
-
-		async created() {
-			LeekWars.loadEncyclopedia(locale)
-
-			const docMessages = await import(/* webpackChunkName: "[request]" */ /* webpackMode: "eager" */ `@/lang/doc.${locale}.lang`)
-			i18n.global.mergeLocaleMessage(locale, { doc: docMessages.default })
-
-			const defaultTheme = LeekWars.darkMode ? 'monokai' : 'leekwars'
-			this.theme = localStorage.getItem('console/theme') || defaultTheme
-			this.leekscript.version = parseInt(localStorage.getItem('console/version') || '4')
-			this.leekscript.strict = localStorage.getItem('console/strict') === 'true'
-			fileSystem.consoleAI = this.ai
-
-			this.clear()
-		}
-
-		isEmpty() {
-			return this.lines.length === 0
-		}
-
-		clear() {
-			this.lines = []
-			this.history = []
-			this.historyPos = 0
-			if (this.editor) {
-				this.editor.editor.setValue('')
-			}
-			LeekWars.socket.send([SocketMessage.CONSOLE_NEW, this.leekscript.version, this.leekscript.strict])
-		}
-
-		up() {
-			this.historyPos--
-			if (this.historyPos < 0) this.historyPos = 0
-			this.editor.editor.setValue(this.history[this.historyPos])
-		}
-
-		down() {
-			this.historyPos++
-			if (this.historyPos >= this.history.length) {
-				this.historyPos = this.history.length
-				this.editor.editor.setValue('')
-			} else {
-				this.editor.editor.setValue(this.history[this.historyPos])
-			}
-		}
-
-		mounted() {
-			this.editor = this.$refs.editor as AIView
-			emitter.on('console', (data: any) => {
-				console.log("on console", data)
-				this.lines.push({ type: 'result', ...data })
-				this.scrollDown()
-			})
-			emitter.on('console-error', (data: any) => {
-				console.log("on console-error", data)
-				let zigzags = ""
-				if (data.location) {
-					for (var i = 0; i < data.location[2]; ++i) zigzags += ' '
-					for (var i = 0; i <= data.location[4] - data.location[2]; ++i) zigzags += '~'
-				}
-				this.lines.push({ type: 'error', ...data, zigzags })
-				this.scrollDown()
-			})
-			emitter.on('console-log', (data: any) => {
-				console.log("on console-log", data)
-				this.lines.push({ type: 'log', log: data })
-				this.scrollDown()
-			})
-			emitter.on("wsconnected", () => {
-				this.clear()
-			})
-		}
-
-		beforeUnmount() {
-			emitter.off('console')
-			emitter.off('console-error')
-			emitter.off('console-log')
-			LeekWars.socket.send([SocketMessage.CONSOLE_CLOSE])
-		}
-
-		enter() {
-			const code = this.editor.editor.getValue()
-			this.history.push(code)
-			this.historyPos = this.history.length
-			this.lines.push({ type: 'code', code })
-			LeekWars.socket.send([SocketMessage.CONSOLE_EXECUTE, code])
-			this.scrollDown()
-			this.editor.editor.setValue('')
-		}
-
-		scrollDown() {
-			setTimeout(() => {
-				(this.$refs.scroll as HTMLElement).scrollTop = (this.$refs.scroll as HTMLElement).scrollHeight
-			}, 50)
-		}
-
-		focus() {
-			this.editor.editor.focus()
-		}
-
-		random() {
-			LeekWars.get('leekscript/random').then(data => {
-				// this.code = data.code
-			}).error(error => {
-				LeekWars.toast(error)
-			})
-		}
-
-		toggleTheme() {
-			this.theme = this.theme === 'leekwars' ? 'monokai' : 'leekwars'
-			localStorage.setItem('console/theme', this.theme)
-		}
-
-		@Watch('leekscript.version')
-		updateVersion(version: number) {
-			localStorage.setItem('console/version', '' + this.leekscript.version)
-			this.clear()
-		}
-
-		@Watch('leekscript.strict')
-		updateStrictMode() {
-			localStorage.setItem('console/strict', '' + this.leekscript.strict)
-			this.clear()
-		}
+interface EditorRef {
+	editor: {
+		getModel(): unknown
+		getValue(): string
+		setValue(v: string): void
+		focus(): void
 	}
+}
+
+interface ConsoleLine {
+	type: string
+	code?: string
+	result?: unknown
+	ops?: number
+	log?: unknown
+	error?: string
+	params?: unknown[]
+	location?: number[]
+	zigzags?: string
+}
+
+const editorRef = useTemplateRef<EditorRef>('editor')
+const scrollRef = useTemplateRef<HTMLElement>('scroll')
+
+const lines = ref<ConsoleLine[]>([])
+const history = ref<string[]>([])
+const historyPos = ref(0)
+const ai = ref<AI>(new AI({ id: 0, code: '', path: FileSystem.CONSOLE_MAGIC_KEY + Math.random() + '.leek' }))
+const theme = ref<string>(localStorage.getItem('editor/theme') || (LeekWars.darkMode ? 'monokai' : 'leek-wars'))
+const leekscript = reactive({
+	version: 4,
+	strict: false,
+})
+
+;(async () => {
+	LeekWars.loadEncyclopedia(locale)
+
+	const docMessages = await import(/* webpackChunkName: "[request]" */ /* webpackMode: "eager" */ `@/lang/doc.${locale}.lang`)
+	i18n.global.mergeLocaleMessage(locale, { doc: docMessages.default })
+	leekscript.version = parseInt(localStorage.getItem('console/version') || '4')
+	leekscript.strict = localStorage.getItem('console/strict') === 'true'
+	fileSystem.consoleAI = ai.value
+
+	clear()
+})()
+
+function isEmpty() {
+	return lines.value.length === 0
+}
+
+function setEditorValue(v: string) {
+	if (editorRef.value?.editor?.getModel()) {
+		editorRef.value.editor.setValue(v)
+	}
+}
+
+function clear() {
+	lines.value = []
+	history.value = []
+	historyPos.value = 0
+	setEditorValue('')
+	LeekWars.socket.send([SocketMessage.CONSOLE_NEW, leekscript.version, leekscript.strict])
+}
+
+function up() {
+	if (history.value.length === 0) return
+	historyPos.value--
+	if (historyPos.value < 0) historyPos.value = 0
+	setEditorValue(history.value[historyPos.value])
+}
+
+function down() {
+	historyPos.value++
+	if (historyPos.value >= history.value.length) {
+		historyPos.value = history.value.length
+		setEditorValue('')
+	} else {
+		setEditorValue(history.value[historyPos.value])
+	}
+}
+
+onMounted(() => {
+	emitter.on('console', (data: Omit<ConsoleLine, 'type'>) => {
+		console.log("on console", data)
+		lines.value.push({ type: 'result', ...data })
+		scrollDown()
+	})
+	emitter.on('console-error', (data: Omit<ConsoleLine, 'type'>) => {
+		console.log("on console-error", data)
+		let zigzags = ""
+		if (data.location) {
+			for (let i = 0; i < data.location[2]; ++i) zigzags += ' '
+			for (let i = 0; i <= data.location[4] - data.location[2]; ++i) zigzags += '~'
+		}
+		lines.value.push({ type: 'error', ...data, zigzags })
+		scrollDown()
+	})
+	emitter.on('console-log', (data: unknown) => {
+		console.log("on console-log", data)
+		lines.value.push({ type: 'log', log: data })
+		scrollDown()
+	})
+	emitter.on("wsconnected", () => {
+		clear()
+	})
+})
+
+onBeforeUnmount(() => {
+	emitter.off('console')
+	emitter.off('console-error')
+	emitter.off('console-log')
+	LeekWars.socket.send([SocketMessage.CONSOLE_CLOSE])
+})
+
+function enter() {
+	if (!editorRef.value?.editor?.getModel()) return
+	const code = editorRef.value.editor.getValue()
+	history.value.push(code)
+	historyPos.value = history.value.length
+	lines.value.push({ type: 'code', code })
+	LeekWars.socket.send([SocketMessage.CONSOLE_EXECUTE, code])
+	scrollDown()
+	setEditorValue('')
+}
+
+function scrollDown() {
+	setTimeout(() => {
+		if (scrollRef.value) {
+			scrollRef.value.scrollTop = scrollRef.value.scrollHeight
+		}
+	}, 50)
+}
+
+function focus() {
+	editorRef.value?.editor.focus()
+}
+
+const cssTheme = computed(() => ['monokai', 'vs-dark', 'hc-black'].includes(theme.value) ? 'monokai' : 'leekwars')
+
+function saveTheme() {
+	localStorage.setItem('editor/theme', theme.value)
+}
+
+watch(() => leekscript.version, () => {
+	localStorage.setItem('console/version', '' + leekscript.version)
+	clear()
+})
+
+watch(() => leekscript.strict, () => {
+	localStorage.setItem('console/strict', '' + leekscript.strict)
+	clear()
+})
+
+defineExpose({ isEmpty, clear, focus, saveTheme, theme, leekscript })
 </script>
 
 <style lang="scss" scoped>
@@ -294,6 +312,24 @@
 	// height: 280px;
 	background: transparent !important;
 	position: initial;
+	&:deep(.monaco-editor),
+	&:deep(.monaco-editor .overflow-guard),
+	&:deep(.monaco-editor .monaco-scrollable-element),
+	&:deep(.monaco-editor .inputarea.ime-input),
+	&:deep(.monaco-editor .margin),
+	&:deep(.monaco-editor .lines-content) {
+		background: transparent !important;
+	}
+	&:deep(.monaco-editor),
+	&:deep(.monaco-editor .overflow-guard),
+	&:deep(.monaco-editor .monaco-editor-background),
+	&:deep(.monaco-editor .view-overlays),
+	&:deep(.monaco-editor .current-line),
+	&:deep(.monaco-editor .view-line) {
+		border: none !important;
+		outline: none !important;
+		box-shadow: none !important;
+	}
 	&:deep(.CodeMirror) {
 		.CodeMirror-lines {
 			padding: 0;

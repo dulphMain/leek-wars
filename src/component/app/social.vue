@@ -26,7 +26,7 @@
 					</template>
 					<template #content>
 						<div v-autostopscroll class="content-limit">
-							<notification v-for="notification in $store.state.notifications" :key="notification.id" :notification="notification" @click.native="readNotification(notification)" />
+							<notification v-for="notification in $store.state.notifications" :key="notification.id" :notification="notification" @click="readNotification(notification)" />
 						</div>
 					</template>
 				</panel>
@@ -47,68 +47,71 @@
 					</template>
 				</panel>
 
-				<chat-panel v-if="env.SOCIAL" toggle="social/chat" chat="social" :height="300" />
+				<chat-panel v-if="env.SOCIAL && socialEverOpened" toggle="social/chat" chat="social" :height="300" />
 			</div>
 		</div>
 	</div>
 </template>
 
-<script lang='ts'>
-	const ChatPanel = defineAsyncComponent(() => import(/* webpackChunkName: "chat" */ `@/component/chat/chat-panel.vue`))
-	import { LeekWars } from '@/model/leekwars'
-	import { Notification } from '@/model/notification'
-	import { Options, Vue } from 'vue-property-decorator'
-	import ConversationElement from '@/component/messages/conversation.vue'
-	import { defineAsyncComponent, nextTick } from 'vue'
+<script setup lang="ts">
+import Conversation from '@/component/messages/conversation.vue'
+import { LeekWars } from '@/model/leekwars'
+import type { Notification } from '@/model/notification'
+import { store } from '@/model/store'
 import { emitter } from '@/model/vue'
+import { defineAsyncComponent, nextTick, ref } from 'vue'
 
-	@Options({ name: 'lw-social', components: { ChatPanel, 'conversation': ConversationElement } })
-	export default class Social extends Vue {
+const ChatPanel = defineAsyncComponent(() => import(/* webpackChunkName: "chat" */ `@/component/chat/chat-panel.vue`))
 
-		panelWidth: number = 400
+defineOptions({ name: 'LwSocial' })
 
-		created() {
-			if (localStorage.getItem('main/social-collapsed') === 'true') {
-				LeekWars.socialCollapsed = true
-			}
-			const width = localStorage.getItem('main/social-width')
-			if (width) {
-				this.panelWidth = parseInt(width, 10)
-			}
-		}
+const panelWidth = ref(400)
+const socialEverOpened = ref(false)
 
-		toggleSocial() {
-			LeekWars.socialCollapsed = !LeekWars.socialCollapsed
-			localStorage.setItem('main/social-collapsed', '' + LeekWars.socialCollapsed)
-			nextTick(() => {
-				emitter.emit('resize')
-			})
-		}
+if (localStorage.getItem('main/social-collapsed') === 'true') {
+	LeekWars.socialCollapsed = true
+}
+socialEverOpened.value = !LeekWars.socialCollapsed
+const widthStored = localStorage.getItem('main/social-width')
+if (widthStored) {
+	panelWidth.value = parseInt(widthStored, 10)
+}
 
-		resizerMousedown(e: MouseEvent) {
-			const startWidth = this.panelWidth
-			const startX = e.clientX
-			const mousemove: any = (ev: MouseEvent) => {
-				this.panelWidth = Math.max(400, Math.min(800, startWidth + startX - ev.clientX))
-				localStorage.setItem('main/social-width', '' + this.panelWidth)
-			}
-			const mouseup: any = (ev: MouseEvent) => {
-				document.documentElement!.removeEventListener('mousemove', mousemove)
-				document.documentElement!.removeEventListener('mouseup', mouseup)
-			}
-			document.documentElement!.addEventListener('mousemove', mousemove, false)
-			document.documentElement!.addEventListener('mouseup', mouseup, false)
-			e.preventDefault()
-		}
-
-		readNotification(notification: Notification) {
-			LeekWars.post('notification/read', {notification_id: notification.id})
-		}
-
-		readAllNotifications() {
-			LeekWars.post('notification/read-all')
-		}
+function toggleSocial() {
+	LeekWars.socialCollapsed = !LeekWars.socialCollapsed
+	if (!LeekWars.socialCollapsed) {
+		socialEverOpened.value = true
 	}
+	localStorage.setItem('main/social-collapsed', '' + LeekWars.socialCollapsed)
+	nextTick(() => {
+		emitter.emit('resize')
+	})
+}
+
+function resizerMousedown(e: MouseEvent) {
+	const startWidth = panelWidth.value
+	const startX = e.clientX
+	const mousemove = (ev: MouseEvent) => {
+		panelWidth.value = Math.max(400, Math.min(800, startWidth + startX - ev.clientX))
+		localStorage.setItem('main/social-width', '' + panelWidth.value)
+	}
+	const mouseup = (_ev: MouseEvent) => {
+		document.documentElement!.removeEventListener('mousemove', mousemove)
+		document.documentElement!.removeEventListener('mouseup', mouseup)
+	}
+	document.documentElement!.addEventListener('mousemove', mousemove, false)
+	document.documentElement!.addEventListener('mouseup', mouseup, false)
+	e.preventDefault()
+}
+
+function readNotification(notification: Notification) {
+	LeekWars.post('notification/read', {notification_id: notification.id})
+}
+
+function readAllNotifications() {
+	store.commit('read-notifications')
+	LeekWars.post('notification/read-all')
+}
 </script>
 
 <style lang='scss' scoped>

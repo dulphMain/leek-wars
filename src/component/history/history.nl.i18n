@@ -7,7 +7,7 @@
 	"1week": "1 week",
 	"n_fights": "{0} gevechten",
 	"victories": "overwinningen",
-	"draws": "banden",
+	"draws": "gelijkspelen",
 	"defeats": "nederlagen",
 	"ratio": "verhouding",
 	"not_found_id": "Prei van id {0} niet gevonden",
@@ -15,10 +15,17 @@
 	"fight_context": "Contexten van gevechten",
 	"solo": "Solo",
 	"farmer": "Fokker",
-	"team": "Bemanning",
+	"team": "Team",
 	"battle_royale": "Battle Royale",
 	"challenge": "Uitdaging",
 	"garden": "Moestuin",
 	"tournament": "Toernooi",
-	"boss": "Baas"
+	"boss": "Baas",
+	"war": "Oorlog",
+	"chest_hunt": "Schattenjacht",
+	"colossus": "Kolos",
+	"chests": "Kisten",
+	"n_chests": "{0} kisten",
+	"loot": "Gevechtsbuit",
+	"rare_loot": "Zeldzame grondstoffen"
 }

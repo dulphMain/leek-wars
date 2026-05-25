@@ -1,5 +1,5 @@
 <template lang="html">
-	<popup :model-value="modelValue" :width="800" :full="true">
+	<popup :model-value="modelValue" :width="800" :full="true" @update:model-value="$emit('update:modelValue', $event)">
 		<template #icon>
 			<v-icon>mdi-star</v-icon>
 		</template>
@@ -26,16 +26,20 @@
 	</popup>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	import ChangelogVersion from './changelog-version.vue'
+<script setup lang="ts">
+import { mixins } from '@/model/i18n'
+import ChangelogVersion from './changelog-version.vue'
 
-	@Options({ name: 'changelog-dialog', i18n: {}, components: { ChangelogVersion } })
-	export default class ChangelogDialog extends Vue {
-		@Prop({required: true}) changelog!: any
-		@Prop() modelValue!: boolean
+defineOptions({ name: 'ChangelogDialog', i18n: {}, mixins: [...mixins] })
 
-	}
+defineProps<{
+	changelog: Record<string, unknown> | null
+	modelValue?: boolean
+}>()
+
+defineEmits<{
+	'update:modelValue': [value: boolean]
+}>()
 </script>
 
 <style lang="scss" scoped>

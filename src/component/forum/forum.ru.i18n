@@ -19,10 +19,9 @@
 	"messages": "Сообщения",
 	"n_topics": "{0} темы",
 	"n_messages": "{0} сообщений",
-	"send": "Отправлять",
+	"send": "Отправить",
 	"team_forum_description": "Частный форум вашей команды",
 	"title": "Форум",
-	"topic_not_found": "Тема с идентификатором <b>{0}</b> не найдена :(",
 	"topics": "Темы",
 	"new_topic_notification": "Сообщайте нам о новых предметах",
 	"resolved": "resolved"

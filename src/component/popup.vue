@@ -1,5 +1,5 @@
 <template lang="html">
-	<v-dialog :model-value="modelValue" :width="width" :persistent="persistent" content-class="popup" scroll-strategy="none" @update:model-value="$emit('update:modelValue', $event)">
+	<v-dialog :model-value="modelValue" :width="width" :persistent="persistent" :content-class="contentClass" scroll-strategy="none" @update:model-value="$emit('update:modelValue', $event)">
 		<template v-if="content_created">
 			<div class="title">
 				<slot name="icon">
@@ -26,37 +26,42 @@
 	</v-dialog>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
-	@Options({ name: "popup" })
-	export default class Popup extends Vue {
-		@Prop() modelValue!: boolean
-		@Prop() icon!: string
-		@Prop() title!: string
-		@Prop() width!: number
-		@Prop() full!: boolean
-		@Prop() persistent!: Boolean
-		content_created: boolean = false
-		created() {
-			if (this.modelValue) {
-				this.content_created = true // Content created direclty from creation
-			}
-			this.$watch('modelValue', (new_value, old_value) => {
-				if (new_value === true) {
-					this.content_created = true
-				}
-			})
-		}
-		get hasActionsSlot() {
-			return !!this.$slots.actions
-		}
-		hasIcon() {
-			return !!this.$slots.icon
-		}
-		close() {
-			this.$emit('update:modelValue', false)
-		}
-	}
+<script setup lang="ts">
+import { ref, computed, watch, useSlots, onBeforeUnmount } from 'vue'
+import { LeekWars } from '@/model/leekwars'
+
+defineOptions({ name: 'Popup' })
+
+const props = defineProps<{
+	modelValue?: boolean
+	icon?: string
+	title?: string
+	width?: number
+	full?: boolean
+	persistent?: boolean
+}>()
+
+const emit = defineEmits<{
+	'update:modelValue': [value: boolean]
+}>()
+
+const slots = useSlots()
+const content_created = ref(props.modelValue === true)
+
+const contentClass = computed(() => LeekWars.mobile ? 'popup mobile' : 'popup')
+const hasActionsSlot = computed(() => !!slots.actions)
+
+watch(() => props.modelValue, (v) => {
+	if (v === true) content_created.value = true
+})
+
+// Démonte le v-dialog avant que le parent soit démonté pour éviter que Vuetify
+// laisse des nœuds Teleport orphelins qui font planter le patch Vue Router.
+onBeforeUnmount(() => { content_created.value = false })
+
+function close() {
+	emit('update:modelValue', false)
+}
 </script>
 
 <style lang="scss">
@@ -178,6 +183,11 @@ body.dark .content {
 		}
 		&.green:hover {
 			background: #73d120;
+		}
+		&.disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+			pointer-events: none;
 		}
 	}
 }
