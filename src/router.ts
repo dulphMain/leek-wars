@@ -13,7 +13,13 @@ const AdminTrophies = () => import(/* webpackChunkName: "admin" */ `@/component/
 const AdminGroups = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-groups.vue`)
 const AdminSources = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-sources.vue`)
 const AdminSchemes = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-schemes.vue`)
+const AdminSecurity = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-security.vue`)
+const AdminApiStats = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-api-stats.vue`)
+const AdminApiEndpoint = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-api-endpoint.vue`)
 const AdminTournaments = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-tournaments.vue`)
+const AdminFunnels = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-funnels.vue`)
+const AdminDashboards = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-dashboards.vue`)
+const AdminMatchmaking = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-matchmaking.vue`)
 const Admin = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin.vue`)
 const Api = () => import(/* webpackChunkName: "[request]" */ `@/component/api/api.${locale}.i18n`)
 import Error from '@/component/app/error.vue'
@@ -66,6 +72,7 @@ const Report = () => import(/* webpackChunkName: "[request]" */ `@/component/rep
 const Settings = () => import(/* webpackChunkName: "[request]" */ `@/component/settings/settings.${locale}.i18n`)
 const Signup = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/signup/signup.${locale}.i18n`))
 const Statistics = () => import(/* webpackChunkName: "[request]" */ `@/component/statistics/statistics.${locale}.i18n`)
+const Status = () => import(/* webpackChunkName: "[request]" */ `@/component/status/status.${locale}.i18n`)
 const SignupResult = () => import(/* webpackChunkName: "[request]" */ `@/component/signup/signup-result.${locale}.i18n`)
 const TalentPage = () => import(/* webpackChunkName: "[request]" */ `@/component/talent/talent.${locale}.i18n`)
 const Team = () => import(/* webpackChunkName: "[request]" */ `@/component/team/team.${locale}.i18n`)
@@ -79,7 +86,7 @@ const Tutorial = () => import(/* webpackChunkName: "[request]" */ `@/component/t
 import { LeekWars } from '@/model/leekwars'
 import { store } from '@/model/store'
 import { createRouter, createWebHistory } from 'vue-router'
-import type { RouteLocationNormalized, NavigationGuardNext } from 'vue-router'
+import type { RouteLocationNormalized, NavigationGuardNext, RouteLocationRaw, RouteLocationResolved, RouteRecordRaw } from 'vue-router'
 import { scroll_to_hash } from './router-functions'
 import AdminComponents from './component/admin/admin-components.vue'
 import { defineAsyncComponent, defineComponent, h } from 'vue'
@@ -100,7 +107,8 @@ const Home = defineComponent({
 	},
 	render() {
 		if (store.state.connected) {
-			return (this as any).chatFirst ? null : h(LeekAsync)
+			const chatFirst = LeekWars.mobile && localStorage.getItem('options/chat-first') === 'true'
+			return chatFirst ? null : h(LeekAsync)
 		}
 		return h(Signup)
 	}
@@ -122,7 +130,7 @@ const disconnected = (to: RouteLocationNormalized, _from: RouteLocationNormalize
 	}
 }
 
-const routes = [
+const routes: RouteRecordRaw[] = [
 	{ path: '/', component: Home },
 	{ path: '/godfather', component: Home },
 	{ path: '/godfather/:godfather', component: Home },
@@ -139,8 +147,16 @@ const routes = [
 	{ path: '/admin/groups', component: AdminGroups, beforeEnter: connected },
 	{ path: '/admin/sources', component: AdminSources, beforeEnter: connected },
 	{ path: '/admin/schemes', component: AdminSchemes, beforeEnter: connected },
+	{ path: '/admin/security', component: AdminSecurity, beforeEnter: connected },
+	{ path: '/admin/api-stats', component: AdminApiStats, beforeEnter: connected },
+	{ path: '/admin/api-stats/:module/:function', component: AdminApiEndpoint, beforeEnter: connected },
 	{ path: '/admin/components', component: AdminComponents, beforeEnter: connected },
 	{ path: '/admin/tournaments', component: AdminTournaments, beforeEnter: connected },
+	{ path: '/admin/funnels', component: AdminFunnels, beforeEnter: connected },
+	{ path: '/admin/funnels/:funnel', component: AdminFunnels, beforeEnter: connected },
+	{ path: '/admin/dashboards', component: AdminDashboards, beforeEnter: connected },
+	{ path: '/admin/dashboards/:id', component: AdminDashboards, beforeEnter: connected },
+	{ path: '/admin/matchmaking', component: AdminMatchmaking, beforeEnter: connected },
 	{ path: '/about', component: About },
 	{ path: '/app', component: MobileApp },
 	{ path: '/conditions', component: Conditions },
@@ -160,7 +176,9 @@ const routes = [
 	{ path: '/encyclopedia/:lang/:page', component: Encyclopedia, meta: {scrollOffset: 45} },
 	{ path: '/encyclopedia-search', component: EncyclopediaSearch },
 	{ path: '/editor', component: Editor, beforeEnter: connected },
-	{ path: '/editor/:id', component: Editor, beforeEnter: connected },
+	{ path: '/editor/:id(.+)/diff', component: Editor, beforeEnter: connected },
+	{ path: '/editor/:id(.+)/h/:hash', component: Editor, beforeEnter: connected },
+	{ path: '/editor/:id(.+)', component: Editor, beforeEnter: connected },
 	{ path: '/group/:id', component: Group, beforeEnter: connected },
 	{ path: '/groups', component: Groups },
 	{ path: '/error/:message', component: Error },
@@ -216,6 +234,7 @@ const routes = [
 	{ path: '/signup/success/:farmer', component: SignupResult, props: { result: 'success' } },
 	{ path: '/signup/failed', component: SignupResult, props: { result: 'failed' } },
 	{ path: '/statistics', component: Statistics },
+	{ path: '/status', component: Status },
 	{ path: '/talent', component: TalentPage },
 	{ path: '/teams', component: Teams },
 	{ path: '/team', component: Team, beforeEnter: connected },
@@ -248,10 +267,10 @@ if (import.meta.env.VITE_BANK !== 'false') {
 		{ path: '/bank/buy/:pack', component: BankBuy, beforeEnter: connected },
 		{ path: '/bank/buy/:pack/:offer', component: BankBuy, beforeEnter: connected },
 		{ path: '/bank/validate/', component: BankValidate, beforeEnter: connected },
-		{ path: '/bank/validate/success/:crystals', component: BankValidate, props: {success: true}, beforeEnter: connected },
-		{ path: '/bank/validate/success/:crystals/:vendor', component: BankValidate, props: {success: true}, beforeEnter: connected },
-		{ path: '/bank/validate/failed/:reason', component: BankValidate, props: {success: false}, beforeEnter: connected },
-		{ path: '/bank/validate/failed/:vendor/:reason', component: BankValidate, props: {success: false}, beforeEnter: connected },
+		{ path: '/bank/validate/success/:crystals', component: BankValidate, props: { success: true }, beforeEnter: connected },
+		{ path: '/bank/validate/success/:crystals/:vendor', component: BankValidate, props: { success: true }, beforeEnter: connected },
+		{ path: '/bank/validate/failed/:reason', component: BankValidate, props: { success: false }, beforeEnter: connected },
+		{ path: '/bank/validate/failed/:vendor/:reason', component: BankValidate, props: { success: false }, beforeEnter: connected },
 	)
 }
 
@@ -262,7 +281,8 @@ const router = createRouter({
 		// console.log("scrollBehavior", to, from, savedPosition)
 		const vm = vueMain
 		if (vm) {
-			vm.$data.savedPosition = 0
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			;(vm.$data as any).savedPosition = 0
 		}
 		if (to.hash) {
 			setTimeout(() => {
@@ -272,7 +292,8 @@ const router = createRouter({
 		}
 		if (savedPosition && !from.hash) {
 			if (vm) {
-				vm.$data.savedPosition = savedPosition.top
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				;(vm.$data as any).savedPosition = savedPosition.top
 			}
 		} else if (LeekWars.mobile && !to.meta!.noscrollapp) {
 			return { left: 0, top: 0 }
@@ -283,14 +304,35 @@ const router = createRouter({
 	},
 })
 
+// Diagnose #11099185 — router.resolve(null) during arena notifications
+{
+	const orig = router.resolve.bind(router)
+	const patched = (location: RouteLocationRaw): RouteLocationResolved => {
+		if (location == null) {
+			let stack: string
+			try { throw new Error() } catch (e) { stack = (e as { stack?: string }).stack || '' }
+			LeekWars.post('error/report', {
+				error: 'TypeError: router.resolve(' + location + ')',
+				stack,
+				file: document.location.href,
+				locale: 'fr',
+				user_agent: navigator.userAgent,
+			})
+		}
+		return orig(location)
+	}
+	;(router as { resolve: typeof patched }).resolve = patched
+}
+
 // Handle chunk loading errors (e.g., after deployment when old chunks no longer exist)
 router.onError((error, to) => {
+	const msg = error?.message || ''
 	if (
-		error.message.includes('Failed to fetch dynamically imported module') ||
-		error.message.includes('Loading chunk') ||
-		error.message.includes('Loading CSS chunk') ||
-		error.message.includes('Unable to preload CSS') ||
-		error.name === 'ChunkLoadError'
+		msg.includes('Failed to fetch dynamically imported module') ||
+		msg.includes('Loading chunk') ||
+		msg.includes('Loading CSS chunk') ||
+		msg.includes('Unable to preload CSS') ||
+		error?.name === 'ChunkLoadError'
 	) {
 		// Prevent infinite reload loop
 		const reloadKey = 'chunk-reload-' + to.fullPath

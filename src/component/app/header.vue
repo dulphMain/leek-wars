@@ -74,7 +74,7 @@
 					</div>
 				</div> -->
 				<div v-if="env.BANK && $store.state.farmer.verified && $store.state.farmer.bank_enabled" class="button-wrapper">
-					<router-link to="/bank">
+					<router-link to="/bank?ref=header">
 						<div v-if="$store.state.farmer" class="header-button">
 							<span class="farmer-crystals text">{{ $filters.number(Math.round($store.state.farmer.animated_crystals)) }}</span>
 							<span class="crystal text"></span>
@@ -178,23 +178,22 @@
 	</div>
 </template>
 
-<script lang="ts">
+<script lang="ts" setup>
 	import { LeekWars } from '@/model/leekwars'
-	import { Notification } from '@/model/notification'
-	import { defineAsyncComponent } from 'vue'
-	import { Options, Vue } from 'vue-property-decorator'
-	const ConversationElement = defineAsyncComponent(() => import('@/component/messages/conversation.vue'))
+	import { store } from '@/model/store'
+	import { defineAsyncComponent, ref } from 'vue'
+
+	defineOptions({ name: 'LwHeader' })
+
+	const Conversation = defineAsyncComponent(() => import('@/component/messages/conversation.vue'))
 	const AccountSwitcher = defineAsyncComponent(() => import('@/component/app/account-switcher.vue'))
 
-	@Options({ name: 'lw-header', components: { 'conversation': ConversationElement, 'account-switcher': AccountSwitcher } })
-	export default class Header extends Vue {
-		accountMenu = false
+	const accountMenu = ref(false)
 
-		readNotifications() {
-			if (this.$store.state.unreadNotifications) {
-				LeekWars.post('notification/read-all')
-				this.$store.commit('read-notifications')
-			}
+	function readNotifications() {
+		if (store.state.unreadNotifications) {
+			LeekWars.post('notification/read-all')
+			store.commit('read-notifications')
 		}
 	}
 </script>

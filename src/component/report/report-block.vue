@@ -106,57 +106,41 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { Fight, FightContext, FightType, ReportFarmer } from '@/model/fight'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
+<script setup lang="ts">
+	import { Fight, FightContext, FightType, ReportLeek, ReportFarmer, ReportTeam } from '@/model/fight'
 	import ReportLeekRow from './report-leek-row.vue'
 	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
+	import { computed } from 'vue'
 
-	@Options({
-		components: { ReportLeekRow, RichTooltipFarmer }
+	const props = defineProps<{
+		fight: Fight
+		icon: string
+		title: string
+		leeks: ReportLeek[]
+		farmer?: ReportFarmer | null
+		team?: ReportTeam | null
+		flags?: string[]
+	}>()
+
+	const totalLevel = computed(() => props.leeks.reduce((sum: number, leek: ReportLeek) => sum + (leek.level || 0), 0))
+	const totalXP = computed(() => props.leeks.reduce((sum: number, leek: ReportLeek) => sum + (leek.xp || 0), 0))
+	const totalMoney = computed(() => props.leeks.reduce((sum: number, leek: ReportLeek) => sum + (leek.money || 0), 0))
+
+	const currentBar = computed(() => {
+		if (!props.team) return 0
+		const totalXP = props.team.next_xp - props.team.prev_xp
+		const newLevel = props.team.cur_xp - props.team.xp < props.team.prev_xp
+		const oldXP = newLevel ? 0 : props.team.cur_xp - props.team.xp - props.team.prev_xp
+		return Math.floor(100 * oldXP / totalXP)
 	})
-	export default class ReportBlock extends Vue {
-		@Prop({required: true}) fight!: Fight
-		@Prop({required: true}) icon!: string
-		@Prop({required: true}) title!: string
-		@Prop({required: true}) leeks!: any
-		@Prop({required: true}) farmer!: any
-		@Prop({required: true}) team!: any
-		@Prop({required: true}) flags!: any
-		FightType = FightType
-		FightContext = FightContext
 
-		get totalLevel() {
-			return this.leeks.reduce((sum: number, leek: any) => sum + leek.level, 0)
-		}
-		get totalXP() {
-			return this.leeks.reduce((sum: number, leek: any) => sum + (leek.xp || 0), 0)
-		}
-		get totalPower() {
-			return Math.round(this.leeks.reduce((sum: number, leek: any) => sum + Math.pow(leek.level, 4.2), 0))
-		}
-		get totalMoney() {
-			return this.leeks.reduce((sum: number, leek: any) => sum + leek.money, 0)
-		}
-		get totalOpes() {
-			return this.leeks.reduce((sum: number, leek: any) => sum + leek.opes, 0)
-		}
-		get totalTime() {
-			return Math.round(this.leeks.reduce((sum: number, leek: any) => sum + leek.time, 0) / 1000000) / 1000
-		}
-		get currentBar() {
-			const totalXP = this.team.next_xp - this.team.prev_xp
-			const newLevel = this.team.cur_xp - this.team.xp < this.team.prev_xp
-			const oldXP = newLevel ? 0 : this.team.cur_xp - this.team.xp - this.team.prev_xp
-			return Math.floor(100 * oldXP / totalXP)
-		}
-		get newBar() {
-			const totalXP = this.team.next_xp - this.team.prev_xp
-			const newLevel = this.team.cur_xp - this.team.xp < this.team.prev_xp
-			const newXPInCurrentLevel = newLevel ? this.team.cur_xp - this.team.prev_xp : this.team.xp
-			return Math.floor(100 * newXPInCurrentLevel / totalXP)
-		}
-	}
+	const newBar = computed(() => {
+		if (!props.team) return 0
+		const totalXP = props.team.next_xp - props.team.prev_xp
+		const newLevel = props.team.cur_xp - props.team.xp < props.team.prev_xp
+		const newXPInCurrentLevel = newLevel ? props.team.cur_xp - props.team.prev_xp : props.team.xp
+		return Math.floor(100 * newXPInCurrentLevel / totalXP)
+	})
 </script>
 
 <style lang="scss" scoped>

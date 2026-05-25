@@ -8,10 +8,10 @@
 				</div>
 			</div>
 			<div class="tabs">
-				<div v-if="chat" class="tab action content" icon="delete" @click="LeekWars.addChat(chat)">
+				<div v-if="currentChat" class="tab action content" icon="delete" @click="LeekWars.addChat(currentChat)">
 					<v-icon>mdi-picture-in-picture-bottom-right</v-icon>
 				</div>
-				<div v-if="chat && chat.type === ChatType.PM" class="tab action content" icon="delete" @click="quitDialog = true">
+				<div v-if="currentChat && currentChat.type === ChatType.PM" class="tab action content" icon="delete" @click="quitDialog = true">
 					<v-icon>mdi-exit-to-app</v-icon>
 					<span>{{ $t('quit') }}</span>
 				</div>
@@ -29,7 +29,7 @@
 									{{ category.name }}
 								</div>
 								<div v-for="chat in category.chats" :key="chat.id" class="conversation chat-preview" :class="{unread: $store.state.chat[chat.id] && !$store.state.chat[chat.id].read, notifications: $store.state.chat[chat.id] && $store.state.chat[chat.id].notifications}">
-									<router-link class="wrapper" :to="'/chat/' + chat.id" v-ripple>
+									<router-link v-ripple class="wrapper" :to="'/chat/' + chat.id">
 										<v-icon>{{ chat.icon }}</v-icon>
 										{{ $t(chat.name) }}
 										<div class="unread"></div>
@@ -49,7 +49,7 @@
 									{{ $t('cat_private') }}
 								</div>
 							</div>
-							<router-link v-if="newConversation && newConversation.messages.length === 0" :to="'/chat/new/' + newFarmer.id + '/' + newFarmer.name + '/' + newFarmer.avatar_changed">
+							<router-link v-if="newConversation && newConversation.messages.length === 0 && newFarmer" :to="'/chat/new/' + newFarmer.id + '/' + newFarmer.name + '/' + newFarmer.avatar_changed">
 								<conversation :chat="newConversation" />
 							</router-link>
 							<router-link v-for="conversation in $store.state.conversationsList" :key="conversation.id" :to="'/chat/' + conversation.id">
@@ -61,7 +61,7 @@
 			</div>
 			<panel v-show="!LeekWars.mobile || LeekWars.splitBack" class="main-column">
 				<template #content>
-					<div class="admin-warn" v-if="isAdmin">
+					<div v-if="isAdmin" class="admin-warn">
 						<v-icon>mdi-alert-outline</v-icon>
 						<i18n-t keypath="admin_warn" tag="div">
 							<template #forum>
@@ -69,8 +69,8 @@
 							</template>
 						</i18n-t>
 					</div>
-					<chat v-if="newConversation" :new-farmer="newFarmer" :large="true" :new-conversation="newConversation" />
-					<chat v-else :id="currentID" :large="true" />
+					<chat v-if="newConversation && newFarmer" :new-farmer="newFarmer" :large="true" :new-conversation="newConversation" />
+					<chat v-else :id="currentID ?? undefined" :large="true" />
 				</template>
 			</panel>
 			<!-- <div v-show="!LeekWars.mobile" class="right-column">
@@ -80,14 +80,14 @@
 			</div> -->
 		</div>
 
-		<v-menu v-model="languageDialog" :target="menuTarget" location="bottom end">
+		<v-menu v-model="languageDialog" :target="menuTarget ?? undefined" location="bottom end">
 			<v-list :dense="true">
 				<div v-for="data in Object.values(LeekWars.languages).filter(l => l.chats)" :key="data.code" class="language">
 					<flag :code="data.country" />
 					<v-list-item v-for="(chatId, i) in data.chats" :key="i" class="language" @click="$router.push('/chat/' + chatId)">
 						<v-icon>{{ LeekWars.publicChats[chatId].icon }}</v-icon>
 						<span class="name">{{ LeekWars.publicChats[chatId].name }}</span>
-						<span class="unread-circle" v-if="$store.state.chat[chatId] && !$store.state.chat[chatId].read"></span>
+						<span v-if="$store.state.chat[chatId] && !$store.state.chat[chatId].read" class="unread-circle"></span>
 					</v-list-item>
 				</div>
 			</v-list>
@@ -107,216 +107,200 @@
 	</div>
 </template>
 
-<script lang="ts">
-	const ChatElement = defineAsyncComponent(() => import(/* webpackChunkName: "chat" */ `@/component/chat/chat.vue`))
-	import { Chat, ChatType } from '@/model/chat'
-	import { mixins } from '@/model/i18n'
+<script lang="ts" setup>
+	import { Chat as ChatModel, ChatType } from '@/model/chat'
+	import type { Farmer } from '@/model/farmer'
+	import { mixins , useNamespacedT } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
 	import { SocketMessage } from '@/model/socket'
 	import { store } from '@/model/store'
-	import { Options, Vue, Watch } from 'vue-property-decorator'
-	import ConversationElement from '@/component/messages/conversation.vue'
+	import { computed, defineAsyncComponent, onBeforeMount, onMounted, onUnmounted, ref, watch } from 'vue'
+	import { useRoute, useRouter } from 'vue-router'
 	import { emitter } from '@/model/vue'
-	import { defineAsyncComponent } from 'vue'
+	import { env } from '@/env'
+	import Conversation from '@/component/messages/conversation.vue'
 
-	@Options({ name: 'messages', i18n: {}, mixins: [...mixins], components: { chat: ChatElement, conversation: ConversationElement } })
-	export default class Messages extends Vue {
-		ChatType = ChatType
-		newFarmer_: any = null
-		currentID: number | null = null
-		quitDialog: boolean = false
-		languageDialog: boolean = false
-		menuTarget: HTMLElement | null = null
-		actions: any[] = []
-		loadingConversations: boolean = false
+	const Chat = defineAsyncComponent(() => import(`@/component/chat/chat.vue`))
 
-		get chats() {
-			const chats = [] as any[]
-			if (store.state.farmer && store.state.farmer.public_chat_enabled) {
-				chats.push({ name: 'Français', flag: 'fr', chats: Object.values(LeekWars.publicChats).filter(c => c.language === 'fr') })
-				chats.push({ name: 'English', flag: 'gb', chats: Object.values(LeekWars.publicChats).filter(c => c.language === 'en') })
-				// chats.push({ name: 'Español', flag: 'es', chats: Object.values(LeekWars.publicChats).filter(c => c.language === 'es') })
+	defineOptions({ name: 'Messages', i18n: {}, mixins: [...mixins] })
+
+	const t = useNamespacedT('messages')
+	const route = useRoute()
+	const router = useRouter()
+
+	const newFarmer_ = ref<Farmer | null>(null)
+	const currentID = ref<number | null>(null)
+	const quitDialog = ref(false)
+	const languageDialog = ref(false)
+	const menuTarget = ref<HTMLElement | null>(null)
+	const actions = ref<{ icon: string, click: () => void }[]>([])
+	interface ChatCategory {
+		name: string
+		flag?: string
+		icon?: string
+		chats: { id: number, name: string, icon?: string, [key: string]: unknown }[]
+	}
+	const chats = computed<ChatCategory[]>(() => {
+		const chats: ChatCategory[] = []
+		if (store.state.farmer && store.state.farmer.public_chat_enabled) {
+			chats.push({ name: 'Français', flag: 'fr', chats: Object.values(LeekWars.publicChats).filter(c => c.language === 'fr') })
+			chats.push({ name: 'English', flag: 'gb', chats: Object.values(LeekWars.publicChats).filter(c => c.language === 'en') })
+		}
+		if (store.state.farmer && store.state.farmer.team) {
+			const team_chats = [
+				{ id: store.state.farmer.team.chat, name: store.state.farmer.team.name, icon: 'mdi-chat-outline' },
+			]
+			if (store.state.farmer.group) {
+				team_chats.push({ id: store.state.farmer.group.chat, name: store.state.farmer.group.name, icon: 'mdi-chat-outline' })
 			}
-			if (this.$store.state.farmer && this.$store.state.farmer.team) {
-				const team_chats = [
-					{ id: this.$store.state.farmer.team.chat, name: this.$store.state.farmer.team.name, icon: 'mdi-chat-outline' },
-				]
-				if (this.$store.state.farmer.group) {
-					team_chats.push({ id: this.$store.state.farmer.group.chat, name: this.$store.state.farmer.group.name, icon: 'mdi-chat-outline' })
-				}
-				chats.push({name: this.$t('cat_team'), icon: 'mdi-account-multiple', chats: team_chats })
-			}
-			return chats
+			chats.push({name: t('cat_team') as string, icon: 'mdi-account-multiple', chats: team_chats })
 		}
+		return chats
+	})
 
-		created() {
-			this.actions = [{icon: 'mdi-delete', click: () => this.showQuitDialog()}]
-			if (!this.env.SOCIAL) {
-				this.$router.push('/')
-				return
-			}
-			LeekWars.setTitle(this.$t('title'))
-			this.update()
+	onMounted(() => {
+		LeekWars.footer = false
+		LeekWars.box = true
+		LeekWars.large = true
+		emitter.on('back', back)
+		emitter.on('focus', conversationRead)
+	})
+
+	onUnmounted(() => {
+		LeekWars.footer = true
+		LeekWars.box = false
+		LeekWars.large = false
+		emitter.off('back', back)
+		emitter.off('focus', conversationRead)
+	})
+
+	function back() {
+		router.push('/chat')
+	}
+
+	const currentConversation = computed(() => (currentID.value === 0) ? newConversation.value : (currentID.value ? store.state.chat[currentID.value] : null))
+
+	const newConversation = computed<ChatModel | null>(() => {
+		if ('name' in route.params && newFarmer.value) {
+			const chat = new ChatModel(0, ChatType.PM, route.params.name as string, true)
+			chat.last_message = t('new_message') as string
+			chat.farmers = [store.state.farmer!, newFarmer.value]
+			return chat
 		}
+		return null
+	})
 
-		mounted() {
-			LeekWars.footer = false
-			LeekWars.box = true
-			LeekWars.large = true
-			emitter.on('back', this.back)
-			emitter.on('focus', this.conversationRead)
+	watch(() => route.params, (params) => {
+		if (!newFarmer_.value && 'name' in params) {
+			newFarmer_.value = {
+				id: parseInt(params.farmer_id as string, 10),
+				name: params.name as string,
+				avatar_changed: parseInt(params.avatar_changed as string, 10)
+			} as Farmer
 		}
+	}, { immediate: true })
 
-		unmounted() {
-			LeekWars.footer = true
-			LeekWars.box = false
-			LeekWars.large = false
-			emitter.off('back', this.back)
-			emitter.off('focus', this.conversationRead)
-		}
+	const newFarmer = computed<Farmer | null>(() => newFarmer_.value)
 
-		back() {
-			this.$router.push('/chat')
-		}
+	const isAdmin = computed(() => {
+		const id = newConversation.value && newFarmer.value ? newFarmer.value.id : getConversationFarmerId()
+		return id === 1 || id === 2 || id === 11
+	})
 
-		get currentConversation() {
-			return (this.currentID === 0) ? this.newConversation : (this.currentID ? this.$store.state.chat[this.currentID] : null)
-		}
+	const id = computed(() => 'id' in route.params ? parseInt(route.params.id as string, 10) : null)
 
-		get newConversation(): Chat | null {
-			if ('name' in this.$route.params) {
-				const chat = new Chat(0, ChatType.PM, this.$route.params.name, true)
-				chat.last_message = this.$t('new_message') as string
-				chat.farmers = [this.$store.state.farmer, this.newFarmer]
-				return chat
-			}
-			return null
-		}
+	const currentChat = computed(() => id.value ? store.state.chat[id.value] : null)
 
-		get newFarmer(): any {
-			if (!this.newFarmer_ && 'name' in this.$route.params) {
-				this.newFarmer_ = {
-					id: parseInt(this.$route.params.farmer_id, 10),
-					name: this.$route.params.name,
-					avatar_changed: parseInt(this.$route.params.avatar_changed, 10)
-				}
-			}
-			return this.newFarmer_
-		}
+	const chat_name = computed(() => currentChat.value ? currentChat.value.name : '')
 
-		get isAdmin() {
-			const id = this.newConversation ? this.newFarmer.id : this.getConversationFarmerId()
-			return id === 1 || id === 2 || id === 11
-		}
+	const isPrivate = computed(() => currentChat.value && currentChat.value.type === ChatType.PM)
 
-		get id() {
-			return 'id' in this.$route.params ? parseInt(this.$route.params.id, 10) : null
-		}
-
-		get chat() {
-			return this.id ? this.$store.state.chat[this.id] : null
-		}
-
-		get chat_name() {
-			return this.chat ? this.chat.name : ''
-		}
-
-		get isPrivate() {
-			return this.chat && this.chat.type === ChatType.PM
-		}
-
-		get isPublicChat() {
-			return this.currentID !== null && LeekWars.isPublicChat(this.currentID)
-		}
-
-		@Watch('$route.params')
-		update() {
-			// console.log("update", this.$route.params)
-			if (this.id !== null || this.newFarmer) {
-				this.selectConversation(this.id || 0)
-			} else {
-				if (LeekWars.mobile) {
-					LeekWars.splitShowList()
-					LeekWars.setTitle(this.$i18n.t('title'))
-				} else if (this.$store.state.conversationsList.length) {
-					this.$router.replace('/chat/' + this.$store.state.conversationsList[0].id)
-				}
+	function update() {
+		if (id.value !== null || newFarmer.value) {
+			selectConversation(id.value || 0)
+		} else {
+			if (LeekWars.mobile) {
+				LeekWars.splitShowList()
+				LeekWars.setTitle(t('title') as string)
+			} else if (store.state.conversationsList.length) {
+				router.replace('/chat/' + store.state.conversationsList[0].id)
 			}
 		}
+	}
+	watch(() => route.params, update)
 
-		selectConversation(id: number) {
-			this.currentID = id
-			LeekWars.splitShowContent()
-			if (this.chat && this.chat.type === ChatType.PM) {
-				LeekWars.setActions(this.actions)
-			} else if (LeekWars.isPublicChat(id)) {
-				LeekWars.setActions([{icon: 'mdi-translate', click: (e: Event) => this.showLanguageDialog(e)}])
-			}
-			if (id === 0) {
-				LeekWars.setTitle(this.$i18n.t('new_message'))
-			} else if (this.currentID in this.$store.state.chat) {
-				LeekWars.setTitle(this.chat_name)
-			} else {
-				LeekWars.setTitle(this.$i18n.t('title'))
-			}
+	actions.value = [{icon: 'mdi-delete', click: () => showQuitDialog()}]
+	if (!env.SOCIAL) {
+		router.push('/')
+	}
+	onBeforeMount(() => {
+		LeekWars.setTitle(t('title') as string)
+		update()
+	})
+
+	function selectConversation(theId: number) {
+		currentID.value = theId
+		LeekWars.splitShowContent()
+		if (currentChat.value && currentChat.value.type === ChatType.PM) {
+			LeekWars.setActions(actions.value)
+		} else if (LeekWars.isPublicChat(theId)) {
+			LeekWars.setActions([{icon: 'mdi-translate', click: (e: Event) => showLanguageDialog(e)}])
 		}
+		if (theId === 0) {
+			LeekWars.setTitle(t('new_message') as string)
+		} else if (currentID.value in store.state.chat) {
+			LeekWars.setTitle(chat_name.value)
+		} else {
+			LeekWars.setTitle(t('title') as string)
+		}
+	}
 
-		getConversationName() {
-			if (!this.chat) { return }
-			for (const farmer of this.chat.farmers) {
-				if (!this.$store.state.farmer || farmer.id !== this.$store.state.farmer.id) {
-					return farmer.name
+	function getConversationFarmerId() {
+		if (currentChat.value && currentChat.value.type === ChatType.PM) {
+			for (const farmer of currentChat.value.farmers) {
+				if (!store.state.farmer || farmer.id !== store.state.farmer.id) {
+					return farmer.id
 				}
 			}
 		}
+	}
 
-		getConversationFarmerId() {
-			if (this.chat && this.chat.type === ChatType.PM) {
-				for (const farmer of this.chat.farmers) {
-					if (!this.$store.state.farmer || farmer.id !== this.$store.state.farmer.id) {
-						return farmer.id
-					}
-				}
-			}
-		}
+	function showLanguageDialog(e: Event) {
+		menuTarget.value = e.currentTarget as HTMLElement
+		languageDialog.value = true
+	}
 
-		showLanguageDialog(e: Event) {
-			this.menuTarget = e.currentTarget as HTMLElement
-			this.languageDialog = true
-		}
+	function showQuitDialog() {
+		quitDialog.value = true
+	}
 
-		showQuitDialog() {
-			this.quitDialog = true
+	function quitConversation() {
+		if (!currentConversation.value) { return }
+		LeekWars.post('message/quit-conversation', {conversation_id: currentConversation.value.id})
+		store.commit('quit-conversation', currentConversation.value.id)
+		if (store.state.conversationsList.length) {
+			router.replace('/chat/' + store.state.conversationsList[0].id)
+		} else {
+			router.replace('/chat')
 		}
+		quitDialog.value = false
+	}
 
-		quitConversation() {
-			if (!this.currentConversation) { return }
-			LeekWars.post('message/quit-conversation', {conversation_id: this.currentConversation.id})
-			this.$store.commit('quit-conversation', this.currentConversation.id)
-			if (this.$store.state.conversationsList.length) {
-				this.$router.replace('/chat/' + this.$store.state.conversationsList[0].id)
-			} else {
-				this.$router.replace('/chat')
-			}
-			this.quitDialog = false
+	function conversationRead() {
+		if (currentConversation.value) {
+			LeekWars.socket.send([SocketMessage.MP_READ, currentConversation.value.id])
 		}
+	}
 
-		conversationRead() {
-			if (this.currentConversation) {
-				LeekWars.socket.send([SocketMessage.MP_READ, this.currentConversation.id])
-			}
+	function conversationsScroll(e: Event) {
+		const target = e.target as HTMLElement
+		if (target.scrollTop + target.clientHeight >= target.scrollHeight - 5 && !store.state.loadingConversations) {
+			store.commit('load-conversations')
 		}
+	}
 
-		conversationsScroll(e: MouseEvent) {
-			const target = e.target as HTMLElement
-			if (target.scrollTop + target.clientHeight >= target.scrollHeight - 5 && !store.state.loadingConversations) {
-				store.commit('load-conversations')
-			}
-		}
-
-		toggleNotifications(chatID: number) {
-			store.commit('toggle-chat-notifications', chatID)
-		}
+	function toggleNotifications(chatID: number) {
+		store.commit('toggle-chat-notifications', chatID)
 	}
 </script>
 

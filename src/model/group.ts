@@ -1,5 +1,6 @@
 import { Farmer } from "./farmer"
-import { WeaponTemplate } from "./weapon"
+import { Fight } from "./fight"
+import { Tournament } from "./tournament"
 
 class Group {
 	public id!: number
@@ -16,7 +17,7 @@ class Group {
 	public setting_xp_blocked!: boolean
 	public setting_equipment_blocked!: boolean
 	public setting_new_leek!: boolean
-	public characteristics!: any
+	public characteristics!: Record<string, number>
 	public weapons!: number[]
 	public chips!: number[]
 	public level!: number
@@ -27,6 +28,11 @@ class Group {
 	public capital!: number
 	public members!: Farmer[]
 	public use_passwords!: boolean
+	public fights!: Fight[]
+	public is_supervisor!: boolean
+	public tournament!: number | null
+	public tournaments!: Tournament[]
+	[key: string]: unknown
 }
 
 export { Group }

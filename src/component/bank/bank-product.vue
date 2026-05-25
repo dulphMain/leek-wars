@@ -1,5 +1,5 @@
 <template lang="html">
-	<div class="pack card" :class="{ best: best }">
+	<div class="pack card" :class="{ best: best, clickable: !preview }" :tabindex="preview ? -1 : 0" role="link" @click="onCardClick" @keydown.enter.prevent="onCardClick">
 		<span v-if="best" class="best-label notif-trophy">{{ $t('best_value') }}</span>
 		<span v-if="firstPurchase" class="x2-label">x2</span>
 		<img :src="'/image/bank/crystals_' + product.id + '.png'">
@@ -18,26 +18,34 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	import { mixins } from '@/model/i18n'
+<script setup lang="ts">
+import { useRouter } from 'vue-router'
+import { mixins } from '@/model/i18n'
 
-	@Options({ name: 'bank-product', i18n: {}, mixins: [...mixins] })
-	export default class BankProduct extends Vue {
+defineOptions({ name: 'BankProduct', i18n: {}, mixins: [...mixins] })
 
-		@Prop({ required: true }) product!: any
-		@Prop({ required: true }) index!: number
-		@Prop() best!: boolean
-		@Prop() preview!: boolean
-		@Prop() firstPurchase!: boolean
+interface Pack { id: number; crystals: number; bonus: number; prices: Record<string, number> }
 
-		format(n: number) {
-			if (Math.floor(n) !== n) {
-				return n.toFixed(2)
-			}
-			return n
-		}
-	}
+const props = defineProps<{
+	product: Pack
+	index: number
+	best?: boolean
+	preview?: boolean
+	firstPurchase?: boolean
+}>()
+
+const router = useRouter()
+
+function format(n: number) {
+	if (Math.floor(n) !== n) return n.toFixed(2)
+	return n
+}
+
+function onCardClick(event: Event) {
+	if (props.preview) return
+	if (event.target instanceof Element && event.target.closest('.buy-button')) return
+	router.push('/bank/buy/' + props.index)
+}
 </script>
 
 <style lang="scss" scoped>
@@ -46,6 +54,18 @@
 	min-height: 90px;
 	text-align: left;
 	position: relative;
+	transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+	&.clickable {
+		cursor: pointer;
+		&:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 4px 14px rgba(25, 118, 210, 0.18);
+		}
+		&:focus-visible {
+			outline: 2px solid #1976d2;
+			outline-offset: 2px;
+		}
+	}
 	.title-line {
 		display: flex;
 		align-items: center;

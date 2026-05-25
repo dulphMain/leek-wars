@@ -1,3 +1,11 @@
+import { isLeekScript } from '@/component/editor/file-types'
+
+interface JavadocItem {
+	type: string
+	name: string
+	text: string | null
+	lstype?: { name: string }
+}
 import { Problem } from '@/component/editor/problem'
 import { fileSystem } from './filesystem'
 import { i18n } from './i18n'
@@ -6,13 +14,15 @@ import { LeekWars } from './leekwars'
 import type * as monaco from 'monaco-editor'
 
 class AI {
-	public id!: number
 	public name!: string
 	public code!: string
 	public valid!: boolean
+	public color?: string
+	public bot?: boolean
 	public version!: number
 	public strict!: boolean
 	public timestamp: number = 0
+	public mtime: number = 0
 	public modified: boolean = false
 	public dragging: boolean = false
 	public folder!: number
@@ -31,19 +41,22 @@ class AI {
 	public errors: number = 0
 	public warnings: number = 0
 	public todos: number = 0
+	public hasConflict: boolean = false
 	public equipped: boolean = false
 	public entrypoint: boolean = false
 	public entrypoints: number[] = []
 	public comments: { [key: number]: string } = {}
 	public scenario!: number | null
-	public problems: { [key: number]: Problem[] } = {}
+	public problems: { [key: string]: Problem[] } = {}
 	public model!: monaco.editor.ITextModel
 
-	constructor(data: any) {
+	constructor(data: Record<string, unknown>) {
 		Object.assign(this, data)
 	}
 
 	public analyze() {
+
+		if (!isLeekScript(this.path)) return
 
 		// console.log("analyze", this.path)
 
@@ -120,7 +133,7 @@ class AI {
 		this.functions = []
 		let match
 
-		const regex = /function\s+(\w+)\s*\(([^]*?)\)\s*(?:=>)?(?:->)?\s*(.*)\s{/gm
+		const regex = /function\s+(\w+)\s*\(([^]*?)\)\s*(?:=>)?(?:->)?\s*(.*?)\s*{/gm
 		// Match [ full_match, javadoc, nom, arguments ]
 
 		while ((match = regex.exec(this.code)) != null) {
@@ -140,7 +153,7 @@ class AI {
 			const javadoc = {
 				name: match[1],
 				description: "",
-				items: [] as any[],
+				items: [] as JavadocItem[],
 			}
 			// console.log(javadoc)
 			// Add arguments from signature
@@ -178,7 +191,7 @@ class AI {
 								const existing = javadoc.items.find(i => i.type === 'param' && ((name.length && i.name === name) || (text.length && i.name === text)))
 								// console.log('existing', existing)
 								// existing.name = existing.text
-								existing.text = text
+								if (existing) existing.text = text
 								continue
 							}
 						}
@@ -290,7 +303,7 @@ class AI {
 			const javadoc = {
 				name: fullName,
 				description: "",
-				items: [] as any[],
+				items: [] as JavadocItem[],
 				lstype: { name: type }
 			}
 			// console.log(javadoc.items)
@@ -355,7 +368,7 @@ class AI {
 		// console.time('methods')
 
 		// Search methods
-		const method_regex = /^\s*(?:public\s+)?(?:(static)\s+)?(.*\s+?)?(\w+)\s*\(([\w\s,<>=?!'".\-\[\]|]*)\)\s*{/gm
+		const method_regex = /^\s*(?:public\s+)?(?:(static)\s+)?(.*\s+?)?(\w+)\s*\(([\w\s,<>=?!'".\-[\]|]*)\)\s*{/gm
 		while ((match = method_regex.exec(this.code)) != null) {
 
 			const name = match[3]
@@ -381,7 +394,7 @@ class AI {
 				name,
 				args,
 				description: "",
-				items: [] as any[],
+				items: [] as JavadocItem[],
 			}
 			// Add arguments from signature
 			let a = 0
@@ -398,7 +411,7 @@ class AI {
 					if ((match_javadoc = javadoc_regex.exec(jline))) {
 						// console.log(match_javadoc)
 						const type = match_javadoc[1]
-						let lstype = null
+						let lstype: { name: string } | undefined = undefined
 						let name = match_javadoc[2]
 						let text = match_javadoc[3]
 						if (type === 'return') {
@@ -420,7 +433,7 @@ class AI {
 								const existing = javadoc.items.find(i => i.type === 'param' && ((name.length && i.name === name) || (text.length && i.name === text)))
 								// console.log('existing', existing)
 								// existing.name = existing.text
-								existing.text = text
+								if (existing) existing.text = text
 								continue
 							}
 						}
@@ -488,8 +501,8 @@ class AI {
 		this.globals = {}
 		let match
 
-		// Search global vars
-		const global_regex = /global\s+(?:.*\s+?)?(\w+)$/gm
+		// Search global vars — capture the identifier right before = or ; (skipping optional type annotation)
+		const global_regex = /global\s+(?:[^=;\n]*?\s)?([A-Za-z_]\w*)\s*(?:[=;]|$)/gm
 		while ((match = global_regex.exec(this.code)) != null) {
 			const line = this.code.substring(0, match.index).split("\n").length
 			const name = match[1]
@@ -511,18 +524,18 @@ class AI {
 	public isClassDefined(clazz: string): boolean {
 		// console.log("isClassDefined", clazz, this)
 
-		const visited = new Set<number>()
+		const visited = new Set<string>()
 
 		const aux = (ai: AI): boolean => {
-			if (visited.has(ai.id)) { return false }
-			visited.add(ai.id)
+			if (visited.has(ai.path)) { return false }
+			visited.add(ai.path)
 			// console.log("aux", ai.path)
 
 			if (ai.classes[clazz]) return true
 
 			if (ai.includes) {
 				for (const include of ai.includes) {
-					if (visited.has(include.id)) { continue }
+					if (visited.has(include.path)) { continue }
 					const found = aux(include)
 					if (found) {
 						return found
@@ -551,11 +564,11 @@ class AI {
 
 		// console.log("searchSymbolInAI", symbol)
 
-		const visited = new Set<number>()
+		const visited = new Set<string>()
 
 		const aux = (ai: AI): Keyword | null => {
-			if (visited.has(ai.id)) { return null }
-			visited.add(ai.id)
+			if (visited.has(ai.path)) { return null }
+			visited.add(ai.path)
 			// console.log("aux", ai.path)
 			if (ai.functions) {
 				for (const fun of ai.functions) {
@@ -591,7 +604,7 @@ class AI {
 			}
 			if (ai.includes) {
 				for (const include of ai.includes) {
-					if (visited.has(include.id)) { continue }
+					if (visited.has(include.path)) { continue }
 					const found = aux(include)
 					if (found) {
 						return found

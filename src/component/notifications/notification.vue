@@ -1,6 +1,6 @@
 <template>
 	<div v-if="notification" v-ripple :notif="notification.id" :type="notification.type" :class="{unread: !notification.read, [notification.clazz]: notification.clazz }" class="notification" @click="click">
-		<router-link :to="link">
+		<component :is="link ? 'router-link' : 'div'" :to="link || undefined">
 			<v-icon v-if="notification.icon" class="image">{{ notification.image }}</v-icon>
 			<img v-else :src="'/image/' + notification.image" class="image">
 			<div class="content">
@@ -14,36 +14,35 @@
 			</span>
 			<v-icon v-if="notification.clazz === 'notif-bigwin'" class="large-icon">mdi-crown</v-icon>
 			<v-icon v-else-if="notification.clazz === 'notif-trophy'" class="large-icon">mdi-trophy</v-icon>
-		</router-link>
+		</component>
 		<v-btn v-if="!notification.read" class="read" size="small" color="primary" @click.stop="read"><v-icon>mdi-check</v-icon></v-btn>
 	</div>
 </template>
 
-<script lang="ts">
-	import { LeekWars } from '@/model/leekwars'
-	import { Notification } from '@/model/notification'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
+<script setup lang="ts">
+import { computed } from 'vue'
+import { LeekWars } from '@/model/leekwars'
+import type { Notification } from '@/model/notification'
+import { store } from '@/model/store'
 
-	@Options({ name: 'notification' })
-	export default class NotificationElement extends Vue {
+defineOptions({ name: 'Notification' })
 
-		@Prop({ required: true }) notification!: Notification
+const props = defineProps<{
+	notification: Notification
+}>()
 
-		get link() { return this.notification.link ? this.notification.link : '' }
-		get resultIcon() {
-			return this.notification.result === null ? '' : this.notification.result === 1 ? 'mdi-check' : this.notification.result === 0 ? 'mdi-equal' : 'mdi-close'
-		}
+const link = computed(() => props.notification.link ? props.notification.link : '')
+const resultIcon = computed(() => props.notification.result === null ? '' : props.notification.result === 1 ? 'mdi-check' : props.notification.result === 0 ? 'mdi-equal' : 'mdi-close')
 
-		click() {
-			LeekWars.post('notification/read', { notification_id: this.notification.id })
-			this.$store.commit('read-notification', this.notification.id)
-			LeekWars.closeMenu()
-		}
+function click() {
+	LeekWars.post('notification/read', { notification_id: props.notification.id })
+	store.commit('read-notification', props.notification.id)
+	LeekWars.closeMenu()
+}
 
-		read() {
-			LeekWars.post('notification/read', { notification_id: this.notification.id })
-		}
-	}
+function read() {
+	LeekWars.post('notification/read', { notification_id: props.notification.id })
+}
 </script>
 
 <style lang="scss" scoped>

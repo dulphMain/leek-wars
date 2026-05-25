@@ -21,62 +21,60 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { mixins } from '@/model/i18n'
 
-	/**
-	 * mogrify -format webp -quality 90 *.jpg *.png
-	 */
-	@Options({ name: 'changelog-version', i18n: {} })
-	export default class ChangelogVersion extends Vue {
+interface ChangelogVersion {
+	version: string
+	[key: string]: unknown
+}
 
-		@Prop({required: true}) version!: any
-		changelog: any = null
+defineOptions({ name: 'ChangelogVersion', i18n: {}, mixins: [...mixins] })
 
-		created() {
-			this.update()
-		}
+const props = defineProps<{
+	version: ChangelogVersion | null
+}>()
 
-		@Watch('$i18n.locale')
-		update() {
-import(/* webpackChunkName: "changelog-[request]" */ `@/component/changelog/changelog.${this.$i18n.locale}.yaml`).then((module) => {
-				this.changelog = module.default
-			})
-		}
+const { t, locale } = useI18n()
+const changelog = ref<Record<string, unknown> | null>(null)
 
-		get changes() {
-			if (!this.version || !this.changelog) { return [] }
-			return this.changelog[this.version.version]
-		}
+function update() {
+	import(/* webpackChunkName: "changelog-[request]" */ `@/component/changelog/changelog.${locale.value}.yaml`).then((module) => {
+		changelog.value = module.default
+	})
+}
 
-		get title() {
-			return this.changes.title
-		}
+watch(locale, update)
+update()
 
-		get sections() {
-			if (!this.version) { return [] }
+const changes = computed(() => {
+	if (!props.version || !changelog.value) return []
+	return changelog.value[props.version.version]
+})
 
-			const changes = []
-			if (Array.isArray(this.changes)) {
-				changes.push(this.changes)
-			} else {
-				for (const key in this.changes) {
-					if (key === 'title') { continue }
-					changes.push(this.changes[key])
-				}
-			}
-			const regex = /#img_(\w+)/g
-			return changes.map((cat: any) => cat
-				.map((c: any) => {
-					return {
-						text: c.replace('# ', '').replace('#ai', '<span class="ai" title="' + this.$t('changelog.need_ai_change') + '">AI</span>').replace(regex, ''),
-						images: Array.from(c.matchAll(regex), (m: any) => m[1])
-					}
-				})
-			)
+const sections = computed(() => {
+	if (!props.version) return []
+
+	const collected = []
+	if (Array.isArray(changes.value)) {
+		collected.push(changes.value)
+	} else {
+		for (const key in changes.value) {
+			if (key === 'title') continue
+			collected.push(changes.value[key])
 		}
 	}
+	const regex = /#img_(\w+)/g
+	const codeRegex = /`([^`]+)`/g
+	return collected.map((cat: string[]) => cat
+		.map((c: string) => ({
+			text: c.replace('# ', '').replace('#ai', '<span class="ai" title="' + t('changelog.need_ai_change') + '">AI</span>').replace(regex, '').replace(codeRegex, '<code>$1</code>'),
+			images: Array.from(c.matchAll(regex), (m: RegExpMatchArray) => m[1])
+		}))
+	)
+})
 </script>
 
 <style lang="scss" scoped>
@@ -86,12 +84,23 @@ import(/* webpackChunkName: "changelog-[request]" */ `@/component/changelog/chan
 	.change {
 		padding: 0 10px;
 		line-height: 20px;
+		font-size: 15px;
 		:deep(.ai) {
 			background: #00a3cc;
 			padding: 0 4px;
 			color: white;
 			border-radius: 4px;
 			cursor: help;
+		}
+		:deep(code) {
+			display: inline;
+			background: var(--background-secondary);
+			border: 1px solid var(--border);
+			padding: 0 5px;
+			border-radius: 3px;
+			font-family: monospace;
+			font-size: 0.9em;
+			color: var(--text-color);
 		}
 		.screenshot {
 			color: #5fad1b;

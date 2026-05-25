@@ -25,8 +25,9 @@
 					</form>
 				</div>
 				<div class="divider"></div>
-				<div class="column">
-					<v-btn class="gh-button" @click="githubStart()"> <img src="/image/github_black.png"> {{ $t('main.login_gh') }}</v-btn>
+				<div class="column oauth-buttons">
+					<v-btn class="gh-button" @click="oauthStart('github')"> <img src="/image/github_black.png"> {{ $t('main.login_gh') }}</v-btn>
+					<v-btn class="google-button" @click="oauthStart('google')"> <img src="/image/google.svg"> {{ $t('main.login_google') }}</v-btn>
 				</div>
 			</div>
 		</panel>
@@ -34,63 +35,64 @@
 
 </template>
 
-<script lang="ts">
-	import { mixins } from '@/model/i18n'
-	import { LeekWars } from '@/model/leekwars'
-	import { getRedirectAfterLogin } from '@/router'
-	import { Options, Vue, Watch } from 'vue-property-decorator'
+<script setup lang="ts">
+import { onBeforeMount, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { mixins , useNamespacedT } from '@/model/i18n'
+import { LeekWars } from '@/model/leekwars'
+import { store } from '@/model/store'
+import { getRedirectAfterLogin } from '@/router'
 
-	@Options({ name: 'login', i18n: {}, mixins: [...mixins] })
-	export default class Login extends Vue {
-		error: any = null
-		loading: boolean = false
-		form = {
-			login: '',
-			password: '',
-			keep_connected: false
-		}
+defineOptions({ name: 'Login', i18n: {}, mixins: [...mixins] })
 
-		created() {
-			LeekWars.setTitle(this.$t('title'))
-			this.form.keep_connected = localStorage.getItem("keep_connected") === 'true'
+const t = useNamespacedT('login')
+const route = useRoute()
+const router = useRouter()
 
-			const token = this.$route.params.token
-			if (token) {
-				LeekWars.post('farmer/login-comeback', { token }).then(data => {
-					const token = LeekWars.DEV ? data.token : '$'
-					this.$store.commit('connect', {...data, token})
-					this.$router.push(getRedirectAfterLogin())
-				}).error(error => {
-					LeekWars.toast(error.error)
-					this.$router.push('/')
-				})
-			}
-		}
+const error = ref<unknown>(null)
+const loading = ref(false)
+const form = ref({
+	login: '',
+	password: '',
+	keep_connected: localStorage.getItem('keep_connected') === 'true'
+})
 
-		login() {
-			this.loading = true
-			this.error = null
-			const url = LeekWars.DEV ? 'farmer/login-token' : 'farmer/login'
-			LeekWars.post(url, this.form).then(data => {
-				const token = LeekWars.DEV ? data.token : '$'
-				this.$store.commit('connect', {...data, token})
-				this.$router.push(getRedirectAfterLogin())
-			}).error(error => {
-				this.loading = false
-				this.error = error
-			})
-		}
+onBeforeMount(() => LeekWars.setTitle(t('title')))
 
-		@Watch('form.keep_connected')
-		changeKeepConnected() {
-			localStorage.setItem("keep_connected", this.form.keep_connected ? "true" : "false")
-		}
+const tokenParam = route.params.token
+if (tokenParam) {
+	LeekWars.post('farmer/login-comeback', { token: tokenParam }).then(data => {
+		const token = LeekWars.DEV ? data.token : '$'
+		store.commit('connect', { ...data, token })
+		router.push(getRedirectAfterLogin())
+	}).catch((err) => {
+		LeekWars.toast(err.error)
+		router.push('/')
+	})
+}
 
-		githubStart() {
-			localStorage.setItem('login-attempt', 'true')
-			document.location.href = LeekWars.API + "farmer/start-github-login"
-		}
-	}
+function login() {
+	loading.value = true
+	error.value = null
+	const url = LeekWars.DEV ? 'farmer/login-token' : 'farmer/login'
+	LeekWars.post(url, form.value).then(data => {
+		const token = LeekWars.DEV ? data.token : '$'
+		store.commit('connect', { ...data, token })
+		router.push(getRedirectAfterLogin())
+	}).catch((err) => {
+		loading.value = false
+		error.value = err
+	})
+}
+
+watch(() => form.value.keep_connected, () => {
+	localStorage.setItem('keep_connected', form.value.keep_connected ? 'true' : 'false')
+})
+
+function oauthStart(provider: 'github' | 'google') {
+	localStorage.setItem('login-attempt', 'true')
+	document.location.href = LeekWars.API + `farmer/start-${provider}-login`
+}
 </script>
 
 <style lang="scss" scoped>
@@ -128,7 +130,7 @@
 		}
 	}
 	.divider {
-		background: #bbb;
+		background: var(--border);
 		width: 1px;
 		height: 300px;
 	}
@@ -140,10 +142,21 @@
 			width: 300px;
 			height: 1px;
 		}
+		.oauth-buttons {
+			align-self: center;
+			margin-top: 0;
+		}
 	}
-	.v-btn.gh-button {
+	.oauth-buttons {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 20px;
+		align-self: flex-start;
+		margin-top: 60px;
+	}
+	.v-btn.gh-button, .v-btn.google-button {
 		height: 40px;
-		margin-right: 10px;
 		img {
 			height: 20px;
 			margin-right: 8px;

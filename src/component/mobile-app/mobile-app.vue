@@ -48,18 +48,20 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { locale } from '@/locale'
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Vue } from 'vue-property-decorator'
+<script setup lang="ts">
+import { onBeforeMount } from 'vue'
+import { locale } from '@/locale'
+import { LeekWars } from '@/model/leekwars'
+import { mixins, useNamespacedT } from '@/model/i18n'
 
-	@Options({ name: 'mobile_app', i18n: {} })
-	export default class MobileApp extends Vue {
-		locale = locale
-		created() {
-			LeekWars.setTitle(this.$t('title'))
-		}
-	}
+defineOptions({ name: 'MobileApp', i18n: {}, mixins: [...mixins] })
+
+const t = useNamespacedT('mobile_app')
+onBeforeMount(() => LeekWars.setTitle(t('title')))
+
+// Expose locale for template
+const _locale = locale
+defineExpose({ locale: _locale })
 </script>
 
 <style lang="scss" scoped>

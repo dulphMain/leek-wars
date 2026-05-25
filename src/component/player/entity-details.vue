@@ -5,7 +5,7 @@
 				<template #activator="{ props }">
 					<div :value="effectText(effect)" :turns="effect.turns === -1 ? '∞' : effect.turns" class="effect" :class="{irreductible: effect.modifiers & EffectModifier.IRREDUCTIBLE}" v-bind="props">
 						<img class="image" :src="effect.texture.src">
-						<img class="state" v-if="effect.type === EffectType.ADD_STATE" :src="LeekWars.STATIC + 'image/state/' + effect.value + '.svg'" :style="{ background: FightEntity.stateColors[effect.value] }">
+						<img v-if="effect.type === EffectType.ADD_STATE" class="state" :src="LeekWars.STATIC + 'image/state/' + effect.value + '.svg'" :style="{ background: FightEntity.stateColors[effect.value] }">
 					</div>
 				</template>
 				<div v-if="effect.item"><b>{{ $t(LeekWars.items[effect.item].name.replace('_', '.')) }}</b></div>
@@ -77,7 +77,13 @@
 						</b>
 					</b>
 					<span v-if="effect.turns === -1">{{ $t('effect.infinite') }}</span>
-					<span v-else v-html="$t('effect.on_n_turns', {turns: $tc('effect.n_turns', [effect.turns])})"></span>
+					<i18n-t v-else keypath="effect.on_n_turns" tag="span">
+						<template #turns>
+							<i18n-t keypath="effect.n_turns" :plural="effect.turns">
+								<template #n><b>{{ effect.turns }}</b></template>
+							</i18n-t>
+						</template>
+					</i18n-t>
 				</div>
 			</v-tooltip>
 		</div>
@@ -97,7 +103,7 @@
 					<div class="bar-wrapper">
 						<div :style="{width: (100 * entity.displayLife / entity.maxLife) + '%', background: entity.lifeColor}" class="details-bar"></div>
 					</div>
-					<div>{{ entity.farmer_name }}</div>
+					<div>{{ entity.farmer?.name }}</div>
 					<avatar :farmer="entity.farmer" class="farmer-avatar" />
 				</div>
 				<div class="stats">
@@ -161,9 +167,8 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { Effect, EffectModifier, EffectType } from '@/model/effect'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
+<script setup lang="ts">
+	import { EffectModifier, EffectType, EntityEffect } from '@/model/effect'
 	import { Chest } from './game/chest'
 	import { FightEntity } from './game/entity'
 	import { Game } from './game/game'
@@ -171,29 +176,24 @@
 	import TurretImage from '@/component/turret-image.vue'
 	import { Mob } from './game/mob'
 
-	@Options({ name: 'entity-details', components: { TurretImage } })
-	export default class EntityDetails extends Vue {
-		@Prop({required: true}) entity!: FightEntity
-		@Prop({required: true}) game!: Game
-		@Prop({required: true}) dark!: boolean
-		Turret = Turret
-		EffectType = EffectType
-		Chest = Chest
-		Mob = Mob
-		FightEntity = FightEntity
-		EffectModifier = EffectModifier
+	defineOptions({ name: 'EntityDetails' })
 
-		effectText(effect: any) {
-			if (effect.type === EffectType.ADD_STATE) return ''
-			let r = '' + effect.value
-			if (effect.type === EffectType.SHACKLE_MAGIC || effect.type === EffectType.SHACKLE_MP || effect.type === EffectType.SHACKLE_TP || effect.type === EffectType.SHACKLE_STRENGTH || effect.type === EffectType.VULNERABILITY || effect.type === EffectType.ABSOLUTE_VULNERABILITY) {
-				r = '-' + r
-			}
-			if (effect.type === EffectType.RAW_RELATIVE_SHIELD || effect.type === EffectType.RELATIVE_SHIELD || effect.type === EffectType.DAMAGE_RETURN || effect.type === EffectType.VULNERABILITY) {
-				r += '%'
-			}
-			return r
+	defineProps<{
+		entity: FightEntity
+		game: Game
+		dark: boolean
+	}>()
+
+	function effectText(effect: EntityEffect) {
+		if (effect.type === EffectType.ADD_STATE) return ''
+		let r = '' + effect.value
+		if (effect.type === EffectType.SHACKLE_MAGIC || effect.type === EffectType.SHACKLE_MP || effect.type === EffectType.SHACKLE_TP || effect.type === EffectType.SHACKLE_STRENGTH || effect.type === EffectType.VULNERABILITY || effect.type === EffectType.ABSOLUTE_VULNERABILITY) {
+			r = '-' + r
 		}
+		if (effect.type === EffectType.RAW_RELATIVE_SHIELD || effect.type === EffectType.RELATIVE_SHIELD || effect.type === EffectType.DAMAGE_RETURN || effect.type === EffectType.VULNERABILITY) {
+			r += '%'
+		}
+		return r
 	}
 </script>
 

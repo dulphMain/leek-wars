@@ -1,8 +1,8 @@
 <template>
 	<div v-show="LeekWars.squares.squares.length" class="squares">
-		<component v-for="square in LeekWars.squares.squares" :is="square.link ? 'router-link' : 'div'" :key="square.id" v-ripple :to="square.link" class="square card" :class="{[square.clazz]: square.clazz}" @click.native="click(square)">
+		<component :is="square.link ? 'router-link' : 'div'" v-for="square in LeekWars.squares.squares" :key="square.id" v-ripple :to="square.link || undefined" class="square card" :class="{[square.clazz]: square.clazz}" @click="click(square)">
 			<v-icon v-if="square.icon" :class="{padding: square.padding}" class="image">{{ square.image }}</v-icon>
-			<img v-else :src="square.image" :class="{padding: square.padding}" class="image">
+			<img v-else :src="square.image ?? undefined" :class="{padding: square.padding}" class="image">
 			<div class="wrapper">
 				<div class="title" v-html="square.title"></div>
 				<div v-emojis class="message" v-html="square.message"></div>
@@ -14,23 +14,19 @@
 	</div>
 </template>
 
-<script lang="ts">
-import { Options, Vue } from 'vue-property-decorator'
+<script setup lang="ts">
 import '@/model/emojis'
-import { Notification } from '@/model/notification'
 import { LeekWars } from '@/model/leekwars'
+import { store } from '@/model/store'
 import { Square } from '@/model/squares'
 
-@Options({})
-export default class Squares extends Vue {
+defineOptions({ name: 'Squares' })
 
-	click(square: Square) {
-		if (square.notification) {
-			LeekWars.post('notification/read', { notification_id: square.notification.id })
-			this.$store.commit('read-notification', square.notification.id)
-		}
+function click(square: Square) {
+	if (square.notification) {
+		LeekWars.post('notification/read', { notification_id: square.notification.id })
+		store.commit('read-notification', square.notification.id)
 	}
-
 }
 </script>
 

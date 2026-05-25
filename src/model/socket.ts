@@ -1,9 +1,9 @@
-import { LeekWars, getRouter } from '@/model/leekwars'
+import { LeekWars } from '@/model/leekwars'
+import router from '@/router'
 import { emitter } from '@/model/emitter'
 import { ChatMessage } from './chat'
 import { NotificationType } from './notification'
 import { store } from './store'
-import { Leek } from './leek'
 const getAnalyzer = () => import('@/component/editor/analyzer').then(m => m.analyzer)
 
 enum SocketMessage {
@@ -94,13 +94,22 @@ enum SocketMessage {
 	EDITOR_REFERENCES = 92,
 }
 
+// On visibility change, if no message received for this long, send a probe ping
+const PROBE_STALE_THRESHOLD = 25000
+// Beyond this, skip the probe and reconnect directly (almost certainly dead, e.g. mobile suspend)
+const PROBE_DEAD_THRESHOLD = 60000
+// Force-reconnect if probe ping gets no response within this time
+const PROBE_RESPONSE_TIMEOUT = 3000
+
 class Socket {
 	public socket!: WebSocket
-	public queue: any[] = []
+	public queue: unknown[] = []
 	public retry_delay: number = 1000
 	private intentionallyClosed: boolean = false
 	private pingTimeout: ReturnType<typeof setTimeout> | null = null
 	private retryTimeout: ReturnType<typeof setTimeout> | null = null
+	private pongProbeTimeout: ReturnType<typeof setTimeout> | null = null
+	private lastReceivedTime: number = 0
 
 	public connect() {
 		if (!store.state.farmer || this.intentionallyClosed || this.connecting() || this.connected()) {
@@ -115,6 +124,7 @@ class Socket {
 			store.commit('invalidate-chats')
 			store.commit('wsconnected')
 			this.retry_delay = 1000
+			this.lastReceivedTime = Date.now()
 			for (const p of this.queue) {
 				this.send(p)
 			}
@@ -127,6 +137,7 @@ class Socket {
 		this.socket.onclose = () => {
 			// console.log("[ws] onclose")
 			this.clearPing()
+			this.clearPongProbe()
 			if (store.getters.admin || LeekWars.LOCAL || LeekWars.DEV || (window.__FARMER__ && window.__FARMER__.farmer.id === 1)) {
 				const message = "[WS] fermée"
 				console.error(message)
@@ -144,7 +155,9 @@ class Socket {
 				// LeekWars.toast(message, 5000)
 			}
 		}
-		this.socket.onmessage = (msg: any) => {
+		this.socket.onmessage = (msg: MessageEvent) => {
+			this.lastReceivedTime = Date.now()
+			this.clearPongProbe()
 			const json = JSON.parse(msg.data)
 			const id = json[0]
 			const data = json[1]
@@ -186,14 +199,14 @@ class Socket {
 					const spoilableTypes: number[] = [NotificationType.BATTLE_ROYALE_STARTED, NotificationType.FIGHT_REPORT, NotificationType.FARMER_FIGHT_REPORT, NotificationType.COMPOSITION_FIGHT_REPORT, NotificationType.CHALLENGE, NotificationType.FARMER_CHALLENGE, NotificationType.TOURNAMENT_WINNER, NotificationType.FARMER_TOURNAMENT_WIN, NotificationType.TEAM_TOURNAMENT_WIN, NotificationType.WAR_REPORT, NotificationType.CHEST_HUNT_REPORT, NotificationType.COLOSSUS_REPORT]
 
 					// Envoie de la notif sur la page du combat pour la mettre en file d'attente
-					if (message.type === NotificationType.TROPHY_UNLOCKED && getRouter().currentRoute.value.path.startsWith('/fight/' + message.parameters[1])) {
+					if (message.type === NotificationType.TROPHY_UNLOCKED && router.currentRoute.value.path.startsWith('/fight/' + message.parameters[1])) {
 						emitter.emit('trophy', message)
 					} else if (
 						spoilableTypes.indexOf(message.type) !== -1
 						&& (
-							((message.type === NotificationType.BATTLE_ROYALE_STARTED || message.type === NotificationType.FARMER_CHALLENGE || message.type === NotificationType.WAR_REPORT || message.type === NotificationType.CHEST_HUNT_REPORT || message.type === NotificationType.COLOSSUS_REPORT) && getRouter().currentRoute.value.path.startsWith('/fight/' + message.parameters[0]))
-							|| ((message.type === NotificationType.FIGHT_REPORT || message.type === NotificationType.FARMER_FIGHT_REPORT || message.type === NotificationType.COMPOSITION_FIGHT_REPORT || message.type === NotificationType.CHALLENGE) && getRouter().currentRoute.value.path.startsWith('/fight/' + message.parameters[1]))
-							|| ((message.type === NotificationType.TOURNAMENT_WINNER || message.type === NotificationType.FARMER_TOURNAMENT_WIN || message.type === NotificationType.TEAM_TOURNAMENT_WIN) && getRouter().currentRoute.value.path.startsWith('/fight/' + message.parameters[2]))
+							((message.type === NotificationType.BATTLE_ROYALE_STARTED || message.type === NotificationType.FARMER_CHALLENGE || message.type === NotificationType.WAR_REPORT || message.type === NotificationType.CHEST_HUNT_REPORT || message.type === NotificationType.COLOSSUS_REPORT) && router.currentRoute.value.path.startsWith('/fight/' + message.parameters[0]))
+							|| ((message.type === NotificationType.FIGHT_REPORT || message.type === NotificationType.FARMER_FIGHT_REPORT || message.type === NotificationType.COMPOSITION_FIGHT_REPORT || message.type === NotificationType.CHALLENGE) && router.currentRoute.value.path.startsWith('/fight/' + message.parameters[1]))
+							|| ((message.type === NotificationType.TOURNAMENT_WINNER || message.type === NotificationType.FARMER_TOURNAMENT_WIN || message.type === NotificationType.TEAM_TOURNAMENT_WIN) && router.currentRoute.value.path.startsWith('/fight/' + message.parameters[2]))
 						)
 					) {
 						emitter.emit('fight_notification', message)
@@ -377,8 +390,8 @@ class Socket {
 					LeekWars.squares.add({
 						image: 'mdi-alert',
 						icon: true,
-						title: 'Erreur serveur ' + source,
-						message: trace,
+						title: 'Erreur serveur ' + LeekWars.protect(source),
+						message: LeekWars.protect(trace),
 						link: '/admin/errors',
 						padding: true,
 						clazz: '',
@@ -394,6 +407,9 @@ class Socket {
 	public reconnect() {
 		this.intentionallyClosed = false
 		this.retry_delay = 1000
+		this.clearPing()
+		this.clearPongProbe()
+		this.clearRetry()
 		// Force close any existing socket to handle zombie connections
 		if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
 			// Detach handlers to prevent onclose from triggering retry
@@ -403,6 +419,48 @@ class Socket {
 			this.socket.close()
 		}
 		this.connect()
+	}
+
+	// Force-reconnect on visibility if connection appears OPEN but is actually
+	// dead (zombie socket, common after mobile suspend).
+	public checkAlive() {
+		if (this.intentionallyClosed || !store.state.farmer) { return }
+		if (!this.socket || this.socket.readyState === WebSocket.CLOSED || this.socket.readyState === WebSocket.CLOSING) {
+			this.retry_delay = 1000
+			this.clearRetry()
+			this.connect()
+			return
+		}
+		if (this.socket.readyState === WebSocket.CONNECTING) { return }
+		const idle = Date.now() - this.lastReceivedTime
+		if (idle > PROBE_DEAD_THRESHOLD) {
+			this.reconnect()
+			return
+		}
+		if (idle > PROBE_STALE_THRESHOLD && !this.pongProbeTimeout) {
+			this.send([SocketMessage.PING])
+			this.pongProbeTimeout = setTimeout(() => {
+				this.pongProbeTimeout = null
+				if (store.getters.admin || LeekWars.LOCAL || LeekWars.DEV || (window.__FARMER__ && window.__FARMER__.farmer.id === 1)) {
+					console.warn("[WS] probe timeout, forcing reconnect")
+				}
+				this.reconnect()
+			}, PROBE_RESPONSE_TIMEOUT)
+		}
+	}
+
+	private clearPongProbe() {
+		if (this.pongProbeTimeout) {
+			clearTimeout(this.pongProbeTimeout)
+			this.pongProbeTimeout = null
+		}
+	}
+
+	private clearRetry() {
+		if (this.retryTimeout) {
+			clearTimeout(this.retryTimeout)
+			this.retryTimeout = null
+		}
 	}
 
 	public retry() {
@@ -438,7 +496,7 @@ class Socket {
 		}
 	}
 
-	public send(message: any) {
+	public send(message: unknown) {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
 			// console.log("[WS] send", message)
 			this.socket.send(JSON.stringify(message))
@@ -456,10 +514,8 @@ class Socket {
 		}
 		this.intentionallyClosed = true
 		this.clearPing()
-		if (this.retryTimeout) {
-			clearTimeout(this.retryTimeout)
-			this.retryTimeout = null
-		}
+		this.clearPongProbe()
+		this.clearRetry()
 		if (this.socket) { this.socket.close() }
 		store.commit('invalidate-chats')
 	}

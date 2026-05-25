@@ -74,15 +74,15 @@
 					</div>
 					<div ref="progressBar" class="progress-bar" @click="progressBarClick" @mousemove="progressBarMove">
 						<div :style="{width: progressBarWidth + '%'}" class="bar"></div>
-						<span v-for="marker in game.progressBarMarkers">
+						<span v-for="(marker, idx) in game.progressBarMarkers" :key="idx">
 							<div class="marker" :style="{left: marker.left + '%', width: marker.width + '%', background: marker.background, outline: marker.outline}"></div>
 						</span>
 						<div class="circle" :style="{left: progressBarWidth + '%'}"></div>
 						<div class="preview-bar" :style="{width: progressBarPreviewWidth + '%'}"></div>
 					</div>
 				</div>
-				<hud ref="hud" :game="game" :creator="creator" />
-				<v-tooltip v-if="hasMarks" :open-delay="0" :close-delay="0" location="bottom" :attach="$refs.player">
+				<hud ref="hud" :game="(game as Game)" :creator="creator" />
+				<v-tooltip v-if="hasMarks" :open-delay="0" :close-delay="0" location="bottom" :attach="playerAttach">
 					<template #activator="{ props }">
 						<v-icon v-ripple class="clear-marks" v-bind="props" @click="game.clearMarks()">mdi-eraser</v-icon>
 					</template>
@@ -97,44 +97,44 @@
 			</div>
 
 			<div v-if="!creator" class="controls controls-a">
-				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="$refs.player">
+				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="playerAttach">
 					<template #activator="{ props }">
-						<v-icon v-ripple class="control" @click="pause" v-bind="props">{{ game.paused ? 'mdi-play' : 'mdi-pause' }}</v-icon>
+						<v-icon v-ripple class="control" v-bind="props" @click="pause">{{ game.paused ? 'mdi-play' : 'mdi-pause' }}</v-icon>
 					</template>
 					{{ $t('pause') }} (P)
 				</v-tooltip>
-				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="$refs.player">
+				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="playerAttach">
 					<template #activator="{ props }">
 						<v-icon v-ripple class="control" :style="{opacity: game.speedButtonVisible ? 1 : 0}" v-bind="props" @click="game.speedUp()">mdi-fast-forward</v-icon>
 					</template>
 					{{ $t('accelerate') }} (S)
 				</v-tooltip>
-				<v-tooltip v-if="!LeekWars.mobile" :open-delay="0" :close-delay="0" location="top" :attach="$refs.player">
+				<v-tooltip v-if="!LeekWars.mobile" :open-delay="0" :close-delay="0" location="top" :attach="playerAttach">
 					<template #activator="{ props }">
 						<v-icon v-ripple class="control" v-bind="props" @click="game.previousAction()">mdi-skip-previous</v-icon>
 					</template>
 					{{ $t('previous_action') }} (←)
 				</v-tooltip>
-				<v-tooltip v-if="!LeekWars.mobile" :open-delay="0" :close-delay="0" location="top" :attach="$refs.player">
+				<v-tooltip v-if="!LeekWars.mobile" :open-delay="0" :close-delay="0" location="top" :attach="playerAttach">
 					<template #activator="{ props }">
 						<v-icon v-ripple class="control" v-bind="props" @click="game.nextAction()">mdi-skip-next</v-icon>
 					</template>
 					{{ $t('next_action') }} (→)
 				</v-tooltip>
-				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="$refs.player">
+				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="playerAttach">
 					<template #activator="{ props }">
 						<v-icon v-ripple class="control" v-bind="props" @click="game.sound = !game.sound">{{ game.sound ? 'mdi-volume-high' : 'mdi-volume-low' }}</v-icon>
 					</template>
 					{{ $t(game.sound ? 'sound_activated' : 'sound_disactivated') }} (V)
 				</v-tooltip>
-				<v-tooltip v-if="game.sound && !LeekWars.mobile" :open-delay="0" :close-delay="0" location="top" :attach="$refs.player">
-					<template #activator="{ props }">
-						<input type="range" min="0" max="1" step="0.01" style="width: 100px; padding: 0" v-model="game.volume">
+				<v-tooltip v-if="game.sound && !LeekWars.mobile" :open-delay="0" :close-delay="0" location="top" :attach="playerAttach">
+					<template #activator>
+						<input v-model="game.volume" type="range" min="0" max="1" step="0.01" style="width: 100px; padding: 0">
 					</template>
 				</v-tooltip>
-				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="$refs.player">
+				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="playerAttach">
 					<template #activator="{ props: tooltipProps }">
-						<v-menu :close-on-content-click="false" :width="390" location="top" offset-y right :attach="$refs.player">
+						<v-menu :close-on-content-click="false" :width="390" location="top" offset-y right :attach="playerAttach">
 							<template #activator="{ props: menuProps }">
 								<div v-ripple class="control turn" v-bind="{...tooltipProps, ...menuProps}">{{ horizontal ? game.turn : $t('fight.turn_n', [game.turn]) }}</div>
 								<!-- <v-icon class="control" >mdi-cog-outline</v-icon> -->
@@ -159,47 +159,47 @@
 
 			<div class="controls constrols-b">
 
-				<v-tooltip v-if="!creator && $store.state.farmer && $store.state.farmer.admin" :open-delay="0" :close-delay="0" location="top" :attach="$refs.player">
+				<v-tooltip v-if="!creator && $store.state.farmer && $store.state.farmer.admin" :open-delay="0" :close-delay="0" location="top" :attach="playerAttach">
 					<template #activator="{ props: tooltipProps }">
 						<v-menu :close-on-content-click="false" top offset-y left>
 							<template #activator="{ props: menuProps }">
 								<v-icon v-ripple class="control" v-bind="{...tooltipProps, ...menuProps}">mdi-map</v-icon>
 							</template>
 							<v-radio-group v-model="game.mapType" class="map-menu" hide-details :mandatory="true">
-								<v-radio v-for="(map, m) of maps" :key="map" :label="map" :value="m" />
+								<v-radio v-for="(map, m) of game.maps" :key="m" :label="map.constructor.name" :value="m" />
 							</v-radio-group>
 						</v-menu>
 					</template>
 					Carte
 				</v-tooltip>
 
-				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="$refs.player">
+				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="playerAttach">
 					<template #activator="{ props }">
 						<v-icon v-ripple class="control" v-bind="props" @click="toggleFullscreen">mdi-aspect-ratio</v-icon>
 					</template>
 					{{ $t('fullscreen') }}
 				</v-tooltip>
-				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="$refs.player">
+				<v-tooltip :open-delay="0" :close-delay="0" location="top" :attach="playerAttach">
 					<template #activator="{ props: tooltipProps }">
-						<v-menu :close-on-content-click="false" top offset-y left :attach="$refs.player">
+						<v-menu :close-on-content-click="false" top offset-y left :attach="playerAttach">
 							<template #activator="{ props: menuProps }">
 								<v-icon v-ripple class="control" v-bind="{...tooltipProps, ...menuProps}">mdi-cog-outline</v-icon>
 							</template>
 							<v-list density="compact" class="settings-menu">
 								<div class="section">INTERFACE</div>
-								<v-list-item v-ripple @click="game.showLifes = !game.showLifes" prepend-icon="mdi-heart-half-full">
+								<v-list-item v-ripple prepend-icon="mdi-heart-half-full" @click="game.showLifes = !game.showLifes">
 									<v-switch :model-value="game.showLifes" :label="$t('display_life_bars') + ' (L)'" hide-details />
 								</v-list-item>
-								<v-list-item :ripple="game.showLifes" :class="{disabled: !game.showLifes}" @click="game.showLifes ? (game.showEffects = !game.showEffects) : null" prepend-icon="mdi-flare">
+								<v-list-item :ripple="game.showLifes" :class="{disabled: !game.showLifes}" prepend-icon="mdi-flare" @click="game.showLifes ? (game.showEffects = !game.showEffects) : null">
 									<v-switch :model-value="game.showEffects" :disabled="!game.showLifes" :label="$t('display_effects') + ' (E)'" hide-details />
 								</v-list-item>
-								<v-list-item v-if="!LeekWars.mobile" v-ripple @click="game.showActions = !game.showActions" prepend-icon="mdi-format-list-bulleted">
+								<v-list-item v-if="!LeekWars.mobile" v-ripple prepend-icon="mdi-format-list-bulleted" @click="game.showActions = !game.showActions">
 									<v-switch :model-value="game.showActions" :label="$t('show_actions') + ' (A)'" hide-details />
 								</v-list-item>
-								<v-list-item v-if="!LeekWars.mobile" :ripple="game.showActions" :class="{disabled: !game.showActions}" @click="game.showActions ? (game.largeActions = !game.largeActions) : null" prepend-icon="mdi-view-split-vertical">
+								<v-list-item v-if="!LeekWars.mobile" :ripple="game.showActions" :class="{disabled: !game.showActions}" prepend-icon="mdi-view-split-vertical" @click="game.showActions ? (game.largeActions = !game.largeActions) : null">
 									<v-switch :model-value="game.largeActions" :disabled="!game.showActions" :label="$t('large_actions') + ' (G)'" hide-details />
 								</v-list-item>
-								<v-list-item v-if="!LeekWars.mobile" :ripple="game.displayDebugs" :class="{disabled: !game.showActions}" @click="game.showActions ? (game.displayDebugs = !game.displayDebugs) : null" prepend-icon="mdi-math-log">
+								<v-list-item v-if="!LeekWars.mobile" :ripple="game.displayDebugs" :class="{disabled: !game.showActions}" prepend-icon="mdi-math-log" @click="game.showActions ? (game.displayDebugs = !game.displayDebugs) : null">
 									<v-switch :model-value="game.displayDebugs" :disabled="!game.showActions" :label="$t('display_logs') + ' (D)'" hide-details />
 									<template #append>
 										<v-checkbox v-model="game.displayAILines" :disabled="!game.showActions || !game.displayDebugs" :class="{disabled: !game.showActions || !game.displayDebugs}" label="Lignes" hide-details class="ally-debug" @click.stop />
@@ -207,7 +207,7 @@
 									</template>
 								</v-list-item>
 								<div class="section">GRAPHISMES</div>
-								<v-list-item v-ripple @click="game.shadows = !game.shadows" prepend-icon="mdi-box-shadow">
+								<v-list-item v-ripple prepend-icon="mdi-box-shadow" @click="game.shadows = !game.shadows">
 									<v-switch :model-value="game.shadows" :label="$t('display_shadows') + ' (O)'" hide-details />
 								</v-list-item>
 								<v-list-item prepend-icon="mdi-weather-night">
@@ -217,16 +217,16 @@
 									</template>
 								</v-list-item>
 								<div class="section">DEVELOPEMENT</div>
-								<v-list-item v-ripple @click="game.tactic = !game.tactic" prepend-icon="mdi-view-comfy">
+								<v-list-item v-ripple prepend-icon="mdi-view-comfy" @click="game.tactic = !game.tactic">
 									<v-switch :model-value="game.tactic" :label="$t('tactic_mode') + ' (T)'" hide-details />
 								</v-list-item>
-								<v-list-item v-ripple @click="game.plainBackground = !game.plainBackground" prepend-icon="mdi-format-color-fill">
+								<v-list-item v-ripple prepend-icon="mdi-format-color-fill" @click="game.plainBackground = !game.plainBackground">
 									<v-switch :model-value="game.plainBackground" :label="$t('plain_background') + ' (U)'" hide-details />
 								</v-list-item>
-								<v-list-item v-ripple @click="game.showCells = !game.showCells" prepend-icon="mdi-numeric-1-box">
+								<v-list-item v-ripple prepend-icon="mdi-numeric-1-box" @click="game.showCells = !game.showCells">
 									<v-switch :model-value="game.showCells" :label="$t('display_cell_numbers') + ' (C)'" hide-details />
 								</v-list-item>
-								<v-list-item v-if="!LeekWars.mobile" :ripple="game.showLifes" :class="{disabled: !game.showLifes}" @click="game.showLifes ? (game.showIDs = !game.showIDs) : null" prepend-icon="mdi-key">
+								<v-list-item v-if="!LeekWars.mobile" :ripple="game.showLifes" :class="{disabled: !game.showLifes}" prepend-icon="mdi-key" @click="game.showLifes ? (game.showIDs = !game.showIDs) : null">
 									<v-switch :model-value="game.showIDs" :disabled="!game.showLifes" :label="$t('show_ids') + ' (I)'" hide-details />
 								</v-list-item>
 							</v-list>
@@ -234,7 +234,7 @@
 					</template>
 					{{ $t('settings') }}
 				</v-tooltip>
-				<v-tooltip v-if="!creator" :open-delay="0" :close-delay="0" location="top" :attach="$refs.player">
+				<v-tooltip v-if="!creator" :open-delay="0" :close-delay="0" location="top" :attach="playerAttach">
 					<template #activator="{ props }">
 						<v-icon v-ripple class="control" v-bind="props" @click="quit">mdi-exit-to-app</v-icon>
 					</template>
@@ -245,574 +245,493 @@
 	</div>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
 	import { locale } from '@/locale'
 	import { Farmer } from '@/model/farmer'
 	import { Fight, FightMap, FightType, Report } from '@/model/fight'
 	import { i18n, mixins } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
 	import { SocketMessage } from '@/model/socket'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
 	import { Game } from './game/game'
+	import type { FightEntity } from './game/entity'
 	import Hud from './hud.vue'
-	import(/* webpackChunkName: "[request]" */ /* webpackMode: "eager" */ `@/lang/fight.${locale}.lang`)
-	import LWTitle from '@/component/title/title.vue'
-	import { nextTick } from 'vue'
+	import LwTitle from '@/component/title/title.vue'
+	import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+	import { useRouter } from 'vue-router'
+	import { store } from '@/model/store'
 	import { emitter } from '@/model/vue'
 
-	@Options({
-		name: 'player',
-		components: { Hud, 'lw-title': LWTitle },
-		emits: ['resize', 'fight'],
-		i18n: {},
-		mixins: [...mixins]
-	})
-	export default class Player extends Vue {
+	defineOptions({ name: 'Player', i18n: {}, mixins: [...mixins], components: { Hud, 'lw-title': LwTitle } })
 
-		CONTROLS_HEIGHT = 36
-		BAR_HEIGHT = 6
+	const props = defineProps<{
+		fightId?: string
+		requiredWidth?: number
+		requiredHeight?: number
+		horizontal?: boolean
+		startTurn?: number
+		startAction?: number
+		creator?: boolean
+		map?: FightMap
+	}>()
 
-		@Prop() fightId!: string
-		@Prop() requiredWidth: number | undefined
-		@Prop() requiredHeight: number | undefined
-		@Prop() horizontal!: boolean
-		@Prop() startTurn!: number
-		@Prop() startAction!: number
-		@Prop() creator!: boolean
-		@Prop() map!: FightMap
+	const emit = defineEmits<{
+		resize: []
+		fight: [fight: Fight]
+		'unlock-trophy': [trophy: unknown]
+		edited: [data?: unknown]
+	}>()
 
-		FightType = FightType
+	const router = useRouter()
+	const document = window.document
+	const playerEl = useTemplateRef<HTMLElement>('player')
+	const playerAttach = computed(() => playerEl.value ?? undefined)
+	const hudRef = useTemplateRef<{ hover_entity: FightEntity | null }>('hud')
+	const progressBar = useTemplateRef<HTMLElement>('progressBar')
+	const progressBarTooltip = useTemplateRef<HTMLElement>('progressBarTooltip')
+	const instance = getCurrentInstance()
 
-		teamGrid(count: number) {
-			let cols
-			if (count <= 1) cols = 1
-			else if (count <= 2) cols = 2
-			else if (count <= 4) cols = 2
-			else if (count <= 6) cols = 3
-			else if (count <= 9) cols = 3
-			else if (count <= 12) cols = 4
-			else cols = 5
-			const rows = Math.ceil(count / cols)
-			return {
-				display: 'grid',
-				gridTemplateColumns: `repeat(${cols}, 1fr)`,
-				gridTemplateRows: `repeat(${rows}, 1fr)`,
-				justifyItems: 'center',
-				alignItems: 'center',
-				height: '100%',
-			}
-		}
+	const CONTROLS_HEIGHT = 36
+	const BAR_HEIGHT = 6
+	let destroyed = false
 
-		fight: Fight | null = null
-		canvas: any
-		game: Game = new Game()
-		queue: any = null
-		getDelay: number = 1000
-		loaded: boolean = false
-		error: any = false
-		fullscreen: boolean = false
-		progressBarTurn: any = 0
-		progressBarTooltipMargin: number = 0
-		progressBarPreviewMouse: number = 0
-		width: number = 0
-		totalWidth: number = 0
-		height: number = 0
-		totalHeight: number = 0
-		timeout: any = null
-		request: any = null
-		progress: number = 0
-		maps = ["Nexus", "Usine", "Désert", "Forêt", "Glacier", "Plage", "Temple", "Japon", "Château", "Cimetière"]
-		document = document
+	function teamGrid(count: number) {
+		let cols
+		if (count <= 1) cols = 1
+		else if (count <= 2) cols = 2
+		else if (count <= 4) cols = 2
+		else if (count <= 6) cols = 3
+		else if (count <= 9) cols = 3
+		else if (count <= 12) cols = 4
+		else cols = 5
+		const rows = Math.ceil(count / cols)
+		return {
+			display: 'grid',
+			gridTemplateColumns: `repeat(${cols}, 1fr)`,
+			gridTemplateRows: `repeat(${rows}, 1fr)`,
+			justifyItems: 'center',
+			alignItems: 'center',
+			height: '100%',
+		}
+	}
 
-		async created() {
-			const fightMessages = await import(/* webpackChunkName: "[request]" */ /* webpackMode: "eager" */ `@/lang/fight.${locale}.lang`)
-			i18n.global.mergeLocaleMessage(locale, { fight: fightMessages.default })
+	const fight = ref<Fight | null>(null)
+	let canvas: HTMLCanvasElement | null = null
+	const game = ref<Game>(new Game())
+	const queue = ref<{ position: number, total: number } | null>(null)
+	let getDelay = 1000
+	const loaded = ref(false)
+	const error = ref<unknown>(false)
+	const fullscreen = ref(false)
+	const progressBarTurn = ref<number | string>(0)
+	const progressBarTooltipMargin = ref(0)
+	const progressBarPreviewMouse = ref(0)
+	const width = ref(0)
+	const totalWidth = ref(0)
+	const height = ref(0)
+	const totalHeight = ref(0)
+	let timeout: ReturnType<typeof setTimeout> | null = null
+	let request: ReturnType<typeof LeekWars.get> | null = null
+	const progress = ref(0)
 
-			if (localStorage.getItem('fight/shadows') === null) { localStorage.setItem('fight/shadows', 'true') }
-			if (localStorage.getItem('fight/volume') === null) { localStorage.setItem('fight/volume', '0.5') }
-			if (localStorage.getItem('fight/sound') === null) { localStorage.setItem('fight/sound', 'true') }
-			if (localStorage.getItem('fight/lifes') === null) { localStorage.setItem('fight/lifes', 'true') }
-			if (localStorage.getItem('fight/effects') === null) { localStorage.setItem('fight/effects', 'true') }
-			if (localStorage.getItem('fight/actions') === null) { localStorage.setItem('fight/actions', 'true') }
-			if (localStorage.getItem('fight/auto-dark') === null) { localStorage.setItem('fight/auto-dark', 'true') }
-			if (localStorage.getItem('fight/debugs') === null) { localStorage.setItem('fight/debugs', 'true') }
-			this.game.shadows = localStorage.getItem('fight/shadows') === 'true'
-			this.game.tactic = localStorage.getItem('fight/tactic') === 'true'
-			this.game.showCells = localStorage.getItem('fight/cells') === 'true'
-			this.game.showLifes = localStorage.getItem('fight/lifes') === 'true'
-			this.game.showEffects = localStorage.getItem('fight/effects') === 'true'
-			this.game.showIDs = localStorage.getItem('fight/ids') === 'true'
-			this.game.showActions = localStorage.getItem('fight/actions') === 'true'
-			this.game.largeActions = localStorage.getItem('fight/large-actions') === 'true'
-			this.game.actionsWidth = parseInt(localStorage.getItem('fight/actions-width') || '395', 10)
-			this.game.sound = localStorage.getItem('fight/sound') === 'true';
-			this.game.volume = parseFloat(localStorage.getItem('fight/volume') || "0.5");
-			this.game.autoDark = localStorage.getItem('fight/auto-dark') === 'true'
-			this.game.dark = localStorage.getItem('fight/dark') === 'true'
-			this.game.plainBackground = localStorage.getItem('fight/plain-background') === 'true'
-			this.game.displayDebugs = localStorage.getItem('fight/debugs') === 'true'
-			this.game.displayAILines = localStorage.getItem('fight/debug-lines') === 'true'
-			this.game.displayAllyDebugs = localStorage.getItem('fight/ally-debugs') === 'true'
-			this.game.player = this
+	;(async () => {
+		const fightMessages = await import(/* webpackChunkName: "[request]" */ /* webpackMode: "eager" */ `@/lang/fight.${locale}.lang`)
+		i18n.global.mergeLocaleMessage(locale, { fight: fightMessages.default })
+	})()
 
-			if (this.fightId) {
-				this.getFight(true)
-			} else {
-				this.initMap(this.map)
-			}
-			this.resize()
-			this.$emit('resize')
-			emitter.on('resize', () => {
-				this.resize()
-			})
-			emitter.on('keyup', this.keyup)
-			emitter.on('keydown', this.keydown)
+	if (localStorage.getItem('fight/shadows') === null) localStorage.setItem('fight/shadows', 'true')
+	if (localStorage.getItem('fight/volume') === null) localStorage.setItem('fight/volume', '0.5')
+	if (localStorage.getItem('fight/sound') === null) localStorage.setItem('fight/sound', 'true')
+	if (localStorage.getItem('fight/lifes') === null) localStorage.setItem('fight/lifes', 'true')
+	if (localStorage.getItem('fight/effects') === null) localStorage.setItem('fight/effects', 'true')
+	if (localStorage.getItem('fight/actions') === null) localStorage.setItem('fight/actions', 'true')
+	if (localStorage.getItem('fight/auto-dark') === null) localStorage.setItem('fight/auto-dark', 'true')
+	if (localStorage.getItem('fight/debugs') === null) localStorage.setItem('fight/debugs', 'true')
+	game.value.shadows = localStorage.getItem('fight/shadows') === 'true'
+	game.value.tactic = localStorage.getItem('fight/tactic') === 'true'
+	game.value.showCells = localStorage.getItem('fight/cells') === 'true'
+	game.value.showLifes = localStorage.getItem('fight/lifes') === 'true'
+	game.value.showEffects = localStorage.getItem('fight/effects') === 'true'
+	game.value.showIDs = localStorage.getItem('fight/ids') === 'true'
+	game.value.showActions = localStorage.getItem('fight/actions') === 'true'
+	game.value.largeActions = localStorage.getItem('fight/large-actions') === 'true'
+	game.value.actionsWidth = parseInt(localStorage.getItem('fight/actions-width') || '395', 10)
+	game.value.sound = !LeekWars.sfw && localStorage.getItem('fight/sound') === 'true'
+	game.value.volume = parseFloat(localStorage.getItem('fight/volume') || "0.5")
+	game.value.autoDark = localStorage.getItem('fight/auto-dark') === 'true'
+	game.value.dark = localStorage.getItem('fight/dark') === 'true'
+	game.value.plainBackground = localStorage.getItem('fight/plain-background') === 'true'
+	game.value.displayDebugs = localStorage.getItem('fight/debugs') === 'true'
+	game.value.displayAILines = localStorage.getItem('fight/debug-lines') === 'true'
+	game.value.displayAllyDebugs = localStorage.getItem('fight/ally-debugs') === 'true'
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	;(game.value as any).player = { gameLaunched, $emit: emit }
 
-			emitter.on('fight-progress', (data: any) => {
-				if (this.fight && data[0] === this.fight.id) {
-					this.progress = data[1]
-					if (this.progress === 100 && this.request === null) {
-						if (this.timeout) { clearTimeout(this.timeout) }
-						this.getFight(false)
-					}
-				}
-			})
-		}
+	if (props.fightId) {
+		getFight(true)
+	} else if (props.map) {
+		initMap(props.map)
+	}
+	resize()
+	emit('resize')
+	emitter.on('resize', onResize)
+	emitter.on('keyup', keyup)
+	emitter.on('keydown', keydown)
+	emitter.on('fight-progress', onFightProgress)
 
-		gameLaunched() {
-			this.loaded = true
-			this.setOrigin()
-		}
+	function onResize() {
+		if (destroyed) return
+		resize()
+	}
 
-		@Watch('requiredWidth')
-		@Watch('requiredHeight')
-		requiredWidthChange() {
-			this.resize()
-		}
-
-		getWidth() {
-			if (this.fullscreen) { return window.innerWidth }
-			else if (this.requiredWidth) { return this.requiredWidth }
-			else return (this.$refs.player as HTMLElement).parentElement!.clientWidth
-		}
-
-		getHeight() {
-			if (this.fullscreen) { return window.innerHeight }
-			else if (this.requiredHeight) { return this.requiredHeight }
-			return (this.$refs.player as HTMLElement).parentElement!.clientHeight
-		}
-
-		get hasMarks() {
-			return Object.keys(this.game.markers).length > 0 || Object.keys(this.game.markersText).length > 0
-		}
-
-		get progressBarWidth() {
-			return this.game && this.game.actions ? 100 * this.game.currentAction / this.game.actions.length : 0
-		}
-
-		resize() {
-			nextTick(() => {
-				if (!this.canvas) { return }
-				const newWidth = this.getWidth()
-				const newHeight = this.getHeight()
-				if (newWidth === this.width && newHeight === this.height) { return }
-				const aspectRatio = window.devicePixelRatio || 1
-				this.game.ratio = aspectRatio
-				this.totalWidth = newWidth
-				this.totalHeight = newHeight
-				this.width = newWidth - (this.horizontal ? 2 * this.CONTROLS_HEIGHT : 0)
-				this.height = newHeight - (this.horizontal ? this.BAR_HEIGHT : (this.creator ? 0 : this.BAR_HEIGHT) + this.CONTROLS_HEIGHT)
-				this.canvas.width = this.width * aspectRatio
-				this.canvas.height = this.height * aspectRatio
-				this.game.resize(this.canvas.width, this.canvas.height)
-				this.game.redraw()
-				this.setOrigin()
-			})
-		}
-		setOrigin() {
-			setTimeout(() => {
-				const p = this.canvas.getBoundingClientRect()
-				this.game.setOrigin(p.left, p.top + window.scrollY)
-			}, 50)
-		}
-		mousemove(e: MouseEvent) {
-			this.game.mousemove(e)
-			if (this.$refs.hud) {
-				;(this.$refs.hud as Hud).hover_entity = this.game.mouseEntity
-			}
-		}
-		mousedown(e: MouseEvent) {
-			this.game.mousedown(e)
-		}
-		mouseup(e: MouseEvent) {
-			this.game.mouseup(e)
-		}
-		mounted() {
-			this.canvas = document.querySelector('.game-canvas')
-			this.game.canvas = this.canvas
-			this.game.ctx = this.canvas.getContext('2d')
-		}
-
-		keydown(e: KeyboardEvent) {
-			if (e.keyCode === 32) {
-				if (this.game.paused) {
-					this.game.resume()
-				} else {
-					this.game.pause()
-				}
-				e.preventDefault()
-				return false
-			} else if (e.keyCode === 37) { // left arrow
-				this.game.previousAction()
-			} else if (e.keyCode === 39) { // right arrow
-				this.game.nextAction()
-			}
-		}
-
-		keyup(e: KeyboardEvent) {
-			if ((e.keyCode === 65) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // A
-				this.game.showActions = !this.game.showActions
-				e.preventDefault()
-			} else if ((e.keyCode === 69) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // E
-				this.game.showEffects = !this.game.showEffects
-				e.preventDefault()
-			} else if ((e.keyCode === 76) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // L
-				this.game.showLifes = !this.game.showLifes
-				e.preventDefault()
-			} else if ((e.keyCode === 79) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // O
-				this.game.shadows = !this.game.shadows
-				e.preventDefault()
-			} else if ((e.keyCode === 71) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // G
-				this.game.largeActions = !this.game.largeActions
-				e.preventDefault()
-			} else if ((e.keyCode === 78) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // N
-				this.game.dark = !this.game.dark
-				e.preventDefault()
-			} else if ((e.keyCode === 84) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // T
-				this.game.tactic = !this.game.tactic
-				e.preventDefault()
-			} else if ((e.keyCode === 68) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // D
-				this.game.displayDebugs = !this.game.displayDebugs
-				e.preventDefault()
-			} else if ((e.keyCode === 85) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // U
-				this.game.plainBackground = !this.game.plainBackground
-				e.preventDefault()
-			} else if ((e.keyCode === 67) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // C
-				this.game.showCells = !this.game.showCells
-				e.preventDefault()
-			} else if ((e.keyCode === 73) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // I
-				this.game.showIDs = !this.game.showIDs
-				e.preventDefault()
-			} else if ((e.keyCode === 81) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // Q
-				if (this.fullscreen) {
-					this.toggleFullscreen()
-				}
-				this.game.showReport()
-				e.preventDefault()
-			} else if ((e.keyCode === 80) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // P
-				if (this.game.paused) {
-					this.game.resume()
-				} else {
-					this.game.pause()
-				}
-				e.preventDefault()
-			} else if ((e.keyCode === 83) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // S
-				this.game.speedUp()
-				e.preventDefault()
-			} else if ((e.keyCode === 70) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // F
-				this.toggleFullscreen()
-				e.preventDefault()
-			} else if ((e.keyCode === 86) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // V
-				this.game.sound = !this.game.sound
-				e.preventDefault()
-			} else if ((e.keyCode === 77) && !e.ctrlKey && !e.shiftKey && !e.altKey) { // M
-				this.game.clearMarks()
-				e.preventDefault()
-			} else if (e.keyCode === 88 && !this.game.creator) { // X
-				this.game.map.seed = Math.random() * 10000000 | 0
-				this.game.mapLoaded()
-				e.preventDefault()
-			}
-		}
-
-		beforeUnmount() {
-			this.game.pause()
-			this.game.cancelled = true
-			emitter.off('keyup', this.keyup)
-			emitter.off('keydown', this.keydown)
-			emitter.off('resize')
-			emitter.off('fight-progress')
-			if (this.timeout) { clearTimeout(this.timeout) }
-			if (this.request) { this.request.abort() }
-			if (this.fightId !== 'local') {
-				LeekWars.socket.send([SocketMessage.FIGHT_PROGRESS_UNREGISTER, this.fightId])
-			}
-			if (LeekWars.didactitial_step === 3) {
-				LeekWars.didactitial_next()
-			}
-		}
-
-		initMap(map: FightMap) {
-			const local_fight = {
-				title: 'Fight', context: 3,	date: 0,
-				farmers1: {1: {id: 1, name: 'Pilow'} as Farmer},
-				farmers2: {1: {id: 1, name: 'Pilow'} as Farmer},
-				id: 0,
-				farmer1: 1, farmer2: 1,
-				leeks1: [],	leeks2: [],
-				team1: null, team2: null,
-				report: {} as Report,
-				status: 1,
-				team1_name: "A", team2_name: "B",
-				tournament: 0, type: 0, winner: 1, year: 2019,
-				data: {
-					actions: [],
-					map: map,
-					leeks: [],
-					team1: [],
-					team2: [],
-					ops: {},
-				},
-				comments: [],
-				result: 'win', queue: 0,
-				trophies: [],
-				chests: 0,
-				size: 0,
-				rareloot: 0,
-				levelups: 0,
-			} as Fight
-			this.loaded = true
-			this.$emit('fight', local_fight)
-			nextTick(() => {
-				this.game.creator = true
-				this.game.paused = true
-				this.game.init(local_fight)
-				// T.torii_gate.load(this.game)
-				// T.boxwood.load(this.game)
-				// for (const obstacle of this.game.ground.obstacles) {
-				// 	// obstacle.resize()
-				// 	this.game.ground.addObstacleElement(obstacle)
-				// }
-				// this.resize()
-				// this.game.redraw()
-			})
-		}
-
-		getFight(first: boolean) {
-			const fightLoaded = (fight: Fight) => {
-				this.fight = fight
-				this.$emit('fight', fight)
-				if (fight.status >= 1) {
-					if (fight.data) {
-						this.getLogs()
-						this.game.startTurn = this.startTurn
-						this.game.startAction = this.startAction
-						this.game.init(fight)
-					} else {
-						this.error = true
-					}
-				} else {
-					if (first) {
-						LeekWars.socket.send([SocketMessage.FIGHT_PROGRESS_REGISTER, this.fight.id])
-					}
-					this.queue = fight.queue
-					if (this.loaded) { return }
-					this.timeout = setTimeout(() => {
-						this.getFight(false)
-					}, this.getDelay)
-					this.getDelay += 500
-					this.getDelay = Math.min(4000, this.getDelay)
-				}
-			}
-			if (this.fightId === 'local') {
-				fetch(`/static/report.json`).then(response => response.json()).then(report => {
-					const local_fight = {
-						title: 'Fight', context: 3,	date: 0,
-						farmers1: {1: {id: 1, name: 'Pilow'} as Farmer},
-						farmers2: {1: {id: 1, name: 'Pilow'} as Farmer},
-						id: 0,
-						farmer1: 1, farmer2: 1,
-						leeks1: [],	leeks2: [],
-						team1: null, team2: null,
-						report: {} as Report,
-						status: 1,
-						team1_name: "A", team2_name: "B",
-						tournament: 0, type: 0, winner: 1, year: 2019,
-						data: report.fight as any,
-						comments: [],
-						result: 'win', queue: 0,
-						trophies: [],
-						chests: 0,
-						size: 0,
-						rareloot: 0,
-						levelups: 0,
-					} as Fight
-					fightLoaded(local_fight)
-					if (this.$store.state.farmer) {
-						this.game.setLogs(report.logs[this.$store.state.farmer.id])
-					}
-				})
-			} else {
-				if (this.request === null) { // Déjà en train de charger
-					this.request = LeekWars.get('fight/get/' + this.fightId)
-					this.request.then((fight: any) => {
-						this.request = null
-						fightLoaded(fight)
-					}).error((error: any) => {
-						this.request = null
-						this.error = error
-					})
-				}
-			}
-		}
-		getLogs() {
-			if (this.$store.state.farmer) {
-				this.game.numData++
-				LeekWars.get('fight/get-logs/' + this.fightId).then(logs => {
-					this.game.setLogs(logs)
-				})
-			}
-		}
-		pause() {
-			if (this.game.paused) {
-				this.game.resume()
-			} else {
-				this.game.pause()
-			}
-		}
-		toggleFullscreen() {
-			if (this.fullscreen) {
-				LeekWars.fullscreenExit()
-				this.fullscreen = false
-			} else {
-				LeekWars.fullscreenEnter(this.$el as HTMLElement, (fullscreen: boolean) => {
-					this.fullscreen = fullscreen
-				})
-			}
-		}
-		quit() {
-			this.$router.push('/report/' + this.fightId)
-		}
-		progressBarClick(e: MouseEvent) {
-			const bar = this.$refs.progressBar as HTMLElement
-			const action = Math.round(this.game.actions.length * (e.pageX - bar.getBoundingClientRect().left) / bar.offsetWidth)
-			this.game.requestJump(action)
-			const barOffset = bar.getBoundingClientRect().left
-			this.progressBarPreviewMouse = 100 * (e.pageX - barOffset) / bar.clientWidth
-		}
-		progressBarMove(e: MouseEvent) {
-			const bar = this.$refs.progressBar as HTMLElement
-			const tooltip = this.$refs.progressBarTooltip as HTMLElement
-			const barOffset = bar.getBoundingClientRect().left
-			let turn: any = 0
-			const pos = (e.pageX - barOffset) / bar.clientWidth
-			for (const i in this.game.turnPosition) {
-				if (pos >= this.game.turnPosition[i]) {
-					turn = i
-				}
-			}
-			this.progressBarTurn = turn
-			this.progressBarTooltipMargin = Math.min(Math.max((e.pageX - barOffset) - (tooltip.clientWidth / 2), 0), bar.clientWidth - tooltip.clientWidth)
-			this.progressBarPreviewMouse = 100 * (e.pageX - barOffset) / bar.clientWidth
-		}
-		get progressBarPreviewWidth() {
-			return Math.max(0, this.progressBarPreviewMouse - this.progressBarWidth)
-		}
-		@Watch("game.volume") changeVolume() {
-			localStorage.setItem('fight/volume', '' + this.game.volume)
-			this.game.changeVolume();
-		}
-		@Watch("game.sound") toggleSound() {
-			localStorage.setItem('fight/sound', '' + this.game.sound)
-			this.game.toggleSound()
-		}
-		@Watch("game.shadows") toggleShadows() {
-			localStorage.setItem('fight/shadows', '' + this.game.shadows)
-			this.game.toggleShadows()
-			this.game.redraw()
-		}
-		@Watch("game.tactic") toggleTactic() {
-			localStorage.setItem('fight/tactic', '' + this.game.tactic)
-			this.game.toggleShadows()
-			this.game.redraw()
-		}
-		@Watch("game.showCells") toggleCells() {
-			localStorage.setItem('fight/cells', '' + this.game.showCells)
-			this.game.redraw()
-		}
-		@Watch("game.showLifes") toggleLifes() {
-			localStorage.setItem('fight/lifes', '' + this.game.showLifes)
-			this.game.redraw()
-		}
-		@Watch("game.showEffects") toggleEffects() {
-			localStorage.setItem('fight/effects', '' + this.game.showEffects)
-			this.game.redraw()
-		}
-		@Watch("game.showIDs") toggleIDs() {
-			localStorage.setItem('fight/ids', '' + this.game.showIDs)
-			this.game.redraw()
-		}
-		@Watch("game.showActions") toggleActions() {
-			localStorage.setItem('fight/actions', '' + this.game.showActions)
-			if (this.game.actionsWidth === 0) {
-				this.game.actionsWidth = 395
-			}
-			this.resize()
-		}
-		@Watch("game.largeActions") toggleLargeActions() {
-			localStorage.setItem('fight/large-actions', '' + this.game.largeActions)
-			if (this.game.actionsWidth === 0) {
-				this.game.actionsWidth = 395
-			}
-			this.resize()
-		}
-		@Watch("game.actionsWidth") updateActionsWidth() {
-			localStorage.setItem('fight/actions-width', '' + this.game.actionsWidth)
-			this.resize()
-		}
-		@Watch("game.dark") toggleDark() {
-			localStorage.setItem('fight/dark', '' + this.game.dark)
-			this.game.toggleDark()
-		}
-		@Watch("game.autoDark") toggleAutoDark() {
-			localStorage.setItem('fight/auto-dark', '' + this.game.autoDark)
-		}
-		@Watch("game.plainBackground") updatePlainBackground() {
-			localStorage.setItem('fight/plain-background', '' + this.game.plainBackground)
-			this.resize()
-		}
-		@Watch("game.displayDebugs") updateDebugs() {
-			localStorage.setItem('fight/debugs', '' + this.game.displayDebugs)
-		}
-		@Watch("game.displayAILines") updateDebugsLines() {
-			localStorage.setItem('fight/debug-lines', '' + this.game.displayAILines)
-		}
-		@Watch("game.displayAllyDebugs") updateAllyDebugs() {
-			localStorage.setItem('fight/ally-debugs', '' + this.game.displayAllyDebugs)
-		}
-		canvasClick() {
-			this.game.selectEntity(this.game.click())
-		}
-		canvasRightClick(e: Event) {
-			this.game.rightClick()
-			e.preventDefault()
-		}
-
-		@Watch("game.going_to_report")
-		endOfFight() {
-			if (this.game.going_to_report && this.fightId !== 'local') {
-				this.$router.push("/report/" + this.fightId)
-			}
-		}
-
-		@Watch('game.mapType')
-		updateMap(after: number, before: number) {
-			if (before !== -1) {
-				this.game.updateMap()
+	function onFightProgress(data: unknown[]) {
+		if (destroyed) return
+		if (fight.value && data[0] === fight.value.id) {
+			progress.value = data[1] as number
+			if (progress.value === 100 && request === null) {
+				if (timeout) clearTimeout(timeout)
+				getFight(false)
 			}
 		}
 	}
+
+	function gameLaunched() {
+		loaded.value = true
+		setOrigin()
+	}
+
+	watch([() => props.requiredWidth, () => props.requiredHeight, fullscreen], () => resize())
+
+	function getWidth() {
+		if (fullscreen.value) return window.innerWidth
+		if (props.requiredWidth) return props.requiredWidth
+		return playerEl.value!.parentElement!.clientWidth
+	}
+
+	function getHeight() {
+		if (fullscreen.value) return window.innerHeight
+		if (props.requiredHeight) return props.requiredHeight
+		return playerEl.value!.parentElement!.clientHeight
+	}
+
+	const hasMarks = computed(() => Object.keys(game.value.markers).length > 0 || Object.keys(game.value.markersText).length > 0)
+	const progressBarWidth = computed(() => game.value && game.value.actions ? 100 * game.value.currentAction / game.value.actions.length : 0)
+	const progressBarPreviewWidth = computed(() => Math.max(0, progressBarPreviewMouse.value - progressBarWidth.value))
+
+	function resize() {
+		nextTick(() => {
+			if (destroyed || !canvas) return
+			const newWidth = getWidth()
+			const newHeight = getHeight()
+			if (newWidth === width.value && newHeight === height.value) return
+			const aspectRatio = window.devicePixelRatio || 1
+			game.value.ratio = aspectRatio
+			totalWidth.value = newWidth
+			totalHeight.value = newHeight
+			width.value = newWidth - (props.horizontal ? 2 * CONTROLS_HEIGHT : 0)
+			height.value = newHeight - (props.horizontal ? BAR_HEIGHT : (props.creator ? 0 : BAR_HEIGHT) + CONTROLS_HEIGHT)
+			canvas.width = width.value * aspectRatio
+			canvas.height = height.value * aspectRatio
+			game.value.resize(canvas.width, canvas.height)
+			game.value.redraw()
+			setOrigin()
+		})
+	}
+
+	function setOrigin() {
+		setTimeout(() => {
+			if (!canvas) return
+			const p = canvas.getBoundingClientRect()
+			game.value.setOrigin(p.left, p.top + window.scrollY)
+		}, 50)
+	}
+
+	function mousemove(e: MouseEvent) {
+		game.value.mousemove(e)
+		if (hudRef.value) {
+			hudRef.value.hover_entity = game.value.mouseEntity
+		}
+	}
+	function mousedown(e: MouseEvent) { game.value.mousedown(e) }
+	function mouseup(e: MouseEvent) { game.value.mouseup(e) }
+
+	onMounted(() => {
+		canvas = document.querySelector('.game-canvas')
+		game.value.canvas = canvas
+		game.value.ctx = canvas.getContext('2d')
+	})
+
+	function keydown(e: KeyboardEvent) {
+		if (e.keyCode === 32) {
+			if (game.value.paused) game.value.resume()
+			else game.value.pause()
+			e.preventDefault()
+			return false
+		} else if (e.keyCode === 37) {
+			if (e.ctrlKey) {
+				game.value.previousEntity()
+				e.preventDefault()
+			} else {
+				game.value.previousAction()
+			}
+		} else if (e.keyCode === 39) {
+			if (e.ctrlKey) {
+				game.value.nextEntity()
+				e.preventDefault()
+			} else {
+				game.value.nextAction()
+			}
+		}
+	}
+
+	function keyup(e: KeyboardEvent) {
+		const plain = !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey
+		if (!plain) return
+		const k = e.keyCode
+		if (k === 65) { game.value.showActions = !game.value.showActions; e.preventDefault() }
+		else if (k === 69) { game.value.showEffects = !game.value.showEffects; e.preventDefault() }
+		else if (k === 76) { game.value.showLifes = !game.value.showLifes; e.preventDefault() }
+		else if (k === 79) { game.value.shadows = !game.value.shadows; e.preventDefault() }
+		else if (k === 71) { game.value.largeActions = !game.value.largeActions; e.preventDefault() }
+		else if (k === 78) { game.value.dark = !game.value.dark; e.preventDefault() }
+		else if (k === 84) { game.value.tactic = !game.value.tactic; e.preventDefault() }
+		else if (k === 68) { game.value.displayDebugs = !game.value.displayDebugs; e.preventDefault() }
+		else if (k === 85) { game.value.plainBackground = !game.value.plainBackground; e.preventDefault() }
+		else if (k === 67) { game.value.showCells = !game.value.showCells; e.preventDefault() }
+		else if (k === 73) { game.value.showIDs = !game.value.showIDs; e.preventDefault() }
+		else if (k === 81) {
+			if (fullscreen.value) toggleFullscreen()
+			game.value.showReport()
+			e.preventDefault()
+		} else if (k === 80) {
+			if (game.value.paused) game.value.resume()
+			else game.value.pause()
+			e.preventDefault()
+		} else if (k === 83) { game.value.speedUp(); e.preventDefault() }
+		else if (k === 70) { toggleFullscreen(); e.preventDefault() }
+		else if (k === 86) { game.value.sound = !game.value.sound; e.preventDefault() }
+		else if (k === 77) { game.value.clearMarks(); e.preventDefault() }
+		else if (k === 88 && !game.value.creator) {
+			game.value.map.seed = Math.random() * 10000000 | 0
+			game.value.mapLoaded()
+			e.preventDefault()
+		}
+	}
+
+	onBeforeUnmount(() => {
+		destroyed = true
+		game.value.pause()
+		game.value.cancelled = true
+		emitter.off('keyup', keyup)
+		emitter.off('keydown', keydown)
+		emitter.off('resize', onResize)
+		emitter.off('fight-progress', onFightProgress)
+		if (timeout) clearTimeout(timeout)
+		if (request) request.abort()
+		if (props.fightId !== 'local') {
+			LeekWars.socket.send([SocketMessage.FIGHT_PROGRESS_UNREGISTER, props.fightId])
+		}
+		if (LeekWars.didactitial_step === 3) {
+			LeekWars.didactitial_next()
+		}
+	})
+
+	function initMap(map: FightMap) {
+		const local_fight = {
+			title: 'Fight', context: 3, date: 0,
+			farmers1: {1: {id: 1, name: 'Pilow'} as Farmer},
+			farmers2: {1: {id: 1, name: 'Pilow'} as Farmer},
+			id: 0, farmer1: 1, farmer2: 1,
+			leeks1: [], leeks2: [], team1: null, team2: null,
+			report: {} as Report, status: 1,
+			team1_name: "A", team2_name: "B",
+			tournament: 0, type: 0, winner: 1, year: 2019,
+			data: { actions: [], map, leeks: [], team1: [], team2: [], ops: {} },
+			comments: [], result: 'win', queue: 0, trophies: [],
+			chests: 0, size: 0, rareloot: 0, levelups: 0,
+		} as unknown as Fight
+		loaded.value = true
+		emit('fight', local_fight)
+		nextTick(() => {
+			game.value.creator = true
+			game.value.paused = true
+			game.value.init(local_fight)
+		})
+	}
+
+	function getFight(first: boolean) {
+		const fightLoaded = (f: Fight) => {
+			// Garde contre une réponse vide (déjà observé en prod : crash en
+			// aval sur f.team1_name, issue #3751). En général c'est la
+			// branche .error() de LeekWars.get qui devrait être empruntée,
+			// mais une réponse 200 + body null arrive parfois.
+			if (!f) {
+				error.value = true
+				return
+			}
+			fight.value = f
+			emit('fight', f)
+			if (f.status >= 1) {
+				if (f.data) {
+					getLogs()
+					game.value.startTurn = props.startTurn ?? 1
+					game.value.startAction = props.startAction ?? 0
+					game.value.init(f)
+				} else {
+					error.value = true
+				}
+			} else {
+				if (first) {
+					LeekWars.socket.send([SocketMessage.FIGHT_PROGRESS_REGISTER, fight.value!.id])
+				}
+				queue.value = f.queue
+				if (loaded.value) return
+				timeout = setTimeout(() => { getFight(false) }, getDelay)
+				getDelay += 500
+				getDelay = Math.min(4000, getDelay)
+			}
+		}
+		if (props.fightId === 'local') {
+			fetch(`/static/report.json`).then(response => response.json()).then(report => {
+				if (destroyed) return
+				const local_fight = {
+					title: 'Fight', context: 3, date: 0,
+					farmers1: {1: {id: 1, name: 'Pilow'} as Farmer},
+					farmers2: {1: {id: 1, name: 'Pilow'} as Farmer},
+					id: 0, farmer1: 1, farmer2: 1,
+					leeks1: [], leeks2: [], team1: null, team2: null,
+					report: {} as Report, status: 1,
+					team1_name: "A", team2_name: "B",
+					tournament: 0, type: 0, winner: 1, year: 2019,
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					data: report.fight as any,
+					comments: [], result: 'win', queue: 0, trophies: [],
+					chests: 0, size: 0, rareloot: 0, levelups: 0,
+				} as unknown as Fight
+				fightLoaded(local_fight)
+				if (store.state.farmer) {
+					game.value.setLogs(report.logs[store.state.farmer.id])
+				}
+			})
+		} else {
+			if (request === null) {
+				request = LeekWars.get('fight/get/' + props.fightId)
+				request.then((f) => {
+					if (destroyed) return
+					request = null
+					fightLoaded(f)
+				}).error((err) => {
+					if (destroyed) return
+					request = null
+					error.value = err
+				})
+			}
+		}
+	}
+
+	function getLogs() {
+		if (store.state.farmer) {
+			game.value.numData++
+			LeekWars.get('fight/get-logs/' + props.fightId).then(logs => {
+				if (destroyed) return
+				game.value.setLogs(logs)
+			})
+		}
+	}
+
+	function pause() {
+		if (game.value.paused) game.value.resume()
+		else game.value.pause()
+	}
+
+	function toggleFullscreen() {
+		if (fullscreen.value) {
+			LeekWars.fullscreenExit()
+			fullscreen.value = false
+		} else {
+			LeekWars.fullscreenEnter(instance?.proxy?.$el as HTMLElement, (fs: boolean) => {
+				fullscreen.value = fs
+			})
+		}
+	}
+
+	function quit() {
+		router.push('/report/' + props.fightId)
+	}
+
+	function progressBarClick(e: MouseEvent) {
+		const bar = progressBar.value
+		if (!bar) return
+		const action = Math.round(game.value.actions.length * (e.pageX - bar.getBoundingClientRect().left) / bar.offsetWidth)
+		game.value.requestJump(action)
+		const barOffset = bar.getBoundingClientRect().left
+		progressBarPreviewMouse.value = 100 * (e.pageX - barOffset) / bar.clientWidth
+	}
+
+	function progressBarMove(e: MouseEvent) {
+		const bar = progressBar.value
+		const tooltip = progressBarTooltip.value
+		if (!bar || !tooltip) return
+		const barOffset = bar.getBoundingClientRect().left
+		let turn: number | string = 0
+		const pos = (e.pageX - barOffset) / bar.clientWidth
+		for (const i in game.value.turnPosition) {
+			if (pos >= game.value.turnPosition[i]) turn = i
+		}
+		progressBarTurn.value = turn
+		progressBarTooltipMargin.value = Math.min(Math.max((e.pageX - barOffset) - (tooltip.clientWidth / 2), 0), bar.clientWidth - tooltip.clientWidth)
+		progressBarPreviewMouse.value = 100 * (e.pageX - barOffset) / bar.clientWidth
+	}
+
+	function setLocalStorageAndRedraw(key: string, value: unknown, redraw = false) {
+		localStorage.setItem('fight/' + key, '' + value)
+		if (redraw) game.value.redraw()
+	}
+
+	watch(() => game.value.volume, () => { localStorage.setItem('fight/volume', '' + game.value.volume); game.value.changeVolume() })
+	watch(() => game.value.sound, () => {
+		if (!LeekWars.sfw) localStorage.setItem('fight/sound', '' + game.value.sound)
+		game.value.toggleSound()
+	})
+	watch(() => game.value.shadows, () => { localStorage.setItem('fight/shadows', '' + game.value.shadows); game.value.toggleShadows(); game.value.redraw() })
+	watch(() => game.value.tactic, () => { localStorage.setItem('fight/tactic', '' + game.value.tactic); game.value.toggleShadows(); game.value.redraw() })
+	watch(() => game.value.showCells, () => setLocalStorageAndRedraw('cells', game.value.showCells, true))
+	watch(() => game.value.showLifes, () => setLocalStorageAndRedraw('lifes', game.value.showLifes, true))
+	watch(() => game.value.showEffects, () => setLocalStorageAndRedraw('effects', game.value.showEffects, true))
+	watch(() => game.value.showIDs, () => setLocalStorageAndRedraw('ids', game.value.showIDs, true))
+	watch(() => game.value.showActions, () => {
+		localStorage.setItem('fight/actions', '' + game.value.showActions)
+		if (game.value.actionsWidth === 0) game.value.actionsWidth = 395
+		resize()
+	})
+	watch(() => game.value.largeActions, () => {
+		localStorage.setItem('fight/large-actions', '' + game.value.largeActions)
+		if (game.value.actionsWidth === 0) game.value.actionsWidth = 395
+		resize()
+	})
+	watch(() => game.value.actionsWidth, () => { localStorage.setItem('fight/actions-width', '' + game.value.actionsWidth); resize() })
+	watch(() => game.value.dark, () => { localStorage.setItem('fight/dark', '' + game.value.dark); game.value.toggleDark() })
+	watch(() => game.value.autoDark, () => { localStorage.setItem('fight/auto-dark', '' + game.value.autoDark) })
+	watch(() => game.value.plainBackground, () => { localStorage.setItem('fight/plain-background', '' + game.value.plainBackground); resize() })
+	watch(() => game.value.displayDebugs, () => { localStorage.setItem('fight/debugs', '' + game.value.displayDebugs) })
+	watch(() => game.value.displayAILines, () => { localStorage.setItem('fight/debug-lines', '' + game.value.displayAILines) })
+	watch(() => game.value.displayAllyDebugs, () => { localStorage.setItem('fight/ally-debugs', '' + game.value.displayAllyDebugs) })
+
+	function canvasClick() { game.value.selectEntity(game.value.click()) }
+	function canvasRightClick(e: Event) { game.value.rightClick(); e.preventDefault() }
+
+	watch(() => game.value.going_to_report, () => {
+		if (game.value.going_to_report && props.fightId !== 'local') {
+			router.push("/report/" + props.fightId)
+		}
+	})
+
+	watch(() => game.value.mapType, (after, before) => {
+		if (before !== -1) game.value.updateMap()
+	})
+
+	defineExpose({ get loaded() { return loaded.value }, set loaded(v: boolean) { loaded.value = v }, gameLaunched })
 </script>
+
 
 <style lang="scss" scoped>
 	.game {

@@ -1,8 +1,8 @@
 <template>
 	<v-menu ref="menu" v-model="value" :close-on-content-click="false" offset-overflow :disabled="disabled || id <= 0" :nudge-width="expand_leeks ? 500 : 200" :nudge-top="-5" :open-delay="_open_delay" :close-delay="_close_delay" :top="!bottom" :bottom="bottom" :transition="instant ? 'none' : 'scale-transition'" :open-on-hover="!locked" offset-y @update:model-value="open($event)">
-		<template #activator="{ props }">
-			<span v-bind="props">
-				<slot></slot>
+		<template #activator="{ props: activatorProps }">
+			<span v-bind="activatorProps">
+				<slot :props="activatorProps"></slot>
 			</span>
 		</template>
 		<div class="card" @mouseenter="mouse = true" @mouseleave="mouse = false">
@@ -22,14 +22,14 @@
 							<flag v-if="farmer.country" :code="farmer.country" class="country" />
 							<lw-title v-if="farmer.title.length" :title="farmer.title" />
 							<div class="spacer"></div>
-							<v-btn v-if="!$store.state.farmer || id != $store.state.farmer.id" variant="text" icon="mdi-chat" size="small" @click="sendMessage()" />
+							<v-btn v-if="!store.state.farmer || id != store.state.farmer.id" variant="text" icon="mdi-chat" size="small" @click="sendMessage()" />
 						</span>
 						<div>
 							<router-link :to="'/trophies/' + farmer.id" class="stat">
 								<img class="icon" src="/image/icon/grey/trophy.png">{{ LeekWars.formatNumber(farmer.points) }}
 							</router-link>
 							<router-link v-if="farmer.forum_messages" :to="'/search?farmer=' + farmer.name + '&order=date'" class="stat">
-								<img class="icon" src="/image/forum.png">{{ $tc('main.n_messages', farmer.forum_messages) }}
+								<img class="icon" src="/image/forum.png">{{ $t('main.n_messages', farmer.forum_messages) }}
 							</router-link>
 						</div>
 					</div>
@@ -38,7 +38,7 @@
 				<span class="talent-more">({{ farmer.talent_more >= 0 ? '+' + farmer.talent_more : farmer.talent_more }})</span>
 				<ranking-badge v-if="farmer && farmer.ranking && farmer.ranking <= 1000 && farmer.in_garden" :id="farmer.id" :ranking="farmer.ranking" category="farmer" />
 				<span class="level">• {{ $t('main.level_n', [farmer.total_level]) }}</span>
-				<v-btn class="expand" variant="text" size="x-small" @click="expand_leeks = !expand_leeks" :icon="expand_leeks ? 'mdi-chevron-up' : 'mdi-chevron-down'" />
+				<v-btn class="expand" variant="text" size="x-small" :icon="expand_leeks ? 'mdi-chevron-up' : 'mdi-chevron-down'" @click="expand_leeks = !expand_leeks" />
 				<table v-if="expand_leeks" class="leeks">
 					<thead>
 						<tr>
@@ -68,84 +68,100 @@
 	</v-menu>
 </template>
 
-<script lang="ts">
-	import { Farmer } from '@/model/farmer'
-	import { LeekWars } from '@/model/leekwars'
-	import { store } from '@/model/store'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
-	import RichTooltipLeek from '@/component/rich-tooltip/rich-tooltip-leek.vue'
-	import { defineAsyncComponent } from 'vue'
-	const LWTitle = defineAsyncComponent(() => import('@/component/title/title.vue'))
+<script setup lang="ts">
+import { ref, computed, watch, useTemplateRef, defineAsyncComponent } from 'vue'
+import { useRouter } from 'vue-router'
+import { LeekWars } from '@/model/leekwars'
+import { store } from '@/model/store'
+import RichTooltipLeek from '@/component/rich-tooltip/rich-tooltip-leek.vue'
 
-	@Options({ components: { RichTooltipLeek, 'lw-title': LWTitle }, emits: ['update:modelValue'] })
-	export default class RichTooltipFarmer extends Vue {
-		@Prop({required: true}) id!: number
-		@Prop() disabled!: boolean
-		@Prop() bottom!: boolean
-		@Prop() instant!: boolean
+const LwTitle = defineAsyncComponent(() => import('@/component/title/title.vue'))
 
-		LeekWars = LeekWars
-		content_created: boolean = false
-		farmer: Farmer | null = null
-		expand_leeks: boolean = false
-		sums: {[key: string]: number} = {}
-		locked: boolean = false
-		mouse: boolean = false
-		value: boolean = false
+const props = defineProps<{
+	id: number
+	disabled?: boolean
+	bottom?: boolean
+	instant?: boolean
+}>()
 
-		get _open_delay() {
-			return this.instant ? 1 : 500
-		}
-		get _close_delay() {
-			return this.instant ? 1 : 1
-		}
-		@Watch('id')
-		update() {
-			this.farmer = null
-			this.content_created = false
-		}
-		open(v: boolean) {
-			this.$emit('update:modelValue', v)
-			this.expand_leeks = localStorage.getItem('richtooltipfarmer/expanded') === 'true'
-			if (this.content_created) { return }
-			this.content_created = true
-			if (this.id > 0 && !this.farmer) {
-				LeekWars.get<Farmer>('farmer/rich-tooltip/' + this.id).then(farmer => {
-					this.farmer = farmer
-					for (const c of LeekWars.characteristics) {
-						this.sums[c] = Object.values(this.farmer.leeks).reduce((sum: number, leek: any) => sum + leek['total_' + c], 0)
-					}
-					if (this.expand_leeks) {
-						(this.$refs.menu as any)?.updateLocation?.()
-					}
-				})
+const emit = defineEmits<{
+	'update:modelValue': [value: boolean]
+}>()
+
+interface RichFarmerLeek {
+	id: number
+	name: string
+	level: number
+	talent: number
+	[key: string]: unknown
+}
+
+interface RichFarmerData {
+	id: number
+	name: string
+	avatar_changed: number
+	leeks: Record<string, RichFarmerLeek>
+	[key: string]: unknown
+}
+
+const router = useRouter()
+const menu = useTemplateRef<{ updateLocation?: () => void }>('menu')
+const content_created = ref(false)
+const farmer = ref<RichFarmerData | null>(null)
+const expand_leeks = ref(false)
+const sums = ref<{[key: string]: number}>({})
+const locked = ref(false)
+const mouse = ref(false)
+const value = ref(false)
+
+const _open_delay = computed(() => props.instant ? 1 : 500)
+const _close_delay = computed(() => props.instant ? 1 : 1)
+
+watch(() => props.id, () => {
+	farmer.value = null
+	content_created.value = false
+})
+
+function open(v: boolean) {
+	emit('update:modelValue', v)
+	expand_leeks.value = localStorage.getItem('richtooltipfarmer/expanded') === 'true'
+	if (content_created.value) { return }
+	content_created.value = true
+	if (props.id > 0 && !farmer.value) {
+		LeekWars.get<RichFarmerData>('farmer/rich-tooltip/' + props.id).then(f => {
+			farmer.value = f
+			for (const c of LeekWars.characteristics) {
+				sums.value[c] = Object.values(f.leeks).reduce((sum: number, leek: RichFarmerLeek) => sum + (leek['total_' + c] as number), 0)
 			}
-		}
-
-		sendMessage() {
-			if (!this.farmer) { return }
-			LeekWars.get('message/find-conversation/' + this.farmer.id).then(conversation => {
-				store.commit('new-conversation', conversation)
-				this.$router.push('/messages/conversation/' + conversation.id)
-			}).error(() => {
-				if (!this.farmer) { return }
-				this.$router.push('/messages/new/' + this.farmer.id + '/' + this.farmer.name + '/' + this.farmer.avatar_changed)
-			})
-		}
-
-		@Watch('expand_leeks')
-		updateExpand() {
-			localStorage.setItem('richtooltipfarmer/expanded', this.expand_leeks ? 'true' : 'false')
-		}
-
-		setParent(event: boolean) {
-			this.locked = event
-			if (!event && !this.mouse) {
-				this.value = false
-				this.$emit('update:modelValue', false)
+			if (expand_leeks.value) {
+				menu.value?.updateLocation?.()
 			}
-		}
+		})
 	}
+}
+
+function sendMessage() {
+	if (!farmer.value) { return }
+	const f = farmer.value
+	LeekWars.get('message/find-conversation/' + f.id).then(conversation => {
+		store.commit('new-conversation', conversation)
+		router.push('/messages/conversation/' + conversation.id)
+	}).catch(() => {
+		router.push('/messages/new/' + f.id + '/' + f.name + '/' + f.avatar_changed)
+	})
+}
+
+watch(expand_leeks, () => {
+	localStorage.setItem('richtooltipfarmer/expanded', expand_leeks.value ? 'true' : 'false')
+})
+
+function setParent(event: boolean) {
+	locked.value = event
+	if (!event && !mouse.value) {
+		value.value = false
+		emit('update:modelValue', false)
+	}
+}
 </script>
 
 <style lang="scss" scoped>

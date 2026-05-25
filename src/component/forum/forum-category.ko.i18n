@@ -12,7 +12,7 @@
 	"messages": "게시물",
 	"new_topic_message": "주제 메시지",
 	"new_topic_title": "주제 제목",
-	"pinned": "교수형 주제",
+	"pinned": "고정된 주제",
 	"resolved": "해결된 주제",
 	"topic": "주제",
 	"mark_as_read": "읽은 상태로 표시",
@@ -44,5 +44,6 @@
 	"no_topics": "표시할 주제가 없습니다",
 	"no_topics_filters": "더 많은 결과를 보려면 필터를 조정해 보세요.",
 	"clear_filters": "필터 초기화",
-	"priority_none": "우선순위 없음"
+	"priority_none": "우선순위 없음",
+	"bug_user_agent_notice": "귀하의 브라우저가 버그 리포트에 표시됩니다:"
 }

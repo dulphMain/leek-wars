@@ -1,58 +1,54 @@
 <template>
 	<div v-if="$store.state.farmer" class="chats">
-		<div v-for="(window, i) in LeekWars.chatWindows" :key="window.name" :class="{expanded: window.expanded, unread: $refs.chats && $refs.chats[i] && !$refs.chats[i].read}" class="window">
+		<div v-for="(window, i) in LeekWars.chatWindows" :key="window.id" :class="{expanded: window.expanded, unread: ($refs.chats as any) && ($refs.chats as any)[i] && !($refs.chats as any)[i].read}" class="window">
 			<div class="header">
 				<router-link v-if="window.type === ChatType.PM" v-ripple :to="'/farmer/' + getFarmer(window).id">
 					<avatar :farmer="getFarmer(window)" class="image" />
 				</router-link>
-				<router-link v-else-if="window.type === ChatType.TEAM" v-ripple :to="'/team/' + $store.state.farmer.team.id">
+				<router-link v-else-if="window.type === ChatType.TEAM && $store.state.farmer?.team" v-ripple :to="'/team/' + $store.state.farmer.team.id">
 					<emblem :team="$store.state.farmer.team" class="image" />
 				</router-link>
 				<div v-ripple class="title" @click="toggleExpanded(window, i)">{{ window.title }}</div>
 				<v-icon class="close" @click="LeekWars.removeChat(i)">mdi-close</v-icon>
 			</div>
-			<chat :id="window.id" ref="chats" class="chat" @send="sendMessage($event, window.name)" />
+			<chat :id="window.id" ref="chats" class="chat" @send="sendMessage($event, window.id)" />
 		</div>
 	</div>
 </template>
 
-<script lang="ts">
-	const ChatElement = defineAsyncComponent(() => import(/* webpackChunkName: "chat" */ `@/component/chat/chat.vue`))
-	import { ChatType, ChatWindow } from '@/model/chat'
-	import { LeekWars } from '@/model/leekwars'
-	import { store } from '@/model/store'
-	import { defineAsyncComponent } from 'vue'
-	import { Options, Vue, Watch } from 'vue-property-decorator'
+<script setup lang="ts">
+import { ChatType, ChatWindow } from '@/model/chat'
+import { LeekWars } from '@/model/leekwars'
+import { store } from '@/model/store'
+import { defineAsyncComponent, ref, watch, type ComponentPublicInstance } from 'vue'
 
-	@Options({
-		components: { chat: ChatElement }
-	})
-	export default class Chats extends Vue {
-		ChatType = ChatType
+const Chat = defineAsyncComponent(() => import(/* webpackChunkName: "chat" */ `@/component/chat/chat.vue`))
 
-		@Watch('LeekWars.chatWindows', {deep: true})
-		update() {
-			localStorage.setItem('chats', JSON.stringify(LeekWars.chatWindows))
-		}
+defineOptions({ name: 'Chats' })
 
-		toggleExpanded(window: ChatWindow, index: number) {
-			window.expanded = !window.expanded
-			setTimeout(() => ((this.$refs.chats as Vue[])[index] as any).updateScroll())
-		}
+const chats = ref<ComponentPublicInstance[]>([])
 
-		getFarmer(window: ChatWindow) {
-			const chat = store.state.chat[window.id]
-			if (chat) {
-				const f = chat.farmers.find(f => f.id !== store.state.farmer!.id)
-				if (f) { return f }
-			}
-			return {id: -1}
-		}
+watch(() => LeekWars.chatWindows, () => {
+	localStorage.setItem('chats', JSON.stringify(LeekWars.chatWindows))
+}, { deep: true })
 
-		sendMessage(message: string, id: number) {
-			LeekWars.post('message/send-message', {conversation_id: id, message})
-		}
+function toggleExpanded(window: ChatWindow, index: number) {
+	window.expanded = !window.expanded
+	setTimeout(() => (chats.value[index] as ComponentPublicInstance & { updateScroll?: () => void }).updateScroll?.())
+}
+
+function getFarmer(window: ChatWindow) {
+	const chat = store.state.chat[window.id]
+	if (chat) {
+		const f = chat.farmers.find(f => f.id !== store.state.farmer!.id)
+		if (f) { return f }
 	}
+	return {id: -1}
+}
+
+function sendMessage(message: string, id: number) {
+	LeekWars.post('message/send-message', {conversation_id: id, message})
+}
 </script>
 
 <style lang="scss" scoped>

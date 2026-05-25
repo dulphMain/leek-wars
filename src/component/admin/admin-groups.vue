@@ -14,19 +14,19 @@
 					density="comfortable"
 					class="elevation-1 members">
 					<template #item.id="{ item }">
-						<router-link :to="'/group/' + item.id" class="flex" v-ripple>
+						<router-link v-ripple :to="'/group/' + item.id" class="flex">
 							{{ item.id }}
 						</router-link>
 					</template>
 					<template #item.name="{ item }">
-						<router-link :to="'/group/' + item.id" class="flex" v-ripple>
+						<router-link v-ripple :to="'/group/' + item.id" class="flex">
 							{{ item.name }}
 						</router-link>
 					</template>
 					<template #item.supervisor="{ item }">
 						<router-link :to="'/farmer/' + item.supervisor.id">
 							<rich-tooltip-farmer :id="item.supervisor.id" :bottom="true">
-								<div class="flex name" v-ripple>
+								<div v-ripple class="flex name">
 									<avatar :farmer="item.supervisor" />
 									<span>{{ item.supervisor.name }}</span>
 									<img v-if="item.supervisor.connected" class="status" src="/image/connected.png">
@@ -47,42 +47,39 @@
 	</div>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
 	import { LeekWars } from '@/model/leekwars'
-	import { Options, Vue } from 'vue-property-decorator'
+	import { store } from '@/model/store'
+	import { ref } from 'vue'
+	import { useRouter } from 'vue-router'
 	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 
 	import Breadcrumb from '@/component/forum/breadcrumb.vue'
 
-	@Options({ components: { RichTooltipFarmer, Breadcrumb } })
-	export default class AdminTrophies extends Vue {
-		groups: any = null
-		headers = [
-          { title: 'ID', value: 'id' },
-          { title: 'Nom', value: 'name' },
-          { title: 'Supervisor', value: 'supervisor' },
-          { title: 'Membres', value: 'members' },
-          { title: 'Date de création', value: 'creation_date' },
-          { title: 'Archivé', value: 'archived' },
-        //   { text: 'Combats restants', value: 'day_fight' },
-        //   { text: 'Combats', value: 'fights' },
-        //   { text: 'Victoires', value: 'wins' },
-        //   { text: 'Nuls', value: 'draws' },
-        //   { text: 'Défaites', value: 'defeats' },
-        //   { text: 'Ratio', value: 'ratio' },
-        //   { text: 'Combats de test', value: 'test_fights' },
-        //   { text: 'Trophées', value: 'trophies' },
-        ]
+	const router = useRouter()
+	const groups = ref<Record<string, unknown>[] | null>(null)
+	const headers = [
+		{ title: 'ID', value: 'id' },
+		{ title: 'Nom', value: 'name' },
+		{ title: 'Supervisor', value: 'supervisor' },
+		{ title: 'Membres', value: 'members' },
+		{ title: 'Date de création', value: 'creation_date' },
+		{ title: 'Archivé', value: 'archived' },
+	//   { text: 'Combats restants', value: 'day_fight' },
+	//   { text: 'Combats', value: 'fights' },
+	//   { text: 'Victoires', value: 'wins' },
+	//   { text: 'Nuls', value: 'draws' },
+	//   { text: 'Défaites', value: 'defeats' },
+	//   { text: 'Ratio', value: 'ratio' },
+	//   { text: 'Combats de test', value: 'test_fights' },
+	//   { text: 'Trophées', value: 'trophies' },
+	]
 
-		created() {
-			if (!this.$store.getters.admin) this.$router.replace('/')
-			LeekWars.setTitle("Admin Groupes")
-			LeekWars.get('groupe/get-all').then(groups => {
-				this.groups = groups
-			})
-		}
-
-	}
+	if (!store.getters.admin) router.replace('/')
+	LeekWars.setTitle("Admin Groupes")
+	LeekWars.get('groupe/get-all').then(g => {
+		groups.value = g
+	})
 </script>
 
 <style lang="scss" scoped>

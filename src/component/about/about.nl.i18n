@@ -1,5 +1,5 @@
 {
-	"about": "Met betrekking tot",
+	"about": "Over",
 	"client": "Klant",
 	"contact": "Contact",
 	"contact_text": "Je kunt contact met ons opnemen via e-mail op {contact}, of via een privébericht op het spel, Facebook of Twitter.",
@@ -20,14 +20,14 @@
 	"thanks": "Bedankt",
 	"thanks_about_articles": "We danken alle sites en blogs die een klein artikel over Leek Wars hebben geschreven :)",
 	"thanks_text": "Veel mensen hebben meegewerkt aan de totstandkoming van <b>Leek Wars</b>, we willen ze graag bedanken:",
-	"title": "Met betrekking tot",
+	"title": "Over",
 	"tools": "Hulpmiddelen",
 	"tools_list": "Een niet-uitputtende lijst van de verschillende talen en tools die voor het project worden gebruikt:",
 	"version_n": "Vrijgeven {0}",
 	"we_talk_about_leeks": "Hebben we het over prei gehad?",
 	"why": "Waarom?",
 	"why_1": "Het project is ontstaan uit het simpele idee tussen twee studenten, tijdens een algebrales op de universiteit, die een spel wilden maken dat volledig gebaseerd was op <b>programmeren</b>, een concept dat in die tijd niet erg wijdverspreid was.",
-	"why_2": "<b>Leek Wars</b> heeft tot doel <b>programmering</b> centraal te stellen in een leuk en vermakelijk videospel, volledig browsergebaseerd, gemakkelijk toegankelijk, gratis en zonder reclame, en wil <b aanbieden >een prettig platform</b> om de concepten van programmeren te introduceren aan <b>beginners</b>, en een goede uitdaging te bieden aan <b>ervaren programmeurs</b>!",
+	"why_2": "<b>Leek Wars</b> heeft tot doel <b>programmering</b> centraal te stellen in een leuk en vermakelijk videospel, volledig browsergebaseerd, gemakkelijk toegankelijk, gratis en zonder reclame, en wil <b>een prettig platform</b> om de concepten van programmeren te introduceren aan <b>beginners</b>, en een goede uitdaging te bieden aan <b>ervaren programmeurs</b>!",
 	"former_mod": "Voormalig moderator",
 	"former_dev": "Voormalig ontwikkelaar",
 	"contributors": "Bijdragers"

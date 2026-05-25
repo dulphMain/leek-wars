@@ -4,12 +4,12 @@
 		<div v-if="!loading && (!chat || !chat.messages.length)" v-autostopscroll class="messages">
 			<div class="no-messages">{{ $t('main.no_messages_yet') }}</div>
 		</div>
-		<div v-else-if="chat && chat.messages.length" ref="messages" v-autostopscroll class="messages" @scroll="scroll" @wheel="scroll">
-			<div v-for="(messages, day) in $store.state.chat[id].days" :key="day">
+		<div v-else-if="chat && chat.messages.length" ref="messages" v-autostopscroll class="messages" @scroll="scroll">
+			<div v-for="(messages, day) in chat.days" :key="day">
 				<div v-if="messages[0]" class="separator">
 					{{ $filters.date(messages[0].date) }}
 				</div>
-				<chat-message v-for="(message, m) in messages" :key="message.id" :message="formatMessage(message)" :chat="chat" @scroll="updateScroll" :large="large" :class="'m-' + message.id" @menu="openMenu($event, message)" @emoji="openEmojis($event, message)" />
+				<chat-message v-for="message in messages" :key="message.id" :message="formatMessage(message)" :chat="chat" :large="large" :class="'m-' + message.id" @scroll="updateScroll" @menu="openMenu($event, message)" @emoji="openEmojis($event, message)" />
 			</div>
 			<div v-show="unread" v-ripple class="chat-new-messages" @click="updateScroll(true)">{{ $t('main.unread_messages') }}</div>
 		</div>
@@ -18,31 +18,35 @@
 		<div v-if="$store.state.farmer && !$store.state.farmer.verified" class="verify">
 			<router-link class="green-link" to="/settings">{{ $t('main.verify_chat') }}</router-link>
 		</div>
-		<chat-input v-else :chat="id" @message="sendMessage" />
+		<chat-input v-else :chat="id || 0" @message="sendMessage" />
 
-		<div v-show="!isScrollBottom" class="card scroll-down" v-ripple @click="scrollToBottom">
+		<div v-show="!isScrollBottom" v-ripple class="card scroll-down" @click="scrollToBottom">
 			<v-icon>mdi-chevron-down</v-icon>
 		</div>
 
-		<report-dialog v-if="reportFarmer" v-model="reportDialog" :target="reportFarmer" :reasons="reasons" :parameter="reportContent" class="report-dialog" />
+		<report-dialog v-if="reportFarmer" v-model="showReport" :target="reportFarmer" :reasons="reasons" :parameter="reportContent" class="report-dialog" />
 
-		<v-menu v-if="menuMessage && !privateMessages && (menuMessage.farmer.color !== 'admin' || $store.getters.admin) && menuMessage.farmer.id !== 0" v-model="menu" :activator="menuActivator" offset-y>
+		<v-menu v-if="chat && $store.state.farmer && menuMessage && !privateMessages && (menuMessage.farmer.color !== 'admin' || $store.getters.admin) && menuMessage.farmer.id !== 0" v-model="menu" :activator="menuActivator" offset-y>
 			<v-list dense class="message-actions">
-				<v-list-item v-if="chat.type === ChatType.GLOBAL && menuMessage.farmer.id !== $store.state.farmer.id && menuMessage.farmer.color !== 'admin'" v-ripple @click="report(menuMessage)">
+				<v-list-item v-if="chat && chat.type === ChatType.GLOBAL && $store.state.farmer && menuMessage.farmer.id !== $store.state.farmer.id && menuMessage.farmer.color !== 'admin'" v-ripple @click="report(menuMessage)">
 					<v-icon>mdi-flag</v-icon>
 					<span>{{ $t('warning.report') }}</span>
 				</v-list-item>
-				<v-list-item v-if="isModerator && chat.type !== ChatType.PM && menuMessage.farmer.color !== 'admin'" v-ripple @click="mute(menuMessage.farmer)">
+				<v-list-item v-if="chat && isModerator && chat.type !== ChatType.PM && menuMessage.farmer.color !== 'admin'" v-ripple @click="mute(menuMessage.farmer)">
 					<v-icon>mdi-volume-off</v-icon>
 					<span>Mute</span>
 				</v-list-item>
-				<v-list-item v-if="isModerator && chat.type !== ChatType.PM && menuMessage.farmer.color !== 'admin'" v-ripple @click="censor(menuMessage)">
+				<v-list-item v-if="chat && isModerator && chat.type !== ChatType.PM && menuMessage.farmer.color !== 'admin'" v-ripple @click="censor(menuMessage)">
 					<v-icon>mdi-gavel</v-icon>
 					<span>{{ $t('warning.censor') }}</span>
 				</v-list-item>
-				<v-list-item v-if="chat.type !== ChatType.PM && (menuMessage.farmer.id === $store.state.farmer.id || $store.getters.admin)" v-ripple @click="deleteMessage(menuMessage)">
+				<v-list-item v-if="chat && $store.state.farmer && chat.type !== ChatType.PM && (menuMessage.farmer.id === $store.state.farmer.id || $store.getters.admin)" v-ripple @click="deleteMessage(menuMessage)">
 					<v-icon>mdi-delete</v-icon>
 					<span>{{ $t('warning.delete') }}</span>
+				</v-list-item>
+				<v-list-item v-if="$store.getters.admin && menuMessage.farmer.id !== 0" v-ripple @click="createIssue(menuMessage)">
+					<v-icon>mdi-github</v-icon>
+					<span>Créer une issue</span>
 				</v-list-item>
 			</v-list>
 		</v-menu>
@@ -57,7 +61,7 @@
 				<div class="flex">
 					<avatar :farmer="muteFarmer" />
 					<div class="messages card">
-						<div v-for="message in censorMessages" :key="message.id">
+						<div v-for="message in censorMessagesList" :key="message.id">
 							<v-checkbox v-if="message.censored === 0" v-model="censoredMessages[message.id]" :hide-details="true">
 								<template #label>
 									<span v-html="message.content"></span>
@@ -80,7 +84,7 @@
 				<div class="flex">
 					<avatar :farmer="muteFarmer" />
 					<div class="messages card">
-						<div v-for="message in deleteMessages" :key="message.id">
+						<div v-for="message in deleteMessagesList" :key="message.id">
 							<v-checkbox v-model="deletedMessages[message.id]" :hide-details="true">
 								<template #label>
 									<span v-html="message.content"></span>
@@ -94,6 +98,23 @@
 			<template #actions>
 				<div v-ripple @click="deleteDialog = false">{{ $t('main.cancel') }}</div>
 				<div v-ripple class="mute red" @click="deleteConfirm"><v-icon>mdi-delete</v-icon> Supprimer</div>
+			</template>
+		</popup>
+
+		<popup v-model="issueDialog" :width="600" icon="mdi-github" title="Créer une issue">
+			<div v-if="issueMessage" class="issue">
+				<div class="flex">
+					<avatar :farmer="issueMessage.farmer" />
+					<div class="bubble card">{{ issueMessage.raw_content }}</div>
+				</div>
+				<label>Titre</label>
+				<input v-model="issueTitle" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+				<label>Description (optionnel)</label>
+				<textarea v-model="issueDescription" rows="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+			</div>
+			<template #actions>
+				<div v-ripple @click="issueDialog = false">{{ $t('main.cancel') }}</div>
+				<div v-ripple class="green" @click="createIssueConfirm"><v-icon>mdi-github</v-icon> Créer</div>
 			</template>
 		</popup>
 
@@ -111,372 +132,374 @@
 			</template>
 		</popup>
 
-		<v-menu v-if="menuMessage && $store.state.farmer?.verified" offset-y top :nudge-top="10" v-model="menuEmoji" :activator="menuEmojiActivator" content-class="emojis-dialog">
+		<v-menu v-if="menuMessage && $store.state.farmer?.verified" v-model="menuEmoji" offset-y top :nudge-top="10" :activator="menuEmojiActivator" content-class="emojis-dialog">
 			<v-card class="emojis">
 				<span v-for="(emoji, e) in emojis" :key="e" class="emoji" :class="{selected: emoji === menuMessage.my_reaction}" @click="toggleReaction(emoji)">{{ emoji }}</span>
 				<span v-if="menuMessage.my_reaction && !emojis.includes(menuMessage.my_reaction)" class="emoji selected" @click="toggleReaction(menuMessage.my_reaction)">{{ menuMessage.my_reaction }}</span>
-				<emoji-picker @pick="toggleReaction" :close-on-selected="true" :classic="false"><v-icon class="more">mdi-dots-horizontal</v-icon></emoji-picker>
+				<emoji-picker :close-on-selected="true" @pick="toggleReaction"><v-icon class="more">mdi-dots-horizontal</v-icon></emoji-picker>
 			</v-card>
 		</v-menu>
 	</div>
 </template>
 
-<script lang="ts">
-	import { ChatMessage, ChatType } from '@/model/chat'
-	import { Farmer } from '@/model/farmer'
+<script lang="ts" setup>
+	import type { Chat as ChatModel, ChatMessage, ChatWindow } from '@/model/chat'
+	import { ChatType } from '@/model/chat'
+	import { formatChatMessage } from '@/model/chat-format'
+	import type { Farmer } from '@/model/farmer'
 	import { LeekWars } from '@/model/leekwars'
 	import { Warning } from '@/model/moderation'
 	import { store } from '@/model/store'
 	import { TeamMemberLevel } from '@/model/team'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
-	import { nextTick } from 'vue'
+	import { computed, defineAsyncComponent, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, useTemplateRef, watch } from 'vue'
+	import { useI18n } from 'vue-i18n'
+	import { useRouter } from 'vue-router'
 	import ChatInput from './chat-input.vue'
 	import ChatMessageComponent from './chat-message.vue'
 	import EmojiPicker from './emoji-picker.vue'
-	import ReportDialog from '@/component/moderation/report-dialog.vue'
-	import { Commands } from '@/model/commands'
-	import { formatEmojis } from '@/model/emojis'
-import { emitter } from '@/model/vue'
+	import { emitter } from '@/model/vue'
 
-	@Options({
-		name: "chat",
-		components: { 'chat-input': ChatInput, 'chat-message': ChatMessageComponent, 'emoji-picker': EmojiPicker, ReportDialog }
+	const ReportDialog = defineAsyncComponent(() => import('@/component/moderation/report-dialog.vue'))
+
+	defineOptions({ name: "Chat", components: { 'chat-message': ChatMessageComponent } })
+
+	const props = defineProps<{
+		id?: number
+		newFarmer?: Farmer
+		newConversation?: ChatModel | ChatWindow
+		large?: boolean
+	}>()
+
+	const { t } = useI18n()
+	const router = useRouter()
+	const messages = useTemplateRef<HTMLElement>('messages')
+	const instance = getCurrentInstance()
+
+	const emojis = ['❤️', '👍', '👋', '😂', '👏', '😢', '😮', '😱']
+
+	const isScrollBottom = ref(true)
+	let userScroll = false
+	const unread = ref(false)
+
+	const menuMessage = ref<ChatMessage | null>(null)
+	let scrollMessage = 0
+	const menuActivator = ref<Element | null>(null)
+	const menuEmojiActivator = ref<Element | null>(null)
+	const menu = ref(false)
+	const menuEmoji = ref(false)
+
+	const muteDialog = ref(false)
+	const muteFarmer = ref<Farmer | null>(null)
+
+	const censorDialog = ref(false)
+	const censorMessage = ref<ChatMessage | null>(null)
+	const censoredMessages = ref<{[key: number]: boolean}>({})
+	const censorMute = ref(false)
+
+	const deleteDialog = ref(false)
+	const deletedMessage = ref<ChatMessage | null>(null)
+	const deletedMessages = ref<{[key: number]: boolean}>({})
+
+	const issueDialog = ref(false)
+	const issueMessage = ref<ChatMessage | null>(null)
+	const issueTitle = ref('')
+	const issueDescription = ref('')
+
+	const showReport = ref(false)
+	const reportFarmer = ref<Farmer | null>(null)
+	const reportContent = ref('')
+	const reasons = [
+		Warning.RUDE_CHAT,
+		Warning.FLOOD_CHAT,
+		Warning.PROMO_CHAT,
+		Warning.INCORRECT_FARMER_NAME,
+		Warning.INCORRECT_AVATAR,
+	]
+
+	const loading = computed(() => !!props.id && (!store.state.chat[props.id] || !store.state.chat[props.id].loaded))
+	const chat = computed(() => props.id ? store.state.chat[props.id] : null)
+	const privateMessages = computed(() => chat.value && chat.value.type === ChatType.PM)
+	const isModerator = computed(() => store.getters.moderator || (chat.value && chat.value.type === ChatType.TEAM && store.state.farmer!.team!.member_level >= TeamMemberLevel.CAPTAIN))
+	const censorMessagesList = computed(() => chat.value && muteFarmer.value ? chat.value.messages.filter((m: ChatMessage) => m.censored === 0 && m.farmer.id === muteFarmer.value!.id) : [])
+	const deleteMessagesList = computed(() => chat.value && muteFarmer.value ? chat.value.messages.filter((m: ChatMessage) => m.farmer.id === muteFarmer.value!.id) : [])
+
+	const onResize = () => updateScroll()
+	emitter.on('chat', newMessage)
+	emitter.on('chat-history', chatHistory)
+	emitter.on('resize', onResize)
+	emitter.on('wsconnected', update)
+	if (store.state.wsconnected) {
+		update()
+	}
+
+	onMounted(() => {
+		updateScroll()
 	})
-	export default class ChatElement extends Vue {
-		ChatType = ChatType
-		@Prop() id!: number
-		@Prop() newFarmer!: any
-		@Prop() newConversation!: any
-		@Prop() large!: boolean
 
-		emojis = ['❤️', '👍', '👋', '😂', '👏', '😢', '😮', '😱']
+	onUpdated(() => {
+		updateScroll()
+	})
 
-		isScrollBottom: boolean = true
-		userScroll: boolean = false
-		unread: boolean = false
+	onBeforeUnmount(() => {
+		emitter.off('chat', newMessage)
+		emitter.off('chat-history', chatHistory)
+		emitter.off('resize', onResize)
+		emitter.off('wsconnected', update)
+	})
 
-		menuMessage: ChatMessage | null = null
-		scrollMessage: number = 0
-		menuActivator: any = null
-		menuEmojiActivator: any = null
-		menu: boolean = false
-		menuEmoji: boolean = false
-
-		muteDialog: boolean = false
-		muteFarmer: Farmer | null = null
-
-		censorDialog: boolean = false
-		censorMessage: ChatMessage | null = null
-		censoredMessages: {[key: number]: boolean} = {}
-		censorMute: boolean = false
-
-		deleteDialog: boolean = false
-		deletedMessage: ChatMessage | null = null
-		deletedMessages: {[key: number]: boolean} = {}
-
-		reportDialog: boolean = false
-		reportFarmer: Farmer | null = null
-		reportContent: string = ''
-		reasons = [
-			Warning.RUDE_CHAT,
-			Warning.FLOOD_CHAT,
-			Warning.PROMO_CHAT,
-			Warning.INCORRECT_FARMER_NAME,
-			Warning.INCORRECT_AVATAR,
-		]
-
-		get loading() {
-			return !!this.id && (!store.state.chat[this.id] || !store.state.chat[this.id].loaded)
+	function newMessage(e: number[]) {
+		if (e[0] === props.id) {
+			updateScroll()
+			if (!isScrollBottom.value) { unread.value = true }
+			read()
 		}
-		get chat() {
-			return this.id ? store.state.chat[this.id] : null
-		}
-		get privateMessages() {
-			return this.chat && this.chat.type === ChatType.PM
-		}
-		get isModerator() {
-			return this.$store.getters.moderator || (this.chat && this.chat.type === ChatType.TEAM && this.$store.state.farmer.team.member_level >= TeamMemberLevel.CAPTAIN)
-		}
-		get censorMessages() {
-			return this.chat && this.muteFarmer ? this.chat.messages.filter(m => m.censored === 0 && m.farmer.id === this.muteFarmer!.id) : []
-		}
-		get deleteMessages() {
-			return this.chat && this.muteFarmer ? this.chat.messages.filter(m => m.farmer.id === this.muteFarmer!.id) : []
-		}
+	}
 
-		created() {
-			emitter.on('chat', this.newMessage)
-			emitter.on('chat-history', this.chatHistory)
-			emitter.on('resize', this.updateScroll)
-			emitter.on('wsconnected', this.update)
-			if (store.state.wsconnected) {
-				this.update()
-			}
-		}
-
-		mounted() {
-			this.updateScroll()
-		}
-
-		beforeUnmount() {
-			emitter.off('chat', this.newMessage)
-			emitter.off('chat-history', this.chatHistory)
-			emitter.off('resize', this.updateScroll)
-			emitter.off('wsconnected', this.update)
-		}
-
-		newMessage(e: any) {
-			if (e[0] === this.id) {
-				this.updateScroll()
-				if (!this.isScrollBottom) { this.unread = true }
-
-				// On reçoit un message sur un chat de conversation privée, il est lu tout de suite
-				this.read()
-			}
-		}
-
-		chatHistory(e: any) {
-			if (e === this.id && this.scrollMessage) {
-				nextTick(() => {
-					const element = this.$el.querySelector('.m-' + this.scrollMessage) as HTMLElement
-					if (element) {
-						(this.$refs.messages as HTMLElement).scrollTop = element.offsetTop
-					}
-					this.scrollMessage = 0
-				})
-			}
-		}
-
-		scrollTop() {
-			const messages = this.$refs.messages as HTMLElement
-			if (!messages) { return true }
-			return messages.scrollTop < 150
-		}
-
-		scroll() {
-			const messages = this.$refs.messages as HTMLElement
-			if (messages) {
-				this.isScrollBottom = messages.offsetHeight > messages.scrollHeight || Math.abs((messages.scrollTop + messages.offsetHeight) - messages.scrollHeight) < 3
-			}
-			if (this.isScrollBottom) {
-				this.userScroll = false
-				this.unread = false
-			} else {
-				this.userScroll = true
-			}
-			if (this.scrollTop()) {
-				this.scrollMessage = this.chat!.messages[0].id
-				store.commit('load-chat-history', this.id)
-			}
-		}
-
-		updated() {
-			this.updateScroll()
-		}
-
-		updateScroll(force: boolean = false) {
-			if (!this.userScroll || force) {
-				const messages = this.$refs.messages as HTMLElement
-				if (messages) {
-					this.scrollToBottom()
-					this.unread = false
-				}
-			}
-		}
-
-		scrollToBottom() {
-			const messages = this.$refs.messages as HTMLElement
-			if (messages) {
-				messages.scrollTop = messages.scrollHeight + 1000
-				setTimeout(() => {
-					if (messages) {
-						messages.scrollTop = messages.scrollHeight + 1000
-					}
-				}, 100)
-			}
-		}
-
-		@Watch('id')
-		update() {
-			if (!this.id) { return }
-			store.commit('register-chat', {id: this.id})
-			store.commit('load-chat', this.chat)
-			this.read()
-		}
-
-		sendMessage(message: any) {
-			LeekWars.track('chat-message')
-			if (message.startsWith('/ping')) {
-				this.$store.commit('last-ping', Date.now())
-			}
-			if (message.match(/(^|\s)\/(br|arena)!?(\s|$)/)) {
-				if (!LeekWars.arena.enabled) {
-					// Auto-inscription en arène avec le dernier poireau utilisé ou le premier disponible
-					const farmer = this.$store.state.farmer
-					if (farmer) {
-						const arenaLeekId = parseInt(localStorage.getItem('arena-leek') || '', 10)
-						const gardenLeekId = parseInt(localStorage.getItem('garden/leek') || '', 10)
-						const lastLeekId = (arenaLeekId && farmer.leeks[arenaLeekId]) ? arenaLeekId : gardenLeekId
-						const leek = (lastLeekId && farmer.leeks[lastLeekId]) ? farmer.leeks[lastLeekId] : Object.values(farmer.leeks)[0] as any
-						if (leek) {
-							LeekWars.arena.register(leek.id)
-						}
-					}
-				}
-			}
-			if (this.chat === null) {
-				LeekWars.post('message/create-conversation', {farmer_id: this.newFarmer.id, message}).then(data => {
-					this.newConversation.id = data.conversation_id
-					this.$store.commit('new-conversation', this.newConversation)
-					this.$router.replace('/messages/conversation/' + data.conversation_id)
-				})
-			} else {
-				LeekWars.post('message/send-message', {conversation_id: this.chat.id, message}).then(() => { /**/ }).error(data => {
-					LeekWars.toast(this.$t('main.error_' + data.error, data.params))
-				})
-			}
-		}
-
-		read() {
-			if (!this.chat) { return }
+	function chatHistory(e: number) {
+		if (e === props.id && scrollMessage) {
 			nextTick(() => {
-				if (!this.chat!.read) {
-					LeekWars.post('message/read', { conversation_id: this.chat!.id })
+				const element = (instance?.proxy?.$el as HTMLElement)?.querySelector('.m-' + scrollMessage) as HTMLElement
+				if (element && messages.value) {
+					messages.value.scrollTop = element.offsetTop
 				}
-				store.commit('chat-set-read', { chat: this.chat!.id, read: true })
+				scrollMessage = 0
 			})
 		}
+	}
 
-		report(message: ChatMessage) {
-			this.reportDialog = true
-			this.reportFarmer = message.farmer
-			this.reportContent = [message.id, ...message.subMessages.map(s => s.id)].join(',')
+	function scroll() {
+		const m = messages.value
+		if (!m) { return }
+		// Batch layout reads up-front: writing to reactive state below schedules a re-render that
+		// could invalidate layout. Reading scrollTop a second time afterward would force reflow.
+		const sTop = m.scrollTop
+		const sHeight = m.scrollHeight
+		const oHeight = m.offsetHeight
+
+		const atBottom = oHeight > sHeight || Math.abs((sTop + oHeight) - sHeight) < 3
+		isScrollBottom.value = atBottom
+		if (atBottom) {
+			userScroll = false
+			unread.value = false
+		} else {
+			userScroll = true
 		}
+		if (sTop < 150 && chat.value && chat.value.messages.length && chat.value.messages[0]) {
+			scrollMessage = chat.value.messages[0].id
+			store.commit('load-chat-history', props.id)
+		}
+	}
 
-		censor(message: ChatMessage) {
-			this.censorDialog = true
-			this.censorMessage = message
-			this.muteFarmer = message.farmer
-			this.censoredMessages = {}
-			if (message.censored === 0) {
-				this.censoredMessages[message.id] = true
+	function updateScroll(force: boolean = false) {
+		if (!userScroll || force) {
+			if (messages.value) {
+				scrollToBottom()
+				unread.value = false
 			}
+		}
+	}
+
+	function scrollToBottom() {
+		if (messages.value) {
+			messages.value.scrollTop = messages.value.scrollHeight + 1000
+			setTimeout(() => {
+				if (messages.value) {
+					messages.value.scrollTop = messages.value.scrollHeight + 1000
+				}
+			}, 100)
+		}
+	}
+
+	watch(() => props.id, update)
+
+	function update() {
+		if (!props.id) { return }
+		store.commit('register-chat', {id: props.id})
+		store.commit('load-chat', chat.value)
+		read()
+	}
+
+	function sendMessage(message: string) {
+		LeekWars.track('chat-message')
+		if (message.startsWith('/ping')) {
+			store.commit('last-ping', Date.now())
+		}
+		if (message.match(/(^|\s)\/(br|arena)!?(\s|$)/)) {
+			if (!LeekWars.arena.enabled) {
+				const farmer = store.state.farmer
+				if (farmer) {
+					const arenaLeekId = parseInt(localStorage.getItem('arena-leek') || '', 10)
+					const gardenLeekId = parseInt(localStorage.getItem('garden/leek') || '', 10)
+					const lastLeekId = (arenaLeekId && farmer.leeks[arenaLeekId]) ? arenaLeekId : gardenLeekId
+					const leek = (lastLeekId && farmer.leeks[lastLeekId]) ? farmer.leeks[lastLeekId] : Object.values(farmer.leeks)[0]
+					if (leek) {
+						LeekWars.arena.register(leek.id)
+					}
+				}
+			}
+		}
+		if (chat.value === null) {
+			if (!props.newFarmer || !props.newConversation) return
+			const newConv = props.newConversation
+			LeekWars.post('message/create-conversation', {farmer_id: props.newFarmer.id, message}).then(data => {
+				// eslint-disable-next-line vue/no-mutating-props
+				newConv.id = data.conversation_id
+				store.commit('new-conversation', newConv)
+				router.replace('/messages/conversation/' + data.conversation_id)
+			})
+		} else {
+			LeekWars.post('message/send-message', {conversation_id: chat.value.id, message}).then(() => { /**/ }).catch(data => {
+				LeekWars.toast(t('main.error_' + data.error, data.params) as string)
+			})
+		}
+	}
+
+	function read() {
+		if (!chat.value) { return }
+		nextTick(() => {
+			if (!chat.value!.read) {
+				LeekWars.post('message/read', { conversation_id: chat.value!.id })
+			}
+			store.commit('chat-set-read', { chat: chat.value!.id, read: true })
+		})
+	}
+
+	function report(message: ChatMessage) {
+		showReport.value = true
+		reportFarmer.value = message.farmer
+		reportContent.value = [message.id, ...message.subMessages.map(s => s.id)].join(',')
+	}
+
+	function censor(message: ChatMessage) {
+		if (!message) return
+		censorDialog.value = true
+		censorMessage.value = message
+		muteFarmer.value = message.farmer
+		censoredMessages.value = {}
+		if (message.censored === 0) {
+			censoredMessages.value[message.id] = true
+		}
+		if (message.subMessages) {
 			for (const sub of message.subMessages) {
 				if (sub.censored === 0) {
-					this.censoredMessages[sub.id] = true
+					censoredMessages.value[sub.id] = true
 				}
 			}
 		}
+	}
 
-		deleteMessage(message: ChatMessage) {
-			this.deleteDialog = true
-			this.deletedMessage = message
-			this.muteFarmer = message.farmer
-			this.deletedMessages = {}
-			this.deletedMessages[message.id] = true
-			if (message.subMessages) {
-				for (const sub of message.subMessages) {
-					this.deletedMessages[sub.id] = true
-				}
+	function deleteMessage(message: ChatMessage) {
+		if (!message) return
+		deleteDialog.value = true
+		deletedMessage.value = message
+		muteFarmer.value = message.farmer
+		deletedMessages.value = {}
+		deletedMessages.value[message.id] = true
+		if (message.subMessages) {
+			for (const sub of message.subMessages) {
+				deletedMessages.value[sub.id] = true
 			}
 		}
+	}
 
-		mute(farmer: Farmer) {
-			this.muteDialog = true
-			this.muteFarmer = farmer
+	function mute(farmer: Farmer) {
+		muteDialog.value = true
+		muteFarmer.value = farmer
+	}
+
+	function createIssue(message: ChatMessage) {
+		issueDialog.value = true
+		issueMessage.value = message
+		issueTitle.value = (message.raw_content || '').replace(/\s+/g, ' ').trim().substring(0, 80)
+		issueDescription.value = ''
+	}
+
+	function createIssueConfirm() {
+		if (!issueMessage.value) return
+		const id = issueMessage.value.id
+		issueDialog.value = false
+		LeekWars.post('message/create-issue', { message_id: id, title: issueTitle.value, description: issueDescription.value }).then(data => {
+			LeekWars.toast('Issue #' + data.issue + ' créée')
+		}).catch(data => {
+			LeekWars.toast(t('main.error_' + data.error) as string)
+		})
+	}
+
+	function censorConfirm() {
+		censorDialog.value = false
+		if (censorMessage.value) {
+			const ids = Object.entries(censoredMessages.value).filter(e => e[1]).map(e => e[0]).join(',')
+			LeekWars.post('message/censor', { messages: ids, mute: censorMute.value })
 		}
+	}
 
-		censorConfirm() {
-			this.censorDialog = false
-			if (this.censorMessage) {
-				const ids = Object.entries(this.censoredMessages).filter(e => e[1]).map(e => e[0]).join(',')
-				LeekWars.post('message/censor', { messages: ids, mute: this.censorMute })
+	function deleteConfirm() {
+		deleteDialog.value = false
+		if (deletedMessage.value) {
+			const ids = Object.entries(deletedMessages.value).filter(e => e[1]).map(e => e[0]).join(',')
+			LeekWars.delete('message/delete', { messages: ids, mute: censorMute.value })
+		}
+	}
+
+	function muteConfirm() {
+		if (!muteFarmer.value || !chat.value) { return }
+		LeekWars.post('message/mute', { target_id: muteFarmer.value.id, chat: chat.value.id, duration: 3600 })
+		muteFarmer.value.muted = true
+		muteDialog.value = false
+	}
+
+	function openMenu(activator: MouseEvent, message: ChatMessage) {
+		menuMessage.value = message
+		menuActivator.value = activator.target as Element | null
+		menuEmoji.value = false
+		nextTick(() => {
+			menu.value = true
+		})
+	}
+
+	function openEmojis(activator: MouseEvent, message: ChatMessage) {
+		menuMessage.value = message
+		menuEmojiActivator.value = activator.target as Element | null
+		menu.value = false
+		nextTick(() => {
+			menuEmoji.value = true
+		})
+	}
+
+	function toggleReaction(emoji: string) {
+		menuEmoji.value = false
+		if (!menuMessage.value) return
+		LeekWars.track('chat-reaction')
+		if (menuMessage.value.my_reaction === emoji) {
+			LeekWars.delete('message-reaction/delete', { message_id: menuMessage.value.id })
+			menuMessage.value.my_reaction = null
+		} else {
+			LeekWars.post('message-reaction/add', { reaction: emoji, message_id: menuMessage.value.id })
+			menuMessage.value.my_reaction = emoji
+		}
+	}
+
+	function formatMessage(message: ChatMessage) {
+		if (message.subMessages) {
+			for (const sub of message.subMessages) {
+				formatMessage(sub)
 			}
 		}
+		if (message.formatted) return message
 
-		deleteConfirm() {
-			this.deleteDialog = false
-			if (this.deletedMessage) {
-				const ids = Object.entries(this.deletedMessages).filter(e => e[1]).map(e => e[0]).join(',')
-				LeekWars.delete('message/delete', { messages: ids, mute: this.censorMute })
-			}
+		message.raw_content = message.content
+		message.content = formatChatMessage(message.content, message.farmer.name, store.state.farmer_by_name)
+
+		const element = document.createElement('div')
+		element.innerHTML = message.content
+		const innerText = element.innerText.trim()
+		message.only_emojis = !element.querySelector('.br-invite') && (innerText.length === 0 || /^[\s\p{Emoji_Presentation}]+$/gmu.test(innerText))
+		if (!('censored' in message)) {
+			message.censored = 0
 		}
-
-		muteConfirm() {
-			if (!this.muteFarmer || !this.chat) { return }
-			LeekWars.post('message/mute', { target_id: this.muteFarmer.id, chat: this.chat.id, duration: 3600 })
-			this.muteFarmer.muted = true
-			this.muteDialog = false
-		}
-
-		openMenu(activator: any, message: ChatMessage) {
-			this.menuMessage = message
-			this.menuActivator = activator.target
-			this.menuEmoji = false
-			nextTick(() => {
-				this.menu = true
-			})
-		}
-
-		openEmojis(activator: any, message: ChatMessage) {
-			this.menuMessage = message
-			this.menuEmojiActivator = activator.target
-			this.menu = false
-			nextTick(() => {
-				this.menuEmoji = true
-			})
-		}
-
-		toggleReaction(emoji: string) {
-			this.menuEmoji = false
-			if (!this.menuMessage) return
-			LeekWars.track('chat-reaction')
-			if (this.menuMessage.my_reaction === emoji) { // Remove current reaction
-				LeekWars.delete('message-reaction/delete', { message_id: this.menuMessage.id })
-				this.menuMessage.my_reaction = null
-			} else {
-				LeekWars.post('message-reaction/add', { reaction: emoji, message_id: this.menuMessage.id })
-				this.menuMessage.my_reaction = emoji
-			}
-		}
-
-		formatMessage(message: ChatMessage) {
-
-			if (message.subMessages) {
-				for (const sub of message.subMessages) {
-					this.formatMessage(sub)
-				}
-			}
-			if (message.formatted) return message
-
-			let content = LeekWars.protect(message.content)
-			content = LeekWars.linkify(content)
-			content = formatEmojis(content)
-			content = Commands.execute(content, message.farmer.name)
-			if (Date.now() / 1000 - message.date > 3600) {
-				content = content.replace(/<span class="br-invite"[^>]*><\/span>/g, '/arena')
-			}
-			content = content.replace(/@(\w+)/g, (a, b) => {
-				const farmer = store.state.farmer_by_name[b]
-				if (farmer) {
-					return "<span class='pseudo'>" + b + "</span>"
-				}
-				return a
-			})
-			content = content.replace(/\n/g, '<br>')
-			message.content = content
-
-			const element = document.createElement('div')
-			element.innerHTML = message.content
-			const innerText = element.innerText.trim()
-			message.only_emojis = !element.querySelector('.br-invite') && (innerText.length === 0 || /^[\s\p{Emoji_Presentation}]+$/gmu.test(innerText))
-			if (!('censored' in message)) {
-				message.censored = 0
-			}
-			message.reactionDialog = false
-			message.formatted = true
-			return message
-		}
+		message.reactionDialog = false
+		message.formatted = true
+		return message
 	}
 </script>
 
@@ -562,6 +585,9 @@ import { emitter } from '@/model/vue'
 		.messages {
 			flex: 1;
 			padding: 10px;
+			:deep(a) {
+				pointer-events: none;
+			}
 		}
 		.bubble {
 			margin-bottom: 10px;
@@ -571,6 +597,37 @@ import { emitter } from '@/model/vue'
 	.censor .flex {
 		gap: 8px;
 		margin: 10px 0;
+	}
+	.issue {
+		.flex {
+			gap: 8px;
+			margin: 0 0 12px 0;
+			align-items: flex-start;
+		}
+		.bubble {
+			flex: 1;
+			padding: 8px;
+			word-break: break-word;
+			white-space: pre-wrap;
+		}
+		label {
+			display: block;
+			margin-bottom: 4px;
+			color: var(--text-color-secondary);
+			font-size: 14px;
+		}
+		input[type="text"], textarea {
+			width: 100%;
+			box-sizing: border-box;
+			padding: 6px 8px;
+			margin-bottom: 12px;
+			border: 1px solid var(--border);
+			border-radius: 4px;
+			background: var(--pure-white);
+			font-family: inherit;
+			font-size: 14px;
+			resize: vertical;
+		}
 	}
 	.avatar {
 		width: 42px;

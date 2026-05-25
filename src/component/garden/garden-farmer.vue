@@ -1,5 +1,5 @@
 <template lang="html">
-	<rich-tooltip-farmer :id="farmer.id" v-slot="{ props }" :bottom="farmer.id !== $store.state.farmer.id" :instant="true" class="rich">
+	<rich-tooltip-farmer :id="farmer.id" v-slot="{ props }" :bottom="farmer.id !== $store.state.farmer?.id" :instant="true" class="rich">
 		<div class="elem" v-bind="props">
 			<avatar :farmer="farmer" />
 			<div class="name">{{ farmer.name }}</div>
@@ -8,23 +8,18 @@
 				<span class="flex">
 				{{ farmer.leek_count }} <img class="icon" src="/image/icon/black/leek.png"></span>
 				{{ $t('main.level_n', [farmer.total_level]) }}
-				<flag class="country" v-if="farmer.country" :code="farmer.country" />
+				<flag v-if="farmer.country" class="country" :code="farmer.country" />
 			</div>
 		</div>
 	</rich-tooltip-farmer>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	import Avatar from '../avatar.vue'
-	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
+<script setup lang="ts">
+import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 
-	@Options({
-		components: { avatar: Avatar, RichTooltipFarmer }
-	})
-	export default class GardenFarmer extends Vue {
-		@Prop() farmer!: any
-	}
+defineProps<{
+	farmer: Record<string, unknown>
+}>()
 </script>
 
 <style lang="scss" scoped>

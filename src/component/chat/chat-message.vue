@@ -19,7 +19,7 @@
 
 			<chat-message-text :message="message" />
 
-			<template v-for="(sub, i) in message.subMessages" :key="sub.id">
+			<template v-for="sub in message.subMessages" :key="sub.id">
 				<chat-message-text :message="sub" />
 			</template>
 
@@ -31,7 +31,7 @@
 			<div class="reactions">
 				<v-tooltip v-for="(reaction, emoji) in message.reactions" :key="emoji" :open-delay="500" :close-delay="0" bottom>
 					<template #activator="{ props }">
-						<div v-bind="props" class="reaction" v-ripple :class="{me: emoji === message.my_reaction}" @click="toggleReaction(emoji)">
+						<div v-ripple v-bind="props" class="reaction" :class="{me: emoji === message.my_reaction}" @click="toggleReaction(emoji)">
 							{{ emoji }} <span v-if="reaction.count > 1" class="count">{{ reaction.count }}</span>
 						</div>
 					</template>
@@ -46,45 +46,44 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { Chat, ChatMessage, ChatType } from '@/model/chat'
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
-	import 'katex/dist/katex.min.css'
-	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
-	import ChatMessageText from './chat-message-text.vue'
+<script setup lang="ts">
+import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
+import { Chat, ChatMessage, ChatType } from '@/model/chat'
+import { LeekWars } from '@/model/leekwars'
+import { computed, watch } from 'vue'
+import ChatMessageText from './chat-message-text.vue'
 
-	@Options({ name: 'ChatMessage', emits: ['scroll', 'emoji'], components: { RichTooltipFarmer, ChatMessageText } })
-	export default class ChatMessageComponent extends Vue {
+defineOptions({ name: 'ChatMessage', components: { RichTooltipFarmer, ChatMessageText } })
 
-		@Prop({ required: true }) message!: ChatMessage
-		@Prop() chat!: Chat
-		@Prop() large!: boolean
+const props = defineProps<{
+	message: ChatMessage
+	chat: Chat
+	large?: boolean
+}>()
 
-		ChatType = ChatType
+const emit = defineEmits<{
+	'scroll': []
+	'emoji': [event: MouseEvent]
+	'menu': [event: MouseEvent]
+}>()
 
-		get me() {
-			return this.message.farmer.id === this.$store.state.farmer.id
-		}
-		get privateMessages() {
-			return this.chat && this.chat.type === ChatType.PM
-		}
+const privateMessages = computed(() => props.chat && props.chat.type === ChatType.PM)
 
-		@Watch('message.reactions', { deep: true })
-		updateReactions() {
-			this.$emit('scroll')
-		}
+watch(() => props.message.reactions, () => {
+	emit('scroll')
+}, { deep: true })
 
-		toggleReaction(emoji: string) {
-			if (this.message.my_reaction === emoji) { // Remove current reaction
-				LeekWars.delete('message-reaction/delete', { message_id: this.message.id })
-				this.message.my_reaction = null
-			} else {
-				LeekWars.post('message-reaction/add', { reaction: emoji, message_id: this.message.id })
-				this.message.my_reaction = emoji
-			}
-		}
+function toggleReaction(emoji: string) {
+	if (props.message.my_reaction === emoji) { // Remove current reaction
+		LeekWars.delete('message-reaction/delete', { message_id: props.message.id })
+		// eslint-disable-next-line vue/no-mutating-props
+		props.message.my_reaction = null
+	} else {
+		LeekWars.post('message-reaction/add', { reaction: emoji, message_id: props.message.id })
+		// eslint-disable-next-line vue/no-mutating-props
+		props.message.my_reaction = emoji
 	}
+}
 </script>
 
 <style lang="scss" scoped>

@@ -9,6 +9,9 @@
 	"click_opponent": "Clicca su un avversario per iniziare un combattimento",
 	"error_fight_not_enough_leeks": "Non abbastanza porri nella squadra",
 	"error_fight_you_need_at_least_2_leeks": "Devi avere almeno 2 porri.",
+	"error_you_need_at_least_2_leeks": "Devi avere almeno 2 porri.",
+	"error_target_needs_at_least_2_leeks": "L'allevatore bersaglio deve avere almeno 2 porri.",
+	"error_you_need_at_least_1_leek": "Devi avere almeno 1 porro.",
 	"farmer_fight": "Combattimento tra allevatori",
 	"garden_solo": "Orto solitario",
 	"garden_farmer": "Orto",
@@ -48,5 +51,8 @@
 	"arena_mode_colossus": "Colosso",
 	"arena_wants_colossus": "Voglio essere il Colosso",
 	"arena_countdown": "Inizio tra {0}s...",
+	"arena_countdown_invite": "Inizio tra {0}s, sbrigati!",
+	"arena_invite_ready": "Pronti a combattere, unisciti a loro! | {count} giocatori pronti a combattere, unisciti a loro!",
+	"arena_invite_join": "Ancora 1 giocatore per iniziare il combattimento! | Ancora {count} giocatori per iniziare il combattimento!",
 	"garden_arena": "Orto Arena"
 }

@@ -14,27 +14,37 @@ import Popup from '@/component/popup.vue'
 import RankingBadge from '@/component/ranking-badge.vue'
 import Talent from '@/component/talent.vue'
 import { env } from '@/env'
-import { i18n, loadLanguageAsync } from '@/model/i18n'
-import { LeekWars, setRouter, loadGameData } from '@/model/leekwars'
+import { i18n, loadLanguageAsync, normalizeComponentName } from '@/model/i18n'
+import { LeekWars, loadGameData } from '@/model/leekwars'
 import '@/model/serviceworker'
 import { store } from "@/model/store"
 import router, { getRedirectAfterLogin } from '@/router'
-import { createApp, defineAsyncComponent, h, nextTick } from 'vue'
-import type { ComponentPublicInstance } from 'vue'
+import { createApp, defineAsyncComponent, defineComponent, getCurrentInstance, h, nextTick } from 'vue'
+import type { App as VueApp, Component, ComponentPublicInstance } from 'vue'
+import { Translation } from 'vue-i18n'
 import { Latex } from './latex'
 import { scroll_to_hash } from '@/router-functions'
 
 import { createVuetify } from 'vuetify'
 import 'vuetify/styles'
-import '@mdi/font/css/materialdesignicons.css'
+import { aliases as mdiSvgAliases } from 'vuetify/iconsets/mdi-svg'
+import { mdiIconSet } from './icon-set'
 import { formatEmojis } from './emojis'
 import { displayWarningMessage, emitter, setVueMain } from './emitter'
 import '@/chart'
 
 const Console = defineAsyncComponent(() => import('@/component/app/console.vue'))
 
+const cspNonce = (document.querySelector('meta[name="csp-nonce"]') as HTMLMetaElement | null)?.content || undefined
+
 const vuetify = createVuetify({
+	icons: {
+		defaultSet: 'mdi',
+		aliases: mdiSvgAliases,
+		sets: { mdi: mdiIconSet },
+	},
 	theme: {
+		cspNonce,
 		themes: {
 			dark: {
 				colors: {
@@ -74,24 +84,167 @@ const vuetify = createVuetify({
 	},
 })
 
-// Handle Vite CSS/JS preload errors after deployment (stale hashed assets)
-// The guard flag prevents infinite reload loops if the error persists after reload.
-// It is cleared on successful page load so that future deploys can trigger a reload again.
-const PRELOAD_RELOAD_KEY = 'vite-preload-reload'
-window.addEventListener('vite:preloadError', () => {
-	if (!sessionStorage.getItem(PRELOAD_RELOAD_KEY)) {
-		sessionStorage.setItem(PRELOAD_RELOAD_KEY, '1')
-		window.location.reload()
+// Cache-busted reload on Vite asset errors, with a cooldown to break out of
+// refresh-on-every-click loops when the new bundle still errors.
+const PRELOAD_RELOAD_KEY = 'vite-preload-reload-at'
+const RELOAD_COOLDOWN = 60_000
+
+function reloadWithCacheBust() {
+	const now = Date.now()
+	const last = parseInt(sessionStorage.getItem(PRELOAD_RELOAD_KEY) || '0', 10)
+	if (now - last < RELOAD_COOLDOWN) return
+	sessionStorage.setItem(PRELOAD_RELOAD_KEY, now.toString())
+	const url = new URL(window.location.href)
+	url.searchParams.set('_r', now.toString())
+	window.location.replace(url.toString())
+}
+
+window.addEventListener('vite:preloadError', reloadWithCacheBust)
+
+// Suppress Monaco internal error when hovering markers on a disposed editor
+window.addEventListener('error', (event) => {
+	if (event.error?.message?.includes('InstantiationService has been disposed')) {
+		event.preventDefault()
 	}
-})
-// Clear the guard once the page has loaded successfully (assets are fresh)
-window.addEventListener('load', () => {
-	sessionStorage.removeItem(PRELOAD_RELOAD_KEY)
 })
 
 let lastErrorSent = 0
 
-let secondInterval: any = null, minuteInterval: any = null
+interface NavSnapshot {
+	fullPath: string
+	name: string | null
+	at: number
+}
+let previousNav: NavSnapshot | null = null
+let currentNav: NavSnapshot | null = null
+
+function describeRouteSubtree(instance: unknown): string | null {
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		let node = (instance as any)?.subTree
+		let depth = 0
+		while (node && depth < 20) {
+			const child = node.component
+			if (child) {
+				const t = child.type
+				const name = t?.name || t?.__name || t?.__file || 'Anonymous'
+				return name
+			}
+			node = node.children?.[0]
+			depth++
+		}
+	} catch { /* empty */ }
+	return null
+}
+
+export function reportVueError(err: unknown, vm: unknown, info: unknown, origin: string = 'main') {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const e = err as any
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const vmAny = vm as any
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const infoAny = info as any
+
+	if (LeekWars.DEV) return
+
+	if (e?.message?.includes('Failed to fetch dynamically imported module') ||
+		e?.message?.includes('Loading chunk') ||
+		e?.message?.includes('Loading CSS chunk') ||
+		e?.message?.includes('Unable to preload CSS')) {
+		return
+	}
+
+	if (infoAny?.includes?.('runtime-13')) {
+		reloadWithCacheBust()
+		return
+	}
+
+	if (Date.now() - lastErrorSent < 1000) return
+	lastErrorSent = Date.now()
+
+	let errorBody: string
+	try {
+		errorBody = e?.message || (e && typeof e === 'object' ? JSON.stringify(e) : String(e))
+	} catch {
+		errorBody = String(e)
+	}
+	const error = (e?.name || 'Error') + ": " + errorBody
+	const file = document.location.href
+	const locale = i18n.locale
+	const user_agent = navigator.userAgent
+
+	let componentTrace = ''
+	let routeSubtree: string | null = null
+	try {
+		if (vmAny) {
+			const components: string[] = []
+			// errorCaptured passes a public proxy (.$ → internal instance); app.config.errorHandler
+			// passes the internal instance directly. Handle both.
+			let instance = vmAny.$ || vmAny
+			const leafInstance = instance
+			while (instance && components.length < 100) {
+				const name = instance.type?.name || instance.type?.__name || 'Anonymous'
+				const propsDef = instance.type?.props
+				let propsStr = ''
+				if (propsDef && instance.props) {
+					const parts: string[] = []
+					const keys = Array.isArray(propsDef) ? propsDef : Object.keys(propsDef)
+					for (const key of keys) {
+						const val = instance.props[key]
+						if (val !== undefined && val !== null && val !== false) {
+							let s: string
+							if (typeof val === 'object') {
+								s = Array.isArray(val) ? '[Array(' + val.length + ')]' : '[Object]'
+							} else {
+								s = String(val).substring(0, 50)
+							}
+							parts.push(key + '=' + s)
+						}
+					}
+					if (parts.length) propsStr = ' ' + parts.join(' ')
+				}
+				components.push('<' + name + propsStr + '>')
+				instance = instance.parent
+			}
+			componentTrace = '\n\nComponent: ' + components[0] + '\nHierarchy: ' + components.join(' → ')
+			// For RouterView/Anonymous-rooted errors, expose the actual route component being patched.
+			const leafName = leafInstance?.type?.name || leafInstance?.type?.__name
+			if (leafName === 'RouterView' || !leafName) {
+				routeSubtree = describeRouteSubtree(leafInstance)
+			}
+		}
+	} catch (ex) {
+		componentTrace = '\n\n[Component trace failed: ' + (ex as Error).message + ']'
+	}
+
+	let navTrace = ''
+	try {
+		const lines: string[] = []
+		if (currentNav) lines.push('Route: ' + currentNav.fullPath + (currentNav.name ? ' [' + currentNav.name + ']' : ''))
+		if (previousNav) lines.push('Previous route: ' + previousNav.fullPath + (previousNav.name ? ' [' + previousNav.name + ']' : ''))
+		if (currentNav) lines.push('Since last navigation: ' + (Date.now() - currentNav.at) + 'ms')
+		if (routeSubtree) lines.push('Route subtree: <' + routeSubtree + '>')
+		if (lines.length) navTrace = '\n\n' + lines.join('\n')
+	} catch { /* empty */ }
+
+	const stack = (e?.stack || '(no stack)') + '\n\nOrigin: ' + origin + '\nVue info: ' + infoAny + componentTrace + navTrace
+	const build_date = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : null
+	const build_commit = typeof __BUILD_COMMIT__ !== 'undefined' ? __BUILD_COMMIT__ : null
+	LeekWars.post('error/report', { error, stack, file, locale, user_agent, build_date, build_commit })
+}
+
+export function createSubApp(component: Component, props?: Record<string, unknown>, origin: string = 'sub-app'): VueApp {
+	const subApp = createApp(component, props)
+	subApp.config.errorHandler = (err, vm, info) => reportVueError(err, vm, info, origin)
+	subApp.use(vuetify)
+	subApp.use(i18n)
+	subApp.use(store)
+	subApp.use(router)
+	subApp.mixin({ data() { return { LeekWars } } })
+	return subApp
+}
+
+let secondInterval: ReturnType<typeof setInterval> | null = null, minuteInterval: ReturnType<typeof setInterval> | null = null
 
 const app = createApp({
 	data() {
@@ -172,7 +325,7 @@ const app = createApp({
 		})
 		document.addEventListener('visibilitychange', () => {
 			if (document.visibilityState === 'visible') {
-				LeekWars.socket.connect()
+				LeekWars.socket.checkAlive()
 			}
 		})
 		window.addEventListener('click', () => {
@@ -190,7 +343,7 @@ const app = createApp({
 			nextTick(() => {
 				// console.log("loaded", this.$data.savedPosition)
 				if (router.currentRoute?.value.hash) {
-					scroll_to_hash(router.currentRoute?.value.hash, router.currentRoute)
+					scroll_to_hash(router.currentRoute?.value.hash, router.currentRoute.value)
 				} else if (this.$data.savedPosition > 0) {
 					// window.scrollTo(0, this.$data.savedPosition)
 					setTimeout(() => {
@@ -209,6 +362,7 @@ const app = createApp({
 			if (matched) {
 				const component = matched.instances?.default
 				if (!component) return
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				const beforeRouteLeave = (component.$options as any).beforeRouteLeave
 				if (beforeRouteLeave) {
 					if (!beforeRouteLeave[0].bind(component)()) { return "Confirm" }
@@ -224,49 +378,90 @@ const app = createApp({
 		if (!LeekWars.LOCAL) {
 			displayWarningMessage()
 		}
-	},
-
-	errorCaptured(err: any, vm: any, info: any) {
-
-		if (LeekWars.DEV) return
-
-		// Ignore chunk loading errors (handled by router.onError / vite:preloadError with page reload)
-		if (err.message?.includes('Failed to fetch dynamically imported module') ||
-			err.message?.includes('Loading chunk') ||
-			err.message?.includes('Loading CSS chunk') ||
-			err.message?.includes('Unable to preload CSS')) {
-			return
-		}
-
-		// Ignore async component loader failures (Vue runtime-13) — same root cause as chunk
-		// loading errors (stale cache after deploy, network issues). Reload the page once to
-		// try loading fresh assets, like the vite:preloadError handler does.
-		if (info?.includes?.('runtime-13')) {
-			if (!sessionStorage.getItem(PRELOAD_RELOAD_KEY)) {
-				sessionStorage.setItem(PRELOAD_RELOAD_KEY, '1')
-				window.location.reload()
-			}
-			return
-		}
-
-		if (Date.now() - lastErrorSent < 1000) return
-		lastErrorSent = Date.now()
-
-		const error = err.name + ": " + err.message
-		const file = document.location.href
-		const stack = err.stack + '\n' + info
-		const locale = i18n.global.locale
-		const user_agent = navigator.userAgent
-
-		LeekWars.post('error/report', { error, stack, file, locale, user_agent })
 	}
 })
 
-setRouter(router)
+app.config.errorHandler = (err, vm, info) => reportVueError(err, vm, info, 'main')
+
 app.use(router)
 app.use(i18n)
 app.use(store)
 app.use(vuetify)
+
+// vue-i18n composition mode: $t injecté via globalInjection est lié au composer
+// global. Les messages des composants sont mergés dans le global de deux façons:
+// (a) un-namespaced — fait fonctionner $t / <i18n-t> tels quels mais collisions
+//     possibles entre composants (ex: 40 composants ont une clé `title`)
+// (b) sous {namespace} — résolu par les wrappers ci-dessous, qui privilégient
+//     toujours la version du composant courant pour éviter les collisions.
+const composer = i18n.global as unknown as {
+	t: (...args: unknown[]) => string
+	te: (key: string, locale?: string) => boolean
+}
+const tFn = composer.t.bind(composer)
+const teFn = composer.te.bind(composer)
+
+function namespaceFor(rawName: string | undefined): string | null {
+	return rawName ? normalizeComponentName(rawName) : null
+}
+
+function resolveKey(vm: unknown, key: string): string {
+	const ns = namespaceFor((vm as { $options?: { name?: string } } | undefined)?.$options?.name)
+	if (ns) {
+		const namespaced = ns + '.' + key
+		if (teFn(namespaced)) return namespaced
+	}
+	return key
+}
+
+const props = app.config.globalProperties as Record<string, unknown>
+props.$t = function(this: unknown, key: string, ...args: unknown[]): string {
+	return tFn(resolveKey(this, key), ...args)
+}
+props.$te = function(this: unknown, key: string): boolean {
+	const ns = namespaceFor((this as { $options?: { name?: string } } | undefined)?.$options?.name)
+	if (ns && teFn(ns + '.' + key)) return true
+	return teFn(key)
+}
+props.$tc = function(this: unknown, key: string, choice?: number, values?: unknown): string {
+	const resolved = resolveKey(this, key)
+	if (choice === undefined) return tFn(resolved)
+	if (values === undefined) return tFn(resolved, choice)
+	return tFn(resolved, values, choice)
+}
+
+// <i18n-t> de vue-i18n appelle directement le composer global (bypass notre $t).
+// Wrapper qui tente chaque ancêtre nommé jusqu'à trouver la clé (évite les faux
+// positifs quand un composant layout comme <panel> est entre <i18n-t> et la page).
+const I18nTWrapper = defineComponent({
+	name: 'i18n-t',
+	inheritAttrs: false,
+	setup(_props, { attrs, slots }) {
+		const namespaces: string[] = []
+		let cur = getCurrentInstance()?.parent
+		while (cur) {
+			const rawName = (cur.type as { name?: string } | undefined)?.name
+			if (rawName) namespaces.push(normalizeComponentName(rawName))
+			cur = cur.parent
+		}
+		return () => {
+			const keypath = attrs.keypath as string | undefined
+			let finalAttrs = attrs
+			if (keypath) {
+				for (const ns of namespaces) {
+					const namespaced = ns + '.' + keypath
+					if (teFn(namespaced)) { finalAttrs = { ...attrs, keypath: namespaced }; break }
+				}
+			}
+			return h(Translation as unknown as Component, { scope: 'global', ...finalAttrs }, slots)
+		}
+	}
+})
+// Override vue-i18n's built-in i18n-t with our namespace-aware wrapper.
+// Delete first to avoid Vue's "already registered" dev warning.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+delete (app as any)._context.components['i18n-t']
+app.component('i18n-t', I18nTWrapper)
 
 app.mixin({
 	data() {
@@ -303,13 +498,9 @@ app.directive('autostopscroll', {
 })
 
 const code = {
-	mounted: (el) => {
-		el.querySelectorAll('code').forEach((c) => {
-			const codeApp = createApp(Code, { code: (c as HTMLElement).innerText })
-			codeApp.use(vuetify)
-			codeApp.use(i18n)
-			codeApp.use(store)
-			codeApp.mount(c)
+	mounted: (el: HTMLElement) => {
+		el.querySelectorAll('code').forEach((c: Element) => {
+			createSubApp(Code, { code: (c as HTMLElement).innerText }, 'v-code').mount(c)
 		})
 	}
 }
@@ -317,23 +508,19 @@ const code = {
 app.directive('code', code)
 
 app.directive('single-code', {
-	mounted: (el) => {
-		el.querySelectorAll('code').forEach((c) => {
-			const codeApp = createApp(Code, { code: (c as HTMLElement).innerText, single: true, theme: 'auto' })
-			codeApp.use(vuetify)
-			codeApp.use(i18n)
-			codeApp.use(store)
-			codeApp.mount(c)
+	mounted: (el: HTMLElement) => {
+		el.querySelectorAll('code').forEach((c: Element) => {
+			createSubApp(Code, { code: (c as HTMLElement).innerText, single: true, theme: 'auto' }, 'v-single-code').mount(c)
 		})
 	}
 })
 
 app.directive('latex', {
-	mounted: (el) => {
+	mounted: (el: HTMLElement) => {
 		el.innerHTML = el.innerHTML.replace(/\$(.*?)\$/, (str: string) => {
 			return "<latex>" + str + "</latex>"
 		})
-		el.querySelectorAll('latex').forEach((c) => {
+		el.querySelectorAll('latex').forEach((c: Element) => {
 			Latex.latexify(c.innerHTML).then(result => {
 				c.innerHTML = result
 			})
@@ -342,8 +529,10 @@ app.directive('latex', {
 })
 
 app.directive('chat-code-latex', {
-	mounted: (el) => {
-		el.innerHTML = el.innerHTML.replace(/\$(.*?)\$/g, (str: string) => {
+	mounted: (el: HTMLElement) => {
+		el.innerHTML = el.innerHTML.replace(/\$(.*?)\$/g, (str: string, content: string) => {
+			// Skip if the captured content already contains HTML tags (e.g. linkified URL)
+			if (/<\w/.test(content)) return str
 			return "<latex>" + str.replace(/`/g, "") + "</latex>"
 		})
 		el.innerHTML = el.innerHTML.replace(/```(.*?)```/g, (str: string, code: string) => {
@@ -352,26 +541,23 @@ app.directive('chat-code-latex', {
 		el.innerHTML = el.innerHTML.replace(/`(.*?)`/g, (str: string, code: string) => {
 			return "<code>" + code + "</code>"
 		})
-		el.querySelectorAll('code').forEach((c) => {
+		el.querySelectorAll('code').forEach((c: Element) => {
 			let props
 			if (c.innerHTML.indexOf("<br>") !== -1) {
-				props = { code: LeekWars.decodehtmlentities(c.innerHTML).replace(/<br>/gi, "\n").trim(), expandable: true }
+				const code = LeekWars.decodehtmlentities(c.innerHTML).replace(/<br>/gi, "\n").replace(/^\n+|\n+$/g, '')
+				props = { code, expandable: true }
 			} else {
 				props = { code: c.textContent || '', single: true }
 			}
-			const codeApp = createApp(Code, props)
-			codeApp.use(vuetify)
-			codeApp.use(i18n)
-			codeApp.use(store)
-			const vm = codeApp.mount(c)
+			const vm = createSubApp(Code, props, 'v-chat-code-latex').mount(c)
 			c.replaceWith(vm.$el)
 		})
-		el.querySelectorAll('latex').forEach((c) => {
+		el.querySelectorAll('latex').forEach((c: Element) => {
 			Latex.latexify(c.innerHTML).then(result => {
 				c.innerHTML = result
 			})
 		})
-		el.querySelectorAll('a').forEach(a => {
+		el.querySelectorAll('a').forEach((a: HTMLAnchorElement) => {
 			const href = a.getAttribute('href')
 			if (href && href.startsWith('/') ) {
 				a.onclick = (e: Event) => {
@@ -390,11 +576,11 @@ app.directive('chat-code-latex', {
 })
 
 const dochash = {
-	mounted: (el) => {
-		el.innerHTML = el.innerHTML.replace(/#(\w+)/g, (a, b) => {
+	mounted: (el: HTMLElement) => {
+		el.innerHTML = el.innerHTML.replace(/#(\w+)/g, (a: string, b: string) => {
 			return "<a href='/help/documentation/" + b + "'>" + b + "</a>"
 		})
-		el.querySelectorAll('a').forEach(a => {
+		el.querySelectorAll('a').forEach((a: HTMLAnchorElement) => {
 			a.onclick = (e: Event) => {
 				e.stopPropagation()
 				e.preventDefault()
@@ -407,8 +593,8 @@ const dochash = {
 
 app.directive('dochash', dochash)
 
-app.directive('emojis', (el) => {
-	el.childNodes.forEach((child) => {
+app.directive('emojis', (el: HTMLElement) => {
+	el.childNodes.forEach((child: ChildNode) => {
 		if (child.nodeType === Node.TEXT_NODE) {
 			const html = formatEmojis(LeekWars.protect((child as Text).wholeText))
 			const template = document.createElement('span')
@@ -427,24 +613,43 @@ app.config.globalProperties.$filters = {
 	duration: LeekWars.formatDuration,
 }
 
-// Charger les données de jeu AVANT le mount Vue
-await loadGameData().catch(e => console.warn('[GameData] Init failed:', e))
+// Charger les données de jeu AVANT le mount Vue. Si on monte avec un dataset
+// vide/incomplet, l'app crashe à des endroits aléatoires (ex: signup avec
+// LeekWars.hats vide). Mieux vaut afficher un écran d'erreur explicite.
+try {
+	await loadGameData()
+} catch (e) {
+	const root = document.getElementById('app2')
+	const tpl = document.getElementById('app-data-error') as HTMLTemplateElement | null
+	if (root && tpl) {
+		root.replaceChildren(tpl.content.cloneNode(true))
+	}
+	// Re-throw : indispensable pour stopper la suite (sinon app.mount('#app2') écraserait l'UI d'erreur).
+	throw e
+}
 
 const vm = app.mount('#app2') as ComponentPublicInstance & {
 	$once: (event: string, callback: () => void) => void
-	$emit: (event: string, ...args: any[]) => void
+	$emit: (event: string, ...args: unknown[]) => void
 }
 setVueMain(vm)
 
 // Restore saved locale in dev/local mode
 if (LeekWars.DEV || LeekWars.LOCAL) {
 	const savedLocale = localStorage.getItem('locale')
-	if (savedLocale && savedLocale !== i18n.global.locale) {
+	if (savedLocale && savedLocale !== i18n.locale) {
 		loadLanguageAsync(vm, savedLocale)
 	}
 }
 
-router.afterEach((to: any) => {
+router.afterEach((to) => {
+	previousNav = currentNav
+	currentNav = {
+		fullPath: to.fullPath,
+		name: typeof to.name === 'string' ? to.name : (to.name ? String(to.name) : null),
+		at: Date.now(),
+	}
+
 	if (to.hash) {
 		setTimeout(() => {
 			scroll_to_hash(to.hash, to)
@@ -481,5 +686,4 @@ if (window.__FARMER__) {
 	}
 }
 
-export { vueMain } from './emitter'
-export { vuetify, displayWarningMessage, app, emitter, dochash, code }
+export { emitter, dochash, code }

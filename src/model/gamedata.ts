@@ -3,7 +3,7 @@ import { getMany, setMany, createStore } from 'idb-keyval'
 const idbStore = createStore('leek-wars-data', 'game-data')
 const LS_PREFIX = 'gd:'
 
-const DATA_TYPES = [
+export const DATA_TYPES = [
 	'items', 'chips', 'weapons', 'hats', 'pomps', 'potions', 'schemes',
 	'components', 'trophies', 'constants', 'functions',
 	'hat_templates', 'chip_templates', 'summon_templates',
@@ -15,10 +15,12 @@ interface Meta {
 	hashes: { [key: string]: string }
 }
 
+type GameDataMap = { [key: string]: unknown }
+
 interface InlineData {
 	master_version: string
 	hashes: { [key: string]: string }
-	data: { [key: string]: any }
+	data: GameDataMap
 }
 
 function getApiUrl(): string {
@@ -34,7 +36,7 @@ function getApiUrl(): string {
 
 let idbFailed = false
 
-async function cacheLoad(skipVersionCheck = false): Promise<{ [key: string]: any } | null> {
+async function cacheLoad(skipVersionCheck = false): Promise<GameDataMap | null> {
 	if (!idbFailed) {
 		const result = await loadFromIdb(skipVersionCheck)
 		if (result) return result
@@ -43,7 +45,7 @@ async function cacheLoad(skipVersionCheck = false): Promise<{ [key: string]: any
 	return loadFromLs(skipVersionCheck)
 }
 
-function cacheSave(masterVersion: string, hashes: { [key: string]: string }, data: { [key: string]: any }) {
+function cacheSave(masterVersion: string, hashes: { [key: string]: string }, data: GameDataMap) {
 	if (!idbFailed) {
 		saveToIdb(masterVersion, hashes, data)
 	} else {
@@ -53,7 +55,7 @@ function cacheSave(masterVersion: string, hashes: { [key: string]: string }, dat
 
 // --- IndexedDB ---
 
-async function loadFromIdb(skipVersionCheck = false): Promise<{ [key: string]: any } | null> {
+async function loadFromIdb(skipVersionCheck = false): Promise<GameDataMap | null> {
 	try {
 		const keys = ['meta', ...DATA_TYPES.map(t => 'data:' + t)]
 		const values = await getMany(keys, idbStore)
@@ -68,7 +70,7 @@ async function loadFromIdb(skipVersionCheck = false): Promise<{ [key: string]: a
 			}
 		}
 
-		const result: { [key: string]: any } = {}
+		const result: GameDataMap = {}
 		for (let i = 0; i < DATA_TYPES.length; i++) {
 			if (values[i + 1] == null) {
 				console.warn(`[GameData] Missing type '${DATA_TYPES[i]}' in IndexedDB → invalidating cache`)
@@ -82,8 +84,8 @@ async function loadFromIdb(skipVersionCheck = false): Promise<{ [key: string]: a
 	}
 }
 
-function saveToIdb(masterVersion: string, hashes: { [key: string]: string }, data: { [key: string]: any }) {
-	const entries: [string, any][] = [['meta', { master_version: masterVersion, hashes } as Meta]]
+function saveToIdb(masterVersion: string, hashes: { [key: string]: string }, data: GameDataMap) {
+	const entries: [string, unknown][] = [['meta', { master_version: masterVersion, hashes } as Meta]]
 	for (const type of Object.keys(data)) {
 		entries.push(['data:' + type, data[type]])
 	}
@@ -94,7 +96,7 @@ function saveToIdb(masterVersion: string, hashes: { [key: string]: string }, dat
 
 // --- localStorage fallback ---
 
-function loadFromLs(skipVersionCheck = false): { [key: string]: any } | null {
+function loadFromLs(skipVersionCheck = false): GameDataMap | null {
 	try {
 		const raw = localStorage.getItem(LS_PREFIX + 'meta')
 		if (!raw) return null
@@ -105,7 +107,7 @@ function loadFromLs(skipVersionCheck = false): { [key: string]: any } | null {
 			if (cookieVersion && meta.master_version !== cookieVersion) return null
 		}
 
-		const result: { [key: string]: any } = {}
+		const result: GameDataMap = {}
 		for (const type of DATA_TYPES) {
 			const item = localStorage.getItem(LS_PREFIX + type)
 			if (item == null) return null
@@ -118,7 +120,7 @@ function loadFromLs(skipVersionCheck = false): { [key: string]: any } | null {
 	}
 }
 
-function saveToLs(masterVersion: string, hashes: { [key: string]: string }, data: { [key: string]: any }) {
+function saveToLs(masterVersion: string, hashes: { [key: string]: string }, data: GameDataMap) {
 	try {
 		localStorage.setItem(LS_PREFIX + 'meta', JSON.stringify({ master_version: masterVersion, hashes }))
 		for (const type of Object.keys(data)) {
@@ -133,12 +135,15 @@ function saveToLs(masterVersion: string, hashes: { [key: string]: string }, data
  * Charge les données de jeu. Sync si __DATA__ présent, async (IndexedDB/localStorage) sinon.
  * À appeler AVANT le mount Vue.
  */
-export async function loadGameData(): Promise<{ [key: string]: any } | null> {
-	const inline: InlineData | null = (window as any).__DATA__
+export async function loadGameData(): Promise<GameDataMap | null> {
+	// `!= null` pour catcher aussi `undefined` : si le script inline `var __DATA__=...`
+	// ne s'exécute pas (CSP nonce mismatch, parse error, extension qui réécrit le DOM),
+	// `window.__DATA__` reste `undefined` au lieu de `null`.
+	const inline: InlineData | null | undefined = (window as unknown as { __DATA__?: InlineData | null }).__DATA__
 
-	if (inline !== null) {
+	if (inline != null) {
 		const changedTypes = Object.keys(inline.data)
-		console.log(`[GameData] Inline: ${changedTypes.length} types changed`)
+		console.log(`[GameData] Inline: ${changedTypes.length} types changed, master_version=${inline.master_version}`)
 
 		cacheSave(inline.master_version, inline.hashes, inline.data)
 		updateCookie(inline.master_version, inline.hashes)
@@ -151,18 +156,14 @@ export async function loadGameData(): Promise<{ [key: string]: any } | null> {
 				}
 				return cached
 			}
-			// Aucun cache disponible → fetch complet
+			// Aucun cache disponible → fetch complet (laisse l'erreur remonter si fetchAll échoue,
+			// retourner inline.data partiel laisserait LeekWars.hats/etc. vides → crash render).
 			console.warn('[GameData] No cache for unchanged types, fetching all from API...')
-			try {
-				const full = await fetchAll()
-				for (const type of changedTypes) {
-					full[type] = inline.data[type]
-				}
-				return full
-			} catch (e) {
-				console.warn('[GameData] API fetch also failed, using partial inline data:', e)
-				return inline.data
+			const full = await fetchAll()
+			for (const type of changedTypes) {
+				full[type] = inline.data[type]
 			}
+			return full
 		}
 		return inline.data
 	}
@@ -174,7 +175,7 @@ export async function loadGameData(): Promise<{ [key: string]: any } | null> {
 	const dt = (performance.now() - t0).toFixed(1)
 
 	if (cached) {
-		console.log(`[GameData] Loaded from cache in ${dt}ms`)
+		console.log(`[GameData] Loaded from cache in ${dt}ms, master_version=${getCookieMasterVersion()}`)
 		return cached
 	}
 
@@ -182,14 +183,14 @@ export async function loadGameData(): Promise<{ [key: string]: any } | null> {
 	return await fetchAll()
 }
 
-async function fetchAll(): Promise<{ [key: string]: any }> {
+async function fetchAll(): Promise<GameDataMap> {
 	const api = getApiUrl()
 	const response = await fetch(api + 'data/get-all')
 	if (!response.ok) throw new Error(`HTTP ${response.status}`)
 	const json = await response.json()
 
 	const data = json.data
-	console.log(`[GameData] Fetched ${Object.keys(data).length} types from API`)
+	console.log(`[GameData] Fetched ${Object.keys(data).length} types from API, master_version=${json.master_version}`)
 
 	cacheSave(json.master_version, json.hashes, data)
 	updateCookie(json.master_version, json.hashes)

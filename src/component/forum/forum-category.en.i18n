@@ -14,11 +14,11 @@
 	"new_topic_title": "Topic title",
 	"pinned": "Topic pinned",
 	"resolved": "Topic solved",
-	"topic": "Subject",
+	"topic": "Topic",
 	"mark_as_read": "Mark as read",
 	"mark_as_read_text": "All topics in all forum categories will be marked as read. After this action, only new topics or replies will be marked.",
-	"show_resolved": "Show completed topics",
-	"status_resolved": "Solved",
+	"show_resolved": "Show resolved topics",
+	"status_resolved": "Resolved",
 	"status_not_reproduced": "Not reproduced",
 	"status_not_planned": "Not planned",
 	"status_not_a_bug": "Not a bug",
@@ -44,5 +44,6 @@
 	"filter_read_no": "Unread",
 	"no_topics": "No topics to display",
 	"no_topics_filters": "Try adjusting your filters to see more results.",
-	"clear_filters": "Clear filters"
+	"clear_filters": "Clear filters",
+	"bug_user_agent_notice": "Your browser will be displayed on the bug report:"
 }

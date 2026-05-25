@@ -38,15 +38,14 @@
 	</router-link>
 </template>
 
-<script lang="ts">
-	import { mixins } from '@/model/i18n'
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
+<script setup lang="ts">
+defineOptions({ name: 'Trophy' })
 
-	@Options({ name: 'trophy' })
-	export default class Trophy extends Vue {
-		@Prop({ required: true }) trophy: any
-	}
+import { LeekWars } from '@/model/leekwars'
+type TrophyData = (typeof LeekWars.trophies)[number]
+defineProps<{
+	trophy: TrophyData
+}>()
 </script>
 
 <style lang="scss" scoped>

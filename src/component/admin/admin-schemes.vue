@@ -47,14 +47,15 @@
 									<img :src="'/image/' + ITEM_CATEGORY_NAME[LeekWars.items[scheme.items[i][0]].type] + '/' + LeekWars.items[scheme.items[i][0]].name.replace('hat_', '').replace('potion_', '').replace('chip_', '').replace('weapon_', '') + '.png'">
 								</div>
 							</rich-tooltip-item>
-							<input v-model="scheme.items[i][0]" @keyup="updateScheme(scheme)" class="item-id">
-							<input v-model="scheme.items[i][1]" @keyup="updateScheme(scheme)" class="quantity">
+							<input v-if="scheme.items[i]" v-model="scheme.items[i]![0]" class="item-id">
+							<input v-if="scheme.items[i]" v-model="scheme.items[i]![1]" class="quantity">
 						</div>
 						<div class="cell" :class="{cell8: true}">
 							<rich-tooltip-item :item="LeekWars.items[scheme.result]" :bottom="true" :inventory="true" :quantity="scheme.quantity">
 								<div class="item" :type="LeekWars.items[scheme.result].type">
 									<img :src="'/image/' + ITEM_CATEGORY_NAME[LeekWars.items[scheme.result].type] + '/' + LeekWars.items[scheme.result].name.replace('hat_', '').replace('potion_', '') + '.png'">
-									<input v-model="scheme.quantity" @keyup="updateScheme(scheme)" class="quantity">
+									<input v-model="scheme.result" class="item-id">
+									<input v-model="scheme.quantity" class="quantity">
 								</div>
 							</rich-tooltip-item>
 						</div>
@@ -63,57 +64,58 @@
 						<div>{{ $filters.number(scheme.quantity * LeekWars.items[scheme.result].price) }} <span class="hab"></span></div>
 						<div :class="{wrong: Math.abs((scheme.quantity * LeekWars.items[scheme.result].price) / scheme.items.reduce((s, i) => s + (i && LeekWars.items[i[0]] ? i[1] * LeekWars.items[i[0]].price : 0), 0) - 1.1) > 0.03 }">{{ $filters.number(scheme.items.reduce((s, i) => s + (i && LeekWars.items[i[0]] ? i[1] * LeekWars.items[i[0]].price : 0), 0)) }} ({{ ((scheme.quantity * LeekWars.items[scheme.result].price) / scheme.items.reduce((s, i) => s + (i && LeekWars.items[i[0]] ? i[1] * LeekWars.items[i[0]].price : 0), 0)).toFixed(2) }}) <span class="hab"></span></div>
 					</div>
+					<button class="copy-code" @click="copyCode(scheme)">Copier le code PHP</button>
 				</div>
 			</div>
 		</panel>
 	</div>
 </template>
 
-<script lang="ts">
-	import { ITEM_CATEGORY_NAME } from '@/model/item'
+<script setup lang="ts">
+	import { ITEM_CATEGORY_NAME as ITEM_CATEGORY_NAME_TYPED } from '@/model/item'
 	import { LeekWars } from '@/model/leekwars'
-	import { Options, Vue, Watch } from 'vue-property-decorator'
-	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 	import { SchemeTemplate } from '@/model/scheme'
-	import { defineAsyncComponent } from 'vue'
+	import { store } from '@/model/store'
+	import { defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
+	import { useRouter } from 'vue-router'
+	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 	const RichTooltipItem = defineAsyncComponent(() => import('@/component/rich-tooltip/rich-tooltip-item.vue'))
 
 	import Breadcrumb from '@/component/forum/breadcrumb.vue'
 
-	@Options({ components: { RichTooltipFarmer, RichTooltipItem, Breadcrumb } })
-	export default class AdminSchemes extends Vue {
-		ITEM_CATEGORY_NAME = ITEM_CATEGORY_NAME
-		data: any = null
-		sources: any = null
-		last: any = null
-		loading: boolean = false
-		schemes: SchemeTemplate[] | null = null
+	defineOptions({})
 
-		created() {
-			if (!this.$store.getters.admin) this.$router.replace('/')
-			LeekWars.setTitle("Admin Schémas")
+	const ITEM_CATEGORY_NAME = ITEM_CATEGORY_NAME_TYPED
 
-			LeekWars.get<{[key: number]: SchemeTemplate}>("scheme/get-all").then(schemes => {
-				this.schemes = Object.values(schemes)
-					.sort((a, b) => LeekWars.items[a.result].price! - LeekWars.items[b.result].price!)
-					.map(s => {
-						const items = [...s.items] as any
-						for (let i = 0; i < 9; ++i) { if (!items[i]) items[i] = ['', ''] }
-						return { ...s, items }
-					})
+	const router = useRouter()
+	const schemes = ref<SchemeTemplate[] | null>(null)
+
+	if (!store.getters.admin) router.replace('/')
+	LeekWars.setTitle("Admin Schémas")
+
+	LeekWars.get<{[key: number]: SchemeTemplate}>("scheme/get-all").then(s => {
+		schemes.value = Object.values(s)
+			.sort((a, b) => LeekWars.items[a.result].price! - LeekWars.items[b.result].price!)
+			.map(sc => {
+				const items = [...sc.items] as ([number | string, number | string] | null)[]
+				for (let i = 0; i < 9; ++i) { if (!items[i]) items[i] = ['', ''] }
+				return { ...sc, items }
 			})
-		}
-		mounted() {
-			LeekWars.large = true
-		}
-		beforeUnmount() {
-			LeekWars.large = false
-		}
+	})
 
-		updateScheme(scheme: SchemeTemplate) {
-			const items = scheme.items.map(i => i && i[0] ? i.map(j => parseInt(j as any)) : null)
-			LeekWars.put("scheme/set-ingredients", { scheme_id: scheme.id, ingredients: JSON.stringify(items) })
-		}
+	onMounted(() => {
+		LeekWars.large = true
+	})
+	onBeforeUnmount(() => {
+		LeekWars.large = false
+	})
+
+	function copyCode(scheme: SchemeTemplate) {
+		const slots = scheme.items.map(i => i && i[0] ? `[${parseInt(String(i[0]))}, ${parseInt(String(i[1]))}]` : 'null').join(', ')
+		const comment = (scheme as unknown as { comment?: string }).comment ?? ''
+		const snippet = `${scheme.id} => ['result' => ${scheme.result}, 'items' => [${slots}], 'comment' => '${comment}', 'quantity' => ${scheme.quantity}],`
+		navigator.clipboard.writeText(snippet)
+		LeekWars.toast("Snippet copié — à coller dans SchemeTemplateRegistry")
 	}
 </script>
 
@@ -219,17 +221,29 @@
 	font-weight: bold;
 }
 
+.copy-code {
+	margin-top: 4px;
+	padding: 4px 10px;
+	font-size: 13px;
+	background: var(--color-primary);
+	color: white;
+	border: none;
+	border-radius: 3px;
+	cursor: pointer;
+	&:hover {
+		opacity: 0.9;
+	}
+}
 .forge {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	gap: 5px;
 	width: 260px;
-	height: 305px;
 	flex-shrink: 0;
 	.grid {
-		width: 100%;
-		height: 100%;
+		width: 260px;
+		height: 260px;
 		position: relative;
 	}
 	.cell {

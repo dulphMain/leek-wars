@@ -8,7 +8,7 @@ class Bulb extends FightEntity {
 	public static SCALE: number = 0.30
 
 	public skin!: number
-	public bulbName!: string
+	declare public bulbName: string
 	public heightAnim!: number
 
 	constructor(game: Game, team: number, level: number, name: string) {
@@ -74,7 +74,7 @@ class Bulb extends FightEntity {
 		super.update(dt)
 	}
 
-	public frameTexture(includeHat: boolean): Texture {
+	public frameTexture(_includeHat: boolean): Texture {
 		const texture = this.front ? this.bodyTexFront : this.bodyTexBack
 		return texture.getScaledTexture(texture.texture.width * Bulb.SCALE)
 	}

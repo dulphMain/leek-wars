@@ -1,11 +1,11 @@
 <template lang="html">
 	<div>
-		<div ref="ai" :class="{modified: ai.modified, selected: ai.selected}" class="item ai" @click="click" @contextmenu.prevent.stop="emitter.emit('editor-menu', { item: ai, ai: true, e: $event })">
+		<div :class="{modified: ai.modified, selected: ai.selected}" class="item ai" @click="click" @contextmenu.prevent.stop="emitter.emit('editor-menu', { item: ai, ai: true, e: $event })">
 			<div :style="{'padding-left': (level * 15 + 15) + 'px'}" class="label" :class="{error: ai.errors, warning: ai.warnings}" :draggable="!inBin" @dragstart="dragstart">
 				<v-icon v-if="ai.errors" class="icon error">mdi-close-circle</v-icon>
 				<v-icon v-else-if="ai.warnings" class="icon warning">mdi-alert-circle</v-icon>
 				<v-icon v-else class="icon valid">mdi-check-bold</v-icon>
-				<span class="text">{{ ai.name }}</span>
+				<span class="text" :class="gitStatusClass">{{ ai.name }}</span>
 				<span v-if="ai.errors" class="count error">{{ ai.errors }}</span>
 				<span v-if="ai.warnings" class="count warning">{{ ai.warnings }}</span>
 				<span v-if="ai.todos" class="count todo">{{ ai.todos }}</span>
@@ -23,40 +23,57 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { fileSystem } from '@/model/filesystem'
-	import { store } from '@/model/store'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	import { AIItem } from './editor-item'
-	import { emitter } from '@/model/vue'
+<script setup lang="ts">
+import { fileSystem } from '@/model/filesystem'
+import { store } from '@/model/store'
+import { emitter } from '@/model/vue'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { AIItem } from './editor-item'
 
-	@Options({ name: 'editor-ai' })
-	export default class EditorAI extends Vue {
-		@Prop({required: true}) item!: AIItem
-		@Prop({required: true}) level!: number
-		emitter = emitter
+defineOptions({ name: 'EditorAi' })
 
-		get ai() { return this.item.ai }
+const props = defineProps<{
+	item: AIItem
+	level: number
+}>()
 
-		get leeks() {
-			return Object.entries(fileSystem.leekAIs)
-				.filter(entry => entry[1] === this.ai.id)
-				.map(entry => store.state.farmer!.leeks[parseInt(entry[0])].name)
-		}
+const router = useRouter()
 
-		get inBin() { return fileSystem.isInBin(this.ai.folder) }
+const ai = computed(() => props.item.ai)
 
-		dragstart(e: DragEvent) {
-			if (this.inBin) { e.stopPropagation(); return }
-			e.dataTransfer!.setData('text/plain', 'drag !!!')
-			emitter.emit('editor-drag', this.item)
-			e.stopPropagation()
-		}
-		click(e: Event) {
-			this.$router.push('/editor/' + this.ai.id)
-			e.stopPropagation()
-		}
-	}
+const leeks = computed(() => {
+	const aiKey = ai.value.path
+	return Object.entries(fileSystem.leekAIs)
+		.filter(entry => entry[1] === aiKey)
+		.map(entry => store.state.farmer!.leeks[parseInt(entry[0])].name)
+})
+
+const inBin = computed(() => fileSystem.isInBin(ai.value.folder))
+
+const gitStatusClass = computed<string>(() => {
+	if (!ai.value.folderpath) return ''
+	const path = ai.value.folderpath + ai.value.name
+	const status = fileSystem.gitStatus[path]
+	if (!status) return ''
+	if (status === 'C') return 'git-conflict'
+	if (status === 'M') return 'git-modified'
+	if (status === 'A' || status === 'U') return 'git-added'
+	if (status === 'D') return 'git-deleted'
+	return 'git-modified'
+})
+
+function dragstart(e: DragEvent) {
+	if (inBin.value) { e.stopPropagation(); return }
+	e.dataTransfer!.setData('text/plain', 'drag !!!')
+	emitter.emit('editor-drag', props.item)
+	e.stopPropagation()
+}
+
+function click(e: Event) {
+	router.push('/editor/' + ai.value.path)
+	e.stopPropagation()
+}
 </script>
 
 <style lang="scss" scoped>
@@ -67,7 +84,8 @@
 		opacity: 1;
 	}
 	.item .label {
-		padding: 7px 10px;
+		padding: 5px 10px;
+		font-size: 14px;
 		white-space: nowrap;
 		text-overflow: ellipsis;
 		overflow: hidden;
@@ -113,7 +131,7 @@
 	.count {
 		border-radius: 10px;
 		padding: 1px 6px;
-		font-size: 13px;
+		font-size: 12px;
 		margin-left: 6px;
 		font-weight: 500;
 		&.error {
@@ -137,5 +155,19 @@
 	}
 	.theme-monokai .count.leek img {
 		filter: invert(1);
+	}
+	.git-modified {
+		color: #e8a838 !important;
+	}
+	.git-added {
+		color: #73c991 !important;
+	}
+	.git-deleted {
+		color: #e06c75 !important;
+		text-decoration: line-through;
+	}
+	.git-conflict {
+		color: #e06c75 !important;
+		font-weight: bold;
 	}
 </style>

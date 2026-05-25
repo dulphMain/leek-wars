@@ -2,23 +2,35 @@
 	<div class="scheme-preview">
 		<scheme ref="schemeElement" :scheme="scheme" :show-result="true" :show-price="false" @update:model-value="$emit('update:modelValue', $event)" />
 
-		<v-btn class="button" :disabled="!$store.getters.scheme_possible(scheme)" @click="emitter.emit('craft', scheme)"><v-icon>mdi-hammer-wrench</v-icon> {{ $t('main.craft') }}</v-btn>
+		<v-btn v-if="showCraft" class="button" :disabled="!$store.getters.scheme_possible(scheme)" prepend-icon="mdi-hammer-wrench" @click="emitter.emit('craft', scheme)">{{ $t('main.craft') }}</v-btn>
 	</div>
 </template>
 
 <script lang="ts">
-	import { SchemeTemplate } from '@/model/scheme'
-	import { defineAsyncComponent } from 'vue';
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	import { emitter } from '@/model/vue';
-	const SchemeView = defineAsyncComponent(() => import('./scheme.vue'))
+import { defineAsyncComponent } from 'vue'
+const Scheme = defineAsyncComponent(() => import('./scheme.vue'))
+export default {
+	components: { scheme: Scheme }
+}
+</script>
 
-	@Options({ components: { 'scheme': SchemeView } })
-	export default class SchemePreview extends Vue {
-		@Prop() scheme!: SchemeTemplate
+<script setup lang="ts">
+import type { SchemeTemplate } from '@/model/scheme'
+import { emitter } from '@/model/vue'
 
-		emitter = emitter
-	}
+withDefaults(defineProps<{
+	scheme: SchemeTemplate
+	showCraft?: boolean
+}>(), {
+	showCraft: true,
+})
+
+defineEmits<{
+	'update:modelValue': [value: unknown]
+}>()
+
+const _emitter = emitter
+defineExpose({ emitter: _emitter })
 </script>
 
 <style scoped lang="scss">

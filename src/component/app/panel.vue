@@ -22,34 +22,44 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
+<script setup lang="ts">
+import { computed, ref, useSlots, watch } from 'vue'
 
-	@Options({ name: 'panel', emits: ['update:expanded'] })
-	export default class Panel extends Vue {
-		@Prop() icon!: string
-		@Prop() title!: string
-		@Prop() toggle!: string
-		@Prop({ default: false }) toggleInvert!: boolean
-		expanded: boolean = true
+defineOptions({ name: 'Panel' })
 
-		get hasTitle() {
-			return this.title || !!this.$slots.title
-		}
-		created() {
-			if (this.toggle) {
-				if (localStorage.getItem(this.toggle) === null) { localStorage.setItem(this.toggle, 'true') }
-				this.expanded = localStorage.getItem(this.toggle) === 'true'
-			}
-		}
-		@Watch('expanded')
-		update() {
-			if (this.toggle) {
-				localStorage.setItem(this.toggle, '' + this.expanded)
-				this.$emit('update:expanded', this.expanded)
-			}
-		}
+const props = withDefaults(defineProps<{
+	icon?: string
+	title?: string
+	toggle?: string
+	toggleInvert?: boolean
+}>(), {
+	icon: undefined,
+	title: undefined,
+	toggle: undefined,
+	toggleInvert: false,
+})
+
+const emit = defineEmits<{
+	'update:expanded': [value: boolean]
+}>()
+
+const slots = useSlots()
+
+const expanded = ref(true)
+
+const hasTitle = computed(() => props.title || !!slots.title)
+
+if (props.toggle) {
+	if (localStorage.getItem(props.toggle) === null) { localStorage.setItem(props.toggle, 'true') }
+	expanded.value = localStorage.getItem(props.toggle) === 'true'
+}
+
+watch(expanded, () => {
+	if (props.toggle) {
+		localStorage.setItem(props.toggle, '' + expanded.value)
+		emit('update:expanded', expanded.value)
 	}
+})
 </script>
 
 <style lang="scss" scoped>
@@ -141,12 +151,12 @@
 			opacity: 0.9;
 			vertical-align: top;
 		}
-		i {
-			padding: 6px 0;
-			opacity: 0.9;
-			font-size: 24px;
-		}
 		.v-icon {
+			width: 24px;
+			height: 24px;
+			padding: 6px 0;
+			box-sizing: content-box;
+			opacity: 0.9;
 			color: white;
 		}
 	}

@@ -1,5 +1,6 @@
 import { Notification } from '@/model/notification'
 import { ChatMessage } from './chat'
+import { formatChatPreview } from './chat-format'
 import { i18n } from './i18n'
 import { LeekWars } from './leekwars'
 
@@ -32,8 +33,10 @@ class Squares {
 			notification,
 			image: (notification.icon ? notification.image : '/image/' + notification.image),
 			icon: notification.icon,
-			title: (i18n as any).t('notification.title_' + notification.type, notification.title) as string,
-			message: (i18n as any).t('notification.message_' + notification.type, notification.message) as string,
+			title: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+			(i18n as any).t('notification.title_' + notification.type, notification.title) as string,
+			message: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+			(i18n as any).t('notification.message_' + notification.type, notification.message) as string,
 			link: notification.link,
 			padding: true,
 			clazz: notification.clazz,
@@ -45,8 +48,8 @@ class Squares {
 		this.add({
 			image: LeekWars.getAvatar(message.farmer.id, message.farmer.avatar_changed),
 			icon: false,
-			title: message.farmer.name,
-			message: "► " + message.content,
+			title: LeekWars.protect(message.farmer.name),
+			message: "► " + formatChatPreview(message.content, message.farmer.name),
 			link: "/messages/conversation/" + message.chat,
 			padding: false,
 			clazz: '',

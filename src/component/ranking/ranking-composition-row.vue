@@ -11,7 +11,7 @@
 		<td>{{ $filters.number(row.talent) }}</td>
 		<td>
 			<router-link :to="'/team/' + row.team_id">
-				<rich-tooltip-team :id="row.team_id" v-slot="{ props }" :bottom="true">
+				<rich-tooltip-team :id="row.team_id ?? 0" v-slot="{ props }" :bottom="true">
 					<span v-bind="props">{{ row.team_name }}</span>
 				</rich-tooltip-team>
 			</router-link>
@@ -21,14 +21,19 @@
 	</tr>
 </template>
 
-<script lang="ts">
-	import { RankingCompositionRow } from '@/model/ranking'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	import RichTooltipTeam from '@/component/rich-tooltip/rich-tooltip-team.vue'
-	import RichTooltipComposition from '@/component/rich-tooltip/rich-tooltip-composition.vue'
+<script setup lang="ts">
+import type { RankingCompositionRow } from '@/model/ranking'
+import RichTooltipTeam from '@/component/rich-tooltip/rich-tooltip-team.vue'
+import RichTooltipComposition from '@/component/rich-tooltip/rich-tooltip-composition.vue'
 
-	@Options({ components: { RichTooltipTeam, RichTooltipComposition } })
-	export default class RankingCompositionRowElement extends Vue {
-		@Prop({ required: true }) row!: RankingCompositionRow
-	}
+defineProps<{
+	row: RankingCompositionRow
+}>()
 </script>
+
+<style lang="scss" scoped>
+	tr.me td {
+		background: var(--background);
+		font-weight: bold;
+	}
+</style>

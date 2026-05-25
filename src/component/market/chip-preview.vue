@@ -19,17 +19,23 @@
 				<i18n-t keypath="effect.cooldown">
 					<template #turns>
 						<b v-if="chip.cooldown === -1">∞</b>
-						<span v-else v-html="$tc('effect.n_turns', chip.cooldown)"></span>
+						<i18n-t v-else keypath="effect.n_turns" :plural="chip.cooldown">
+							<template #n><b>{{ chip.cooldown }}</b></template>
+						</i18n-t>
 					</template>
 				</i18n-t>
 				<b v-if="chip.team_cooldown" v-html="'&nbsp;' + $t('effect.team_cooldown')"></b>
 			</div>
 			<i18n-t v-if="chip.initial_cooldown > 0" tag="div" keypath="effect.initial_cooldown">
-				<template #turns><span v-html="$tc('effect.n_turns', chip.initial_cooldown)"></span></template>
+				<template #turns>
+					<i18n-t keypath="effect.n_turns" :plural="chip.initial_cooldown">
+						<template #n><b>{{ chip.initial_cooldown }}</b></template>
+					</i18n-t>
+				</template>
 			</i18n-t>
 			<i18n-t v-if="chip.max_uses != -1" keypath="effect.max_uses" tag="div">
 				<template #uses>
-					<span v-html="$tc('effect.n_uses', chip.max_uses)"></span>
+					<span v-html="$t('effect.n_uses', chip.max_uses)"></span>
 				</template>
 			</i18n-t>
 			<effect-view v-for="(effect, e) in chip.effects" :key="chip.id + '_' + e" :effect="effect" :leek="leek" />
@@ -38,7 +44,7 @@
 	</div>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
 	import AreaView from '@/component/market/area-view.vue'
 	import EffectView from '@/component/market/effect.vue'
 	import RangeView from '@/component/market/range-view.vue'
@@ -48,30 +54,23 @@
 	import { EffectType } from '@/model/effect'
 	import { Leek } from '@/model/leek'
 	import { LeekWars } from '@/model/leekwars'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
+	import { computed } from 'vue'
 
-	@Options({
-		name: 'chip-preview',
-		components: {
-			'range-view': RangeView,
-			'effect-view': EffectView,
-			'area-view': AreaView,
-			'summon-view': SummonView
-		}
-	})
-	export default class ChipPreview extends Vue {
-		@Prop() chip!: ChipTemplate
-		@Prop() leek!: Leek
-		Area = Area
-		get summon() {
-			for (const effect of this.chip.effects) {
-				if (effect.id === EffectType.SUMMON) {
-					return LeekWars.summonTemplates[effect.value1]
-				}
+	defineOptions({ name: 'ChipPreview' })
+
+	const props = defineProps<{
+		chip: ChipTemplate
+		leek?: Leek
+	}>()
+
+	const summon = computed(() => {
+		for (const effect of props.chip.effects) {
+			if (effect.id === EffectType.SUMMON) {
+				return LeekWars.summonTemplates[effect.value1]
 			}
-			return null
 		}
-	}
+		return null
+	})
 </script>
 
 <style src='./item-preview.scss' lang='scss'></style>
