@@ -7,9 +7,14 @@
 	"date": "Tanggal",
 	"all": "Semua",
 	"weapons": "Senjata",
-	"chips": "Kutu",
+	"chips": "Chip",
 	"potions": "Ramuan",
 	"hats": "Topi",
 	"pomps": "Penampilan",
-	"resources": "Sumber daya"
+	"resources": "Sumber daya",
+	"no_group": "Tanpa grup",
+	"type": "Tipe",
+	"rarity": "Kelangkaan",
+	"craftable": "Dapat dibuat",
+	"ingredient_count": "Jumlah bahan"
 }

@@ -25,11 +25,12 @@
 	"unlocked_the_x": "Débloqué le {date}",
 	"see_fight": "Voir le combat",
 	"progress": "Progression",
-	"n_pocessors": "{n} possesseurs",
+	"n_pocessors": "aucun possesseur | 1 possesseur | {0} possesseurs",
 	"first_farmers": "Premiers éleveurs",
 	"last_farmers": "Derniers éleveurs",
 	"fastest_farmers": "Éleveurs les plus rapides",
 	"slowest_farmers": "Éleveurs les plus lents",
 	"title_farmers": "Éleveurs l'ayant dans leur titre",
-	"created_the": "Ajouté le {0}"
+	"created_the": "Ajouté le {0}",
+	"show_in_chat": "Affiché dans le chat"
 }

@@ -1,25 +1,29 @@
 import packageJson from '@/../package.json'
 import { env } from '@/env'
 import { locale } from '@/locale'
-import { BattleRoyale } from '@/model/battle-royale'
+import { Arena } from '@/model/arena'
 import { CHIP_TEMPLATES, HAT_TEMPLATES, HATS, POMPS, POTIONS, SUMMON_TEMPLATES, TROPHY_CATEGORIES, COMPLEXITIES } from '@/model/data'
 import { Socket } from '@/model/socket'
 import { Squares } from '@/model/squares'
 import { store } from '@/model/store'
 import { emitter, vueMain } from '@/model/emitter'
 import { WeaponTemplate } from '@/model/weapon'
+import { UAParser } from 'ua-parser-js'
 import router from '@/router'
+import type { Constant } from '@/model/constant'
+import type { LSFunction } from '@/model/function'
 
 import { TranslateResult } from 'vue-i18n'
 import { Chat, ChatWindow } from './chat'
 import { i18n, loadLanguageAsync } from './i18n'
-import { ItemTemplate, ItemType } from './item'
+import { ItemType } from './item'
 import { PotionEffect, PotionTemplate } from './potion'
 import { ITEMS } from './items'
 import { SCHEMES } from './schemes'
 import { COMPONENTS } from './components'
 import { WEAPONS } from './weapons'
 import { BossSquads } from './boss-squads'
+import { DATA_TYPES, loadGameData as loadGameDataRaw } from './gamedata'
 import { nextTick, reactive } from 'vue'
 
 const DEV = window.location.port === '8080'
@@ -32,86 +36,159 @@ const $t = (key: string, args?: any): string => {
 	const t = (i18n.global as any).t
 	return t(key, args)
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const $tc = (key: string, choice: number): string => {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const tc = (i18n.global as any).tc
+	const tc = (i18n as any).tc
 	return tc(key, choice)
 }
-const $locale = (): string => i18n.global.locale as string
+const $locale = (): string => i18n.locale
 
-function ucfirst(str: any) {
+interface Trophy {
+	id: number
+	code: string
+	habs: number
+	points: number
+	category: number
+	difficulty: number
+	rarity: number
+	unlocked: boolean
+	date: number
+	noun_gender: number
+	adj_gender: number
+	description: string
+	progression: number | null
+	threshold: number
+	total: number
+	in_fight: boolean
+	fight: number
+	index: number
+	noun_translation: string
+	adj_translation: string
+	[key: string]: unknown
+}
+
+function ucfirst(str: string) {
 	str += ''
 	const f = str.charAt(0).toUpperCase()
 	return f + str.substr(1)
 }
 
-function request<T = any>(method: string, url: string, params?: any) {
-	const xhr = new XMLHttpRequest()
-	const promise = new Promise<T>((resolve, reject) => {
-		xhr.open(method, url)
-		xhr.responseType = 'json'
-		if (store.state.connected) {
-			xhr.setRequestHeader('Authorization', 'Bearer ' + store.state.token)
-		}
-		if (!(params instanceof FormData)) {
-			// xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8')
-			xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8')
-		}
-		xhr.onload = (e: any) => {
-			if (e.target.status === 200) {
-				resolve(e.target.response)
-			} else {
-				if (store.getters.admin || LOCAL || DEV || (window.__FARMER__ && window.__FARMER__.farmer.id === 1)) {
-					const message = "[" + e.target.status + "] " + method + " " + url
-					console.error(message)
-					// LeekWars.toast(message, 5000)
-				}
-				reject(e.target.response)
-			}
-		}
-		xhr.onerror = reject
-		xhr.send(params)
-		LeekWars.requests++
-	})
-	return {
-		abort: () => xhr.abort(),
-		error: (e: (e: T) => void) => promise.catch(e),
-		then: (p: (p: T) => void) => {
-			promise.then(p)
-			return { error: (e: (e: T) => void) => promise.catch(e) }
-		}
-	}
+const RETRY_CONFIG = {
+	maxRetries: 3,
+	baseDelay: 1000,  // 1s, 2s, 4s
+	maxDelay: 10000,
+}
+function retryDelay(retry: number) {
+	return Math.min(RETRY_CONFIG.baseDelay * Math.pow(2, retry), RETRY_CONFIG.maxDelay)
 }
 
-function post<T = any>(url: any, form: any = {}) {
-	if (!(form instanceof FormData)) {
-		// const f = []
-		// for (const k in form) { f.push(k + '=' + encodeURIComponent(form[k])) }
-		// form = f.join('&')
-		form = JSON.stringify(form)
-	}
-	return request<T>('POST', LeekWars.API + url, form)
+interface ApiError {
+	error: string
+	params?: unknown[]
+	[key: string]: unknown
 }
-function put<T = any>(url: any, form: any = {}) {
-	if (!(form instanceof FormData)) {
-		// const f = []
-		// for (const k in form) { f.push(k + '=' + encodeURIComponent(form[k])) }
-		// form = f.join('&')
-		form = JSON.stringify(form)
-	}
-	return request<T>('PUT', LeekWars.API + url, form)
+
+interface ExtendedPromise<T> extends Promise<T> {
+	abort: () => void
+	error: (callback: (error: ApiError) => void) => ExtendedPromise<T>
+	then<TResult1 = T, TResult2 = never>(
+		onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null,
+		onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | undefined | null
+	): ExtendedPromise<TResult1 | TResult2>
+	catch<TResult = never>(
+		onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | undefined | null
+	): ExtendedPromise<T | TResult>
 }
-function del<T = any>(url: any, form: any = {}) {
-	if (!(form instanceof FormData)) {
-		// const f = []
-		// for (const k in form) { f.push(k + '=' + encodeURIComponent(form[k])) }
-		// form = f.join('&')
-		form = JSON.stringify(form)
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function request<T = any>(method: string, url: string, params?: string | FormData | null): ExtendedPromise<T> {
+	let currentXhr: XMLHttpRequest | null = null
+	let retryTimeout: ReturnType<typeof setTimeout> | null = null
+
+	const promise = new Promise<T>((resolve, reject) => {
+		LeekWars.requests++
+		function attempt(retry: number) {
+			const xhr = new XMLHttpRequest()
+			currentXhr = xhr
+			xhr.open(method, url)
+			xhr.responseType = 'json'
+			if (store.state.connected) {
+				xhr.setRequestHeader('Authorization', 'Bearer ' + store.state.token)
+			}
+			if (!(params instanceof FormData)) {
+				// xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8')
+				xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8')
+			}
+			xhr.onload = () => {
+				if (xhr.status === 200) {
+					resolve(xhr.response)
+				} else if (xhr.status === 429 && retry < RETRY_CONFIG.maxRetries) {
+					const delay = retryDelay(retry)
+					if (store.getters.admin || LOCAL || DEV || (window.__FARMER__ && window.__FARMER__.farmer.id === 1)) {
+						console.warn("[429] " + method + " " + url + " — retry " + (retry + 1) + "/" + RETRY_CONFIG.maxRetries + " in " + delay + "ms")
+					}
+					retryTimeout = setTimeout(() => attempt(retry + 1), delay)
+				} else {
+					if (store.getters.admin || LOCAL || DEV || (window.__FARMER__ && window.__FARMER__.farmer.id === 1)) {
+						const message = "[" + xhr.status + "] " + method + " " + url
+						console.error(message)
+						// LeekWars.toast(message, 5000)
+					}
+					reject(xhr.response)
+				}
+			}
+			xhr.onerror = () => {
+				// En dev (cross-origin), une 429 sur le preflight CORS se traduit par un onerror
+				if ((LOCAL || DEV) && retry < RETRY_CONFIG.maxRetries) {
+					const delay = retryDelay(retry)
+					console.warn("[CORS/429?] " + method + " " + url + " — retry " + (retry + 1) + "/" + RETRY_CONFIG.maxRetries + " in " + delay + "ms")
+					retryTimeout = setTimeout(() => attempt(retry + 1), delay)
+				} else {
+					console.error("[429] " + method + " " + url + " — all retries exhausted")
+					LeekWars.toast($t('main.too_many_requests'))
+					reject({ error: 'too_many_requests' })
+				}
+			}
+			xhr.send(params)
+		}
+		attempt(0)
+	})
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const extended = promise as any
+	extended.abort = () => {
+		if (retryTimeout) clearTimeout(retryTimeout)
+		if (currentXhr) currentXhr.abort()
 	}
-	return request<T>('DELETE', LeekWars.API + url, form)
+	extended.error = (e: (e: unknown) => void) => promise.catch(e)
+	const originalThen = promise.then.bind(promise)
+	// eslint-disable-next-line unicorn/no-thenable
+	extended.then = (p: (p: T) => void, r?: (e: unknown) => void) => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const chained = originalThen(p, r) as any
+		chained.error = (e: (e: unknown) => void) => chained.catch(e)
+		return chained
+	}
+	return extended as ExtendedPromise<T>
 }
-function get<T = any>(url: any) {
+
+function serializeBody(form: Record<string, unknown> | FormData): string | FormData {
+	if (form instanceof FormData) return form
+	return JSON.stringify(form)
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function post<T = any>(url: string, form: Record<string, unknown> | FormData = {}) {
+	return request<T>('POST', LeekWars.API + url, serializeBody(form))
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function put<T = any>(url: string, form: Record<string, unknown> | FormData = {}) {
+	return request<T>('PUT', LeekWars.API + url, serializeBody(form))
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function del<T = any>(url: string, form: Record<string, unknown> | FormData = {}) {
+	return request<T>('DELETE', LeekWars.API + url, serializeBody(form))
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function get<T = any>(url: string) {
 	return request<T>('GET', LeekWars.API + url)
 }
 
@@ -216,8 +293,10 @@ const WEAPON_BY_NAME = weaponByName(WEAPONS)
 class Language {
 	public code!: string
 	public name!: string
+	public country!: string
 	public flag!: string
 	public chat!: number
+	public chats?: number[] | null
 	public encyclopedia!: string
 	public currency!: string
 	public forum!: boolean
@@ -229,26 +308,50 @@ const LANGUAGES = Object.freeze({
 	es: { code: 'es', name: 'Español', country: 'es', flag: '/image/flag/es.png', chat: 2, encyclopedia: 'Enciclopedia', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
 	de: { code: 'de', name: 'Deutsch', country: 'de', flag: '/image/flag/de.png', chat: 2, encyclopedia: 'Enzyklopädie', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
 	it: { code: 'it', name: 'Italiano', country: 'it', flag: '/image/flag/it.png', chat: 2, encyclopedia: 'Enciclopedia', chats: null, currency: 'EUR', beta: false, forum: false } as Language,
-	pt: { code: 'pt', name: 'Portugais', country: 'pt', flag: '/image/flag/pt.png', chat: 2, encyclopedia: 'Enciclopédia', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
+	pt: { code: 'pt', name: 'Português', country: 'pt', flag: '/image/flag/pt.png', chat: 2, encyclopedia: 'Enciclopédia', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
 	da: { code: 'da', name: 'Dansk', country: 'dk', flag: '/image/flag/da.png', chat: 2, encyclopedia: 'Encyklopædi', chats: null, currency: 'DKK', beta: true, forum: false } as Language,
 	fi: { code: 'fi', name: 'Suomi', country: 'fi', flag: '/image/flag/fi.png', chat: 2, encyclopedia: 'Tietosanakirja', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
 	nl: { code: 'nl', name: 'Nederlands', country: 'nl', flag: '/image/flag/nl.png', chat: 2, encyclopedia: 'Encyclopedie', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
 	no: { code: 'no', name: 'Norsk', country: 'no', flag: '/image/flag/no.png', chat: 2, encyclopedia: 'Encyclopedia', chats: null, currency: 'NOK', beta: true, forum: false } as Language,
 	pl: { code: 'pl', name: 'Polska', country: 'pl', flag: '/image/flag/pl.png', chat: 2, encyclopedia: 'Encyklopedia', chats: null, currency: 'EUR', beta: true, forum: false } as Language,
 	sv: { code: 'sv', name: 'Svenska', country: 'se', flag: '/image/flag/sv.png', chat: 2, encyclopedia: 'Encyklopedi', chats: null, currency: 'SEK', beta: true, forum: false } as Language,
-	ru: { code: 'ru', name: 'Русский', country: 'ru', flag: '/image/flag/ru.png', chat: 2, encyclopedia: 'Энциклопедия', chats: null, currency: 'RUB', beta: true, forum: false } as Language,
-	zh: { code: 'zh', name: '中文', country: 'cn', flag: '/image/flag/cn.png', chat: 2, encyclopedia: '百科全书', chats: null, currency: 'RUB', beta: true, forum: false } as Language,
+	ru: { code: 'ru', name: 'Русский', country: 'ru', flag: '/image/flag/ru.png', chat: 2, encyclopedia: 'Энциклопедия', chats: null, currency: 'USD', beta: true, forum: false } as Language,
+	zh: { code: 'zh', name: '中文', country: 'cn', flag: '/image/flag/cn.png', chat: 2, encyclopedia: '百科全书', chats: null, currency: 'CNY', beta: true, forum: false } as Language,
 	hi: { code: 'hi', name: 'भारतीय', country: 'in', flag: '/image/flag/in.png', chat: 2, encyclopedia: 'विश्वकोश', chats: null, currency: 'USD', beta: true, forum: false } as Language,
 	id: { code: 'id', name: 'Bahasa', country: 'id', flag: '/image/flag/id.png', chat: 2, encyclopedia: 'Ensiklopedia', chats: null, currency: 'USD', beta: true, forum: false } as Language,
 	ja: { code: 'ja', name: '日本', country: 'jp', flag: '/image/flag/jp.png', chat: 2, encyclopedia: '百科事典', chats: null, currency: 'JPY', beta: true, forum: false } as Language,
-	ko: { code: 'ko', name: '한국인', country: 'kr', flag: '/image/flag/kr.png', chat: 2, encyclopedia: '백과 사전', chats: null, currency: 'USD', beta: true, forum: false } as Language,
+	ko: { code: 'ko', name: '한국인', country: 'kr', flag: '/image/flag/kr.png', chat: 2, encyclopedia: '백과사전', chats: null, currency: 'USD', beta: true, forum: false } as Language,
 } as { [key: string]: Language })
+
+const CURRENCIES = Object.freeze({
+	AUD: {symbol: 'A$', flag: 'au', prefix: true},
+	CAD: {symbol: 'C$', flag: 'ca', prefix: true},
+	CHF: {symbol: 'CHF', flag: 'ch' },
+	CNY: {symbol: '¥', flag: 'cn' },
+	EUR: {symbol: '€', flag: 'eu'},
+	DKK: {symbol: 'kr', flag: 'dk'},
+	GBP: {symbol: '£', flag: 'gb', prefix: true},
+	HKD: {symbol: 'HK$', flag: 'hk', prefix: true},
+	JPY: {symbol: '¥', flag: 'jp'},
+	NOK: {symbol: 'kr', flag: 'no'},
+	NZD: {symbol: 'NZ$', flag: 'nz', prefix: true},
+	SEK: {symbol: 'kr', flag: 'se'},
+	SGD: {symbol: 'S$', flag: 'sg', prefix: true},
+	USD: {symbol: '$', flag: 'us', prefix: true},
+}) as Record<string, { symbol: string, flag: string, prefix?: boolean }>
 
 const LOCAL_DATE = new Date()
 const invdate = new Date(LOCAL_DATE.toLocaleString('en-US', {
     timeZone: 'Europe/Paris'
 }))
 const DATE = new Date(invdate.getTime())
+
+let xpCursorListenerRegistered = false
+function persistDidactitielStep(step: number) {
+	LeekWars.didactitial_step = step
+	post('farmer/didactitiel-step', { step })
+	if (store.state.farmer) store.state.farmer.didactitiel_step = step
+}
 
 const LeekWars = reactive({
 	version: packageJson.version,
@@ -271,38 +374,24 @@ const LeekWars = reactive({
 	menuCollapsed: false,
 	menuExpanded: false,
 	splitBack: false,
-	actions: [],
+	actions: [] as unknown[],
 	lightBar: false,
 	dark: 0,
 	title: '',
-	subtitle: '',
+	subtitle: '' as string | TranslateResult | null,
 	titleCounter: 0,
-	titleTag: null,
+	titleTag: null as string | number | null,
 	requests: 0,
 	notifsResults: localStorage.getItem('options/notifs-results') === 'true',
+	notifsPopups: localStorage.getItem('options/notifs-popups') !== 'false',
 	rankingInactive: localStorage.getItem('options/ranking-inactive') === 'true',
 	service_worker: null as ServiceWorkerRegistration | null,
-	battleRoyale: new BattleRoyale(),
+	arena: new Arena(),
 	bossSquads: new BossSquads(),
 	squares: new Squares(),
 	languages: LANGUAGES,
-	currencies: Object.freeze({
-		AUD: {symbol: 'A$', flag: 'au', prefix: true},
-		CAD: {symbol: 'C$', flag: 'ca', prefix: true},
-		CHF: {symbol: 'CHF', flag: 'ch' },
-		CNY: {symbol: '¥', flag: 'cn' },
-		EUR: {symbol: '€', flag: 'eu'},
-		DKK: {symbol: 'kr', flag: 'dk'},
-		GBP: {symbol: '£', flag: 'gb', prefix: true},
-		HKD: {symbol: 'HK$', flag: 'hk', prefix: true},
-		JPY: {symbol: '¥', flag: 'jp'},
-		NOK: {symbol: 'kr', flag: 'no'},
-		NZD: {symbol: 'NZ$', flag: 'nz', prefix: true},
-		SEK: {symbol: 'kr', flag: 'se'},
-		SGD: {symbol: 'S$', flag: 'sg', prefix: true},
-		USD: {symbol: '$', flag: 'us', prefix: true},
-	}),
-	currency: localStorage.getItem('currency') || LANGUAGES[locale].currency,
+	currencies: CURRENCIES,
+	currency: CURRENCIES[localStorage.getItem('currency') ?? ''] ? localStorage.getItem('currency')! : (CURRENCIES[LANGUAGES[locale].currency] ? LANGUAGES[locale].currency : 'USD'),
 	timeDelta: 0, // (Date.now() / 1000 | 0) - __SERVER_TIME,
 	time: (Date.now() / 1000) | 0,
 	timeSeconds: (Date.now() / 1000) | 0,
@@ -312,15 +401,36 @@ const LeekWars = reactive({
 	footer: true,
 	box: false,
 	nativeEmojis: detectNativeEmojis(),
-	leekTheme: localStorage.getItem('leek-theme') === 'true',
-	keepConnected: null as any,
+	leekTheme: (() => {
+		const stored = localStorage.getItem('leek-theme') === 'true'
+		// Sync cookie miroir au boot pour que le serveur puisse injecter le bon preload
+		// dès la prochaine navigation (migration des users qui n'avaient que localStorage).
+		if (typeof document !== 'undefined' && !document.cookie.includes('leek_theme=')) {
+			document.cookie = 'leek_theme=' + (stored ? '1' : '0') + '; path=/; max-age=31536000; SameSite=Lax'
+		}
+		return stored
+	})(),
+	xpTheme: localStorage.getItem('theme') === 'xp',
+	xpCursorsInit() {
+		if (xpCursorListenerRegistered) return
+		xpCursorListenerRegistered = true
+		document.addEventListener('mouseover', (e) => {
+			const el = e.target as HTMLElement
+			if (!el || !el.style) return
+			if (LeekWars.xpTheme) {
+				if (getComputedStyle(el).cursor === 'pointer') {
+					el.style.cursor = "url('/image/pointer.png') 5 0, pointer"
+				}
+			} else if (el.style.cursor.includes('pointer.png')) {
+				el.style.cursor = ''
+			}
+		})
+	},
+	keepConnected: null as ReturnType<typeof setInterval> | null,
 	startIntervals: () => {
 		if (LeekWars.keepConnected || !store.state.connected) { return }
 		LeekWars.keepConnected = setInterval(() => {
 			store.commit('last-connection', LeekWars.time)
-			LeekWars.post('farmer/update').then(data => {
-				store.commit('connected-count', data.farmers)
-			})
 		}, 59 * 1000)
 	},
 	clearIntervals: () => {
@@ -368,14 +478,14 @@ const LeekWars = reactive({
 		16: { id: 16, name: 'General', language: 'sv', icon: 'mdi-chat-outline' },
 		17: { id: 17, name: 'General', language: 'sv', icon: 'mdi-chat-outline' },
 		18: { id: 18, name: 'General', language: 'sv', icon: 'mdi-chat-outline' },
-	} as {[key: number]: { name: string, language: string }},
+	} as {[key: number]: { id: number, name: string, language: string, icon: string }},
 	getLeekSkinName: (skin: number) => {
 		if (!(skin in SKINS)) { return SKINS[1] }
 		return SKINS[skin]
 	},
-	objectSize(obj: Record<string, unknown>): number {
-		let size = 0, key
-		for (key in obj) {
+	objectSize(obj: Record<string, unknown> | unknown[]): number {
+		let size = 0
+		for (const _key in obj) {
 			// if (obj.hasOwnProperty(key)) {
 				size++
 			// }
@@ -390,7 +500,7 @@ const LeekWars = reactive({
 		}
 		return null
 	},
-	isEmptyObj(obj: any) {
+	isEmptyObj(obj: object | null | undefined) {
 		for (const e in obj) {
 			// if (obj.hasOwnProperty(e)) {
 				return false
@@ -398,13 +508,13 @@ const LeekWars = reactive({
 		}
 		return true
 	},
-	selectWhere(array: any, key: string, value: any) {
+	selectWhere<T extends object>(array: T[], key: keyof T, value: T[keyof T]): T | null {
 		for (const e of array) {
 			if (e && e[key] === value) { return e }
 		}
 		return null
 	},
-	removeOneWhere(array: any, attr: string, condition: any) {
+	removeOneWhere<T extends object>(array: T[], attr: keyof T, condition: T[keyof T]) {
 		for (let i = 0; i < array.length; ++i) {
 			if (array[i] && array[i][attr] === condition) {
 				array.splice(i, 1)
@@ -412,10 +522,10 @@ const LeekWars = reactive({
 			}
 		}
 	},
-	clone(obj: any) {
+	clone<T>(obj: T): T {
 		return JSON.parse(JSON.stringify(obj))
 	},
-	selectText(element: any) {
+	selectText(element: HTMLElement) {
 		LeekWars.removeTextSelections()
 		if (window.getSelection) {
 			const range = document.createRange()
@@ -442,18 +552,33 @@ const LeekWars = reactive({
 	formatTurns(turns: number) {
 		return turns === -1 ? '∞' : turns
 	},
-	protect(string: any) {
+	protect(string: string) {
 		return ('' + string).replace(/&/g, "&amp;")
 			.replace(/>/g, "&gt;").replace(/</g, "&lt;")
 			.replace(/"/g, "&quot;").replace(/'/g, "&#39;")
 	},
-	decodehtmlentities(string: any) {
+	safeUrl(url: string | null | undefined): string | null {
+		if (!url) { return null }
+		const trimmed = url.trim()
+		return /^https?:\/\//i.test(trimmed) ? trimmed : null
+	},
+	decodehtmlentities(string: string) {
+		// &nbsp; is a non-breaking SPACE, not a tab. Mapping to '\t' was the cause
+		// of issue #3337 : code pasted into the chat ended up with each &nbsp;
+		// rendered as a tab, then displayed at tab-size (4 or 8) chars — doubling
+		// or quadrupling the original indentation. Single space preserves intent.
 		return ('' + string).replace(/&amp;/g, "&")
 			.replace(/&gt;/g, ">").replace(/&lt;/g, "<")
-			.replace(/&nbsp;/g, "\t")
+			.replace(/&nbsp;/g, " ")
 	},
-	formatNumber(n: number) {
+	formatNumber(n: number | string) {
 		return ("" + n).replace(/\B(?=(\d{3})+(?!\d))/g, " ")
+	},
+	formatFileSize(bytes: number) {
+		if (bytes < 1024) return bytes + ' B'
+		if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+		if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+		return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
 	},
 	numberPrecision(number: number, precision: number) {
 		return number.toPrecision(precision)
@@ -474,15 +599,15 @@ const LeekWars = reactive({
 	},
 	contenteditable_paste_protect(element: HTMLElement) {
 		// Paste : keep the pure text of the element
-		element.addEventListener('paste', (e: any) => {
+		element.addEventListener('paste', (e: ClipboardEvent) => {
 			e.preventDefault()
-			const text = (e.originalEvent || e).clipboardData.getData('text/plain')
+			const text = e.clipboardData?.getData('text/plain') ?? ''
 			document.execCommand('insertText', false, text)
 		})
 		// Drop : take the string data in the event and append it to the element
-		element.addEventListener('drop', (e: any) => {
+		element.addEventListener('drop', (e: DragEvent) => {
 			e.preventDefault()
-			e.originalEvent.dataTransfer.items[0].getAsString((str: any) => {
+			e.dataTransfer?.items[0]?.getAsString((str: string) => {
 				element.textContent = element.innerText + str
 			})
 		})
@@ -513,22 +638,24 @@ const LeekWars = reactive({
 		if (!LeekWars.isMobile()) { return }
 		LeekWars.splitBack = true
 	},
-	setActions(actions: any) {
+	setActions(actions: unknown[]) {
 		LeekWars.actions = actions
 	},
 	getAvatar(farmerID: number, avatarChanged: number) {
-		return avatarChanged === 0 ? '/image/no_avatar.png' : LeekWars.AVATAR + 'avatar/' + farmerID + '.png'
+		return avatarChanged === 0 ? '/image/no_avatar.png' : LeekWars.AVATAR + 'avatar/' + farmerID + '.png?' + avatarChanged
 	},
-	_documentation: {} as any,
-	_documentationPromises: {} as any,
+	_documentation: {} as Record<string, unknown>,
+	_documentationPromises: {} as Record<string, Promise<unknown>>,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	documentation(locale: string): Promise<any> {
 		if (!(locale in LeekWars._documentationPromises)) {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const promise = get<any>('function/doc/' + locale)
 			LeekWars._documentationPromises[locale] = promise
-			promise.then((data) => {
+			promise.then((data: unknown) => {
 				LeekWars._documentation[locale] = data
 			})
-			return promise as any
+			return promise
 		}
 		return LeekWars._documentationPromises[locale]
 	},
@@ -578,8 +705,8 @@ const LeekWars = reactive({
 	fullscreenEnter(element: HTMLElement, callback: (f: boolean) => void) {
 		const fullscreenCallback = () => {
 			LeekWars.fullscreen = !LeekWars.fullscreen
-			emitter.emit('resize')
 			callback(LeekWars.fullscreen)
+			emitter.emit('resize')
 		}
 		if (element.requestFullscreen) {
 			document.onfullscreenchange = fullscreenCallback
@@ -627,7 +754,7 @@ const LeekWars = reactive({
 		LeekWars.sfw = false
 		LeekWars.setFavicon(true)
 	},
-	toast(message: string | TranslateResult, durationOrCallback: number | any = 1800) {
+	toast(message: string | TranslateResult, durationOrCallback: number | (() => void) = 1800) {
 		const d = typeof(durationOrCallback) === "number" ? durationOrCallback : 1800
 		const callback = typeof(durationOrCallback) === "function" ? durationOrCallback : null
 
@@ -675,9 +802,16 @@ const LeekWars = reactive({
 	setTitle, setSubTitle, setTitleCounter, setTitleTag,
 	shadeColor,
 	createCodeArea, createCodeAreaSimple,
-	clover: false, cloverTop: 0, cloverLeft: 0, cloverDX: 0, cloverDY: 0, cloverDDX: 0, cloverDDY: 0, cloverFake: false, cloverTimeout: null as any, lucky,
+	clover: false, cloverTop: 0, cloverLeft: 0, cloverDX: 0, cloverDY: 0, cloverDDX: 0, cloverDDY: 0, cloverFake: false, cloverTimeout: null as ReturnType<typeof setTimeout> | null, lucky,
 	setFavicon,
 	linkify, toChatLink,
+	parseUserAgent(ua: string): string {
+		const { browser, os } = UAParser(ua)
+		const parts: string[] = []
+		if (browser.name) parts.push(browser.name + (browser.version ? ' ' + browser.version : ''))
+		if (os.name) parts.push(os.name + (os.version ? ' ' + os.version : ''))
+		return parts.join(' — ') || ua
+	},
 	goToRanking,
 	track: (event: string) => {
 		if (typeof umami !== 'undefined') {
@@ -689,36 +823,46 @@ const LeekWars = reactive({
 	didactitial_visible: false,
 	show_didactitiel: () => {
 		LeekWars.didactitial = true
-		LeekWars.didactitial_step = 1
+		const saved = store.state.farmer?.didactitiel_step ?? 0
+		const step = saved >= 1 && saved <= 5 ? saved : 1
+		// Persiste si la valeur sauvegardée ne reflète pas où on démarre
+		// (ex: replay via le footer avec saved=6, ou tout premier lancement à saved=0).
+		if (step !== saved) persistDidactitielStep(step)
+		else LeekWars.didactitial_step = step
 		nextTick(() => {
 			LeekWars.didactitial_visible = true
 		})
 	},
 	didactitial_next: () => {
-		LeekWars.didactitial_step++
+		persistDidactitielStep(LeekWars.didactitial_step + 1)
 		LeekWars.didactitial_visible = false
 		nextTick(() => LeekWars.didactitial_visible = true)
 	},
 	socket: new Socket(),
-	hats: Object.freeze(HATS),
-	pomps: Object.freeze(POMPS),
-	schemes: Object.freeze(SCHEMES),
-	weapons: Object.freeze(WEAPONS),
-	weaponByName: Object.freeze(WEAPON_BY_NAME),
-	items: Object.freeze(ITEMS),
-	chipTemplates: Object.freeze(CHIP_TEMPLATES),
+	hats: HATS,
+	pomps: POMPS,
+	schemes: SCHEMES,
+	weapons: WEAPONS,
+	weaponByName: WEAPON_BY_NAME,
+	items: ITEMS,
+	chipTemplates: CHIP_TEMPLATES,
+	trophies: [] as Trophy[],
+	constants: [] as Constant[],
+	functions: [] as LSFunction[],
+	chips: {} as Record<string, unknown>,
 	trophyCategories: Object.freeze(TROPHY_CATEGORIES),
 	trophyCategoriesById: Object.freeze([...TROPHY_CATEGORIES].sort((a, b) => a.id - b.id)),
 	trophyCategoriesIcons: Object.freeze([
-		'mdi-trophy-variant-outline',
-		'mdi-sword-cross',
-		'mdi-trophy-outline',
-		'mdi-emoticon-outline',
-		'mdi-chat-outline',
-		'mdi-star-outline',
-		'mdi-code-braces',
-		'mdi-basket-outline',
-		'mdi-crown-outline'
+		'mdi-trophy-variant-outline',  // 1: general
+		'mdi-sword-cross',             // 2: fight
+		'mdi-trophy-outline',          // 3: tournament
+		'mdi-emoticon-outline',        // 4: fun
+		'mdi-chat-outline',            // 5: social
+		'mdi-star-outline',            // 6: bonus
+		'mdi-code-braces',             // 7: code
+		'mdi-basket-outline',          // 8: shopping
+		'mdi-crown-outline',           // 9: boss
+		'mdi-stadium',               // 10: arena
 	]),
 	summonTemplates: Object.freeze(SUMMON_TEMPLATES),
 	potions: Object.freeze(POTIONS),
@@ -733,6 +877,9 @@ const LeekWars = reactive({
 	effectRawOpened: false,
 	message: null as string | null,
 	messagePopup: false,
+	logoutDialog: false,
+	cloverResult: null as string | null,
+	cloverPopup: false,
 	displayMessage: (message: string | null) => {
 		if (message) {
 			// console.log("Display message", message)
@@ -740,8 +887,21 @@ const LeekWars = reactive({
 			LeekWars.messagePopup = true
 		}
 	},
-	encyclopedia: {} as {[key: string]: {[key: string]: any}},
-	encyclopediaById: {} as {[key: string]: {[key: number]: any}},
+	showCloverResult: (clover: Record<string, unknown>) => {
+		let result = ''
+		if (clover.type === 'passed') {
+			result = clover.passed ? i18n.t('potion.clover_passed_yes') as string : i18n.t('potion.clover_passed_no') as string
+		} else if (clover.type === 'hour') {
+			result = clover.passed ? i18n.t('potion.clover_hour_passed', [clover.hour]) as string : i18n.t('potion.clover_hour_coming', [clover.hour]) as string
+		} else if (clover.type === 'second') {
+			const time = clover.hour + 'h' + String(clover.minute).padStart(2, '0') + 'm' + String(clover.second).padStart(2, '0') + 's'
+			result = clover.passed ? i18n.t('potion.clover_second_passed', [time]) as string : i18n.t('potion.clover_second_coming', [time]) as string
+		}
+		LeekWars.cloverResult = result
+		LeekWars.cloverPopup = true
+	},
+	encyclopedia: {} as {[key: string]: {[key: string]: { id: number, title: string, alias?: boolean, parent?: number, [key: string]: unknown } }},
+	encyclopediaById: {} as {[key: string]: {[key: number]: { id: number, title: string, parent?: number, [key: string]: unknown } }},
 	encyclopediaLoaded: {} as {[key: string]: boolean},
 	encyclopediaPromise: {} as {[key: string]: Promise<void>},
 	loadEncyclopedia: (locale: string): Promise<void> => {
@@ -761,7 +921,7 @@ const LeekWars = reactive({
 		}
 		return LeekWars.encyclopediaPromise[locale] || Promise.resolve()
 	},
-	trophyWords: null as any[] | null,
+	trophyWords: null as Trophy[] | null,
 	loadTrophyWords: async () => {
 		if (LeekWars.trophyWords) {
 			return Promise.resolve(LeekWars.trophyWords)
@@ -780,40 +940,41 @@ const LeekWars = reactive({
 		}
 	},
 	christmasPresents: DATE.getMonth() === 11 && DATE.getDate() >= 25 && DATE.getDate() <= 31,
+	aprilFools: DATE.getMonth() === 3 && DATE.getDate() === 1,
 	LATEST_LEEKSCRIPT_VERSION: 4,
-	logClass: (log: any[]) => {
+	logClass: (log: unknown[]) => {
 		if (log[1] === 2 || log[1] === 7 || log[1] === 11) { return "warning" }
 		else if (log[1] === 3 || log[1] === 8) { return "error" }
 		else if (log[1] === 5) { return "pause" }
 		return null
 	},
-	logColor: (log: any[]) => {
-		return log[1] === 1 && log.length > 3 && log[3] ? LeekWars.colorToHex(log[3]) : ''
+	logColor: (log: unknown[]) => {
+		return log[1] === 1 && log.length > 3 && (log[3] as number) >= 0 ? LeekWars.colorToHex(log[3] as number) : ''
 	},
-	logText: (log: any[]) => {
+	logText: (log: unknown[]) => {
 		if (log[1] === 5) { return "pause()" }
 		if (log[1] === 11) { return $t('leekscript.too_much_debug') }
-		if (log[1] >= 6 && log[1] <= 8) {
+		if ((log[1] as number) >= 6 && (log[1] as number) <= 8) {
 			if (log[3] === 113) { // HELP_PAGE_LINK
 				const helpPage = LeekWars.logHelpPage(log)
 				return helpPage
 			}
-			return $t('leekscript.error_' + log[3], log[4]) + "\n" + log[2]
+			return $t('leekscript.error_' + log[3], log[4] as string[]) + "\n" + log[2]
 		}
 		return log[2]
 	},
-	logHelpPage: (log: any[]) => {
-		const helpPages = {
+	logHelpPage: (log: unknown[]) => {
+		const helpPages: Record<string, Record<string, string>> = {
 			fr: { too_much_ops: "Comprendre les Erreurs d'exécution", summons: "Bulbes" },
 			en: { too_much_ops: "Understanding Runtime Errors",	summons: "Bulbs" },
 			es: { too_much_ops: "Comprender los errores de tiempo de ejecución", summons: "Bulbos" }
-		} as any
-		if (locale in helpPages) {
-			return helpPages[locale][log[4]]
 		}
-		return helpPages.en[log[4]]
+		if (locale in helpPages) {
+			return helpPages[locale][log[4] as string]
+		}
+		return helpPages.en[log[4] as string]
 	},
-	completionsProvider: null as any,
+	completionsProvider: null as unknown,
 	unload: () => {
 		// console.log("Leek Wars unload")
 		// if (LeekWars.completionsProvider) {
@@ -835,11 +996,11 @@ function setTitleCounter(counter: number) {
 	LeekWars.titleCounter = counter
 	updateTitle()
 }
-function setTitleTag(tag: any) {
+function setTitleTag(tag: string | number | null) {
 	LeekWars.titleTag = tag
 	updateTitle()
 }
-function setSubTitle(subtitle: any) {
+function setSubTitle(subtitle: string | TranslateResult | null) {
 	LeekWars.subtitle = subtitle
 }
 
@@ -878,7 +1039,7 @@ function potionsBySkin(potions: {[key: string]: PotionTemplate}) {
 	for (const p in potions) {
 		const potion = potions[p]
 		if (potion.effects.length && potion.effects[0].type === PotionEffect.CHANGE_SKIN) {
-			result[potion.effects[0].params[0]] = potion
+			result[potion.effects[0].params[0] as number] = potion
 		}
 	}
 	return result
@@ -909,7 +1070,7 @@ function formatDuration(timestamp: number, capital: boolean = false) {
 
 	const seconds = LeekWars.time - timestamp
 
-	let text: any = ""
+	let text: string
 
 	if (seconds < 60) { // en dessous d'une minute
 		text = $t("main.time_just_now")
@@ -956,6 +1117,7 @@ function formatDuration(timestamp: number, capital: boolean = false) {
 }
 
 function formatDate(timestamp: number) {
+	if (!timestamp) { return '' }
 	const date = new Date(timestamp * 1000)
 	const day = date.getDate()
 	const month = date.getMonth()
@@ -983,7 +1145,7 @@ function formatDayMonthShort(timestamp: number) {
 function formatDateTime(timestamp: number) {
 	const date = new Date(timestamp * 1000)
 	const hour = date.getHours()
-	let minuts: any = date.getMinutes()
+	let minuts: string | number = date.getMinutes()
 	if (minuts < 10) { minuts = '0' + minuts }
 	return ucfirst($t('main.time_at', [ formatDate(timestamp), hour + ":" + minuts]))
 }
@@ -1046,7 +1208,7 @@ function createCodeAreaSimple(code: string, element: HTMLElement) {
 }
 
 
-function get_cursor_position(editableDiv: any) {
+function get_cursor_position(editableDiv: HTMLElement) {
 	if (window.getSelection) {
 		const sel = window.getSelection()
 		if (sel && sel.rangeCount) {
@@ -1059,7 +1221,8 @@ function get_cursor_position(editableDiv: any) {
 	return 0
 }
 
-function set_cursor_position(el: any, pos: number) {
+function set_cursor_position(el: HTMLElement, pos: number) {
+	if (!el.firstChild) return
 	const range = document.createRange()
 	const sel = window.getSelection()
 	range.setStart(el.firstChild, pos)
@@ -1123,8 +1286,9 @@ function linkify(html: string) {
 		}
 		const clazz = lw_index.index === 0 ? 'lw' : ''
 
-		html = html.substring(0, match.index) + toChatLink(real_url, url, blank, clazz) + html.substring(i)
-		url_regex.lastIndex += real_url.length + blank.length + '<a href=""  ></a>'.length
+		const link = toChatLink(real_url, url, blank, clazz)
+		html = html.substring(0, match.index) + link + html.substring(i)
+		url_regex.lastIndex = match.index + link.length
 	}
 	return html.replace(email_pattern, '<a target="_blank" rel="noopener" href="mailto:$&">$&</a>')
 }
@@ -1183,10 +1347,62 @@ function goToRanking(type: string, order: string, id: number = 0) {
 		const page = 1 + Math.floor((data.rank - 1) / 50)
 		const active_url = data.active ? '' : '?inactive'
 		const newRoute = '/ranking/' + type + '/' + order + '/page-' + page + active_url + '#rank-' + data.rank
-		if (router.currentRoute.fullPath !== newRoute) {
+		if (router.currentRoute.value.fullPath !== newRoute) {
 			router.push(newRoute)
 		}
 	})
 }
 
-export { LeekWars, Language }
+/**
+ * Charge les données de jeu depuis __DATA__ (inline HTML) + IndexedDB, et met à jour l'objet LeekWars.
+ * À appeler au boot de l'app, juste après le mount.
+ */
+async function loadGameData() {
+	console.log('[GameData] Loading...')
+	const rawData = await loadGameDataRaw()
+	if (!rawData) {
+		throw new Error('[GameData] No data returned')
+	}
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const data = rawData as { [key: string]: any }
+
+	const missing = DATA_TYPES.filter(t => !data[t])
+	if (missing.length > 0) {
+		throw new Error('[GameData] Incomplete dataset, missing: ' + missing.join(', '))
+	}
+
+	const t0 = performance.now()
+
+	if (data.items) LeekWars.items = Object.freeze(data.items)
+	if (data.weapons) {
+		LeekWars.weapons = Object.freeze(data.weapons)
+		LeekWars.weaponByName = Object.freeze(weaponByName(data.weapons))
+	}
+	if (data.hats) LeekWars.hats = Object.freeze(data.hats)
+	if (data.pomps) LeekWars.pomps = Object.freeze(data.pomps)
+	if (data.potions) {
+		LeekWars.potions = Object.freeze(data.potions)
+		LeekWars.potionByName = Object.freeze(potionByName(data.potions))
+		LeekWars.potionsBySkin = Object.freeze(potionsBySkin(data.potions))
+	}
+	if (data.schemes) LeekWars.schemes = Object.freeze(data.schemes)
+	if (data.components) LeekWars.components = Object.freeze(data.components)
+	if (data.hat_templates) LeekWars.hatTemplates = Object.freeze(data.hat_templates)
+	if (data.chip_templates) LeekWars.chipTemplates = Object.freeze(data.chip_templates)
+	if (data.summon_templates) LeekWars.summonTemplates = Object.freeze(data.summon_templates)
+	if (data.trophy_categories) {
+		LeekWars.trophyCategories = Object.freeze(data.trophy_categories)
+		LeekWars.trophyCategoriesById = Object.freeze([...data.trophy_categories].sort((a, b) => a.id - b.id))
+	}
+	if (data.complexities) LeekWars.complexities = Object.freeze(data.complexities)
+	if (data.trophies) LeekWars.trophies = Object.freeze(data.trophies)
+	if (data.constants) LeekWars.constants = Object.freeze(data.constants)
+	if (data.functions) LeekWars.functions = Object.freeze(data.functions)
+	if (data.chips) LeekWars.chips = Object.freeze(data.chips)
+
+	console.log(`[GameData] Applied in ${(performance.now() - t0).toFixed(1)}ms`)
+}
+
+if (DEV || LOCAL) { (window as unknown as Record<string, unknown>).LeekWars = LeekWars }
+
+export { LeekWars, Language, loadGameData }

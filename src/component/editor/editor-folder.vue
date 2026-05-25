@@ -1,12 +1,13 @@
 <template lang="html">
 	<div :class="{root: folder.id === 0}" @click="click" @contextmenu.prevent.stop="emitter.emit('editor-menu', { item: folder, ai: false, e: $event })">
-		<div :class="{empty: !folder.items.length, 'dragover': dragOver > 0, expanded: folder.expanded, root: level === 0, selected: folder.selected}" :draggable="level > 0 && folder.id !== -1" class="item folder" @dragenter="dragenter" @dragleave="dragleave" @dragover="dragover" @drop="drop" @dragstart="dragstart" @dragend="dragend">
+		<div :class="{empty: !folder.items.length, 'dragover': dragOver > 0, expanded: folder.expanded, root: level === 0, selected: folder.selected}" :draggable="level > 0 && folder.id !== -1 && !inBin" class="item folder" @dragenter="dragenter" @dragleave="dragleave" @dragover="dragover" @drop="drop" @dragstart="dragstart" @dragend="dragend">
 			<div v-if="folder.id != 0" :style="{'padding-left': ((level - 1) * 15 + 10) + 'px'}" class="label" :class="{error: folder.errors, warning: folder.warnings, closed: folder.closed}" @click="toggle(folder)">
 				<div class="triangle"></div>
 				<!-- <v-icon v-if="folder.id === -1" class="icon">mdi-delete-outline</v-icon> -->
-				<v-icon class="icon" v-if="folder.closed">mdi-folder-lock-outline</v-icon>
-				<v-icon class="icon" v-else="folder.closed">mdi-folder-outline</v-icon>
-				<span v-if="folder.id === -1" ref="name" class="text">{{ $parent.$t(folder.name) }}
+				<v-icon v-if="folder.closed" class="icon">mdi-folder-lock-outline</v-icon>
+				<v-icon v-else-if="isGitRepo" class="icon">mdi-source-branch</v-icon>
+				<v-icon v-else class="icon">mdi-folder-outline</v-icon>
+				<span v-if="folder.id === -1" ref="name" class="text">{{ $t(folder.name) }}
 					<span v-if="folder.id === -1">({{ folder.items.length }})</span>
 				</span>
 				<span v-else ref="name" class="text">{{ folder.name }}</span>
@@ -16,7 +17,7 @@
 			</div>
 			<div v-if="folder.expanded" :class="{dragging: dragging}" class="content">
 				<template v-for="(item, i) in folder.items" :key="i">
-					<editor-folder v-if="item.folder" :folder="item" :level="level + 1" />
+					<editor-folder v-if="item.folder" :folder="(item as Folder)" :level="level + 1" />
 					<editor-ai v-else :item="item" :level="level" />
 				</template>
 			</div>
@@ -24,68 +25,84 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { AI } from '@/model/ai'
-	import { i18n } from '@/model/i18n'
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
-	import EditorAI from './editor-ai.vue'
-	import { AIItem, Folder } from './editor-item'
-	import { explorer } from './explorer'
-	import { emitter } from '@/model/vue'
+<script setup lang="ts">
+import { fileSystem } from '@/model/filesystem'
+import { emitter } from '@/model/vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import EditorAI from './editor-ai.vue'
+import { Folder } from './editor-item'
+import { explorer } from './explorer'
 
-	@Options({ name: 'editor-folder', components: { 'editor-ai': EditorAI } })
-	export default class EditorFolder extends Vue {
-		@Prop() folder!: Folder
-		@Prop() level!: number
-		dragOver: number = 0
-		dragging: boolean = false
-		emitter = emitter
+defineOptions({ name: 'EditorFolder', components: { 'editor-ai': EditorAI } })
 
-		toggle(folder: Folder) {
-			if (!folder.closed) {
-				explorer.setExpanded(folder, !folder.expanded)
-			}
-		}
-		drop(e: DragEvent) {
-			if (this.folder.id === -1) { return }
-			emitter.emit('editor-drop', this.folder)
-			e.preventDefault()
-			e.stopPropagation()
-			this.dragOver = 0
-			this.dragging = false
-			return false
-		}
-		dragenter(e: DragEvent) {
-			if (this.folder.id === -1) { return }
-			this.dragOver++
-			e.stopPropagation()
-		}
-		dragleave(e: DragEvent) {
-			this.dragOver--
-			e.stopPropagation()
-		}
-		dragover(e: DragEvent) {
-			e.preventDefault()
-			e.stopPropagation()
-		}
-		dragstart(e: DragEvent) {
-			if (this.folder.id === -1) { return }
-			e.dataTransfer!.setData('text/plain', 'drag !!!')
-			this.dragging = true
-			emitter.emit('editor-drag', this.folder)
-			e.stopPropagation()
-		}
-		dragend() {
-			this.dragging = false
-		}
-		click(e: Event) {
-			if (this.$router.currentRoute.path !== '/editor/' + this.folder.id) {
-				this.$router.push('/editor/' + this.folder.id)
-			}
-			e.stopPropagation()
-		}
+const props = defineProps<{
+	folder: Folder
+	level: number
+}>()
+
+const router = useRouter()
+
+const dragOver = ref(0)
+const dragging = ref(false)
+
+const inBin = computed(() => fileSystem.isInBin(props.folder.parent))
+
+const isGitRepo = computed<boolean>(() => {
+	const path = fileSystem.getFolderPath(props.folder).replace(/\/$/, '')
+	return !!fileSystem.gitRepos[path]
+})
+
+function toggle(folder: Folder) {
+	if (!folder.closed) {
+		explorer.setExpanded(folder, !folder.expanded)
 	}
+}
+
+function drop(e: DragEvent) {
+	if (props.folder.id === -1 || inBin.value) { return }
+	emitter.emit('editor-drop', props.folder)
+	e.preventDefault()
+	e.stopPropagation()
+	dragOver.value = 0
+	dragging.value = false
+	return false
+}
+
+function dragenter(e: DragEvent) {
+	if (props.folder.id === -1 || inBin.value) { return }
+	dragOver.value++
+	e.stopPropagation()
+}
+
+function dragleave(e: DragEvent) {
+	dragOver.value--
+	e.stopPropagation()
+}
+
+function dragover(e: DragEvent) {
+	e.preventDefault()
+	e.stopPropagation()
+}
+
+function dragstart(e: DragEvent) {
+	if (props.folder.id === -1 || inBin.value) { return }
+	e.dataTransfer!.setData('text/plain', 'drag !!!')
+	dragging.value = true
+	emitter.emit('editor-drag', props.folder)
+	e.stopPropagation()
+}
+
+function dragend() {
+	dragging.value = false
+}
+
+function click(e: Event) {
+	if (router.currentRoute.value.path !== '/editor/' + props.folder.id) {
+		router.push('/editor/' + props.folder.id)
+	}
+	e.stopPropagation()
+}
 </script>
 
 <style lang="scss" scoped>
@@ -100,7 +117,8 @@
 		}
 	}
 	.item .label {
-		padding: 7px 10px;
+		padding: 5px 10px;
+		font-size: 14px;
 		white-space: nowrap;
 		text-overflow: ellipsis;
 		overflow: hidden;
@@ -187,7 +205,7 @@
 		border-radius: 10px;
 		color: #333;
 		padding: 1px 4px;
-		font-size: 13px;
+		font-size: 12px;
 		margin-left: 6px;
 		font-weight: 500;
 		&.error {

@@ -1,7 +1,7 @@
 <template>
 	<div class="page">
 		<div class="page-header page-bar">
-			<h1><router-link to="/admin">Administration</router-link> > Services</h1>
+			<h1><breadcrumb :items="[{name: 'Administration', link: '/admin'}, {name: 'Services', link: '/admin/services'}]" :raw="true" /></h1>
 			<div class="tabs">
 				<div class="tab disabled">{{ services ? services.length : '...' }} services</div>
 			</div>
@@ -25,21 +25,22 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Vue } from 'vue-property-decorator'
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { LeekWars } from '@/model/leekwars'
+import { store } from '@/model/store'
+import Breadcrumb from '@/component/forum/breadcrumb.vue'
 
-	@Options({})
-	export default class AdminServices extends Vue {
-		services: any = null
-		created() {
-			if (!this.$store.getters.admin) this.$router.replace('/')
-			LeekWars.setTitle("Services")
-			LeekWars.get('service/get-all-admin').then(data => {
-				this.services = data.services
-			})
-		}
-	}
+const router = useRouter()
+if (!store.getters.admin) router.replace('/')
+
+const services = ref<Record<string, unknown> | null>(null)
+
+LeekWars.setTitle('Services')
+LeekWars.get('service/get-all-admin').then(data => {
+	services.value = data.services
+})
 </script>
 
 <style lang="scss" scoped>

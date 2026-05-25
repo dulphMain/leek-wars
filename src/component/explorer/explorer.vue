@@ -6,26 +6,30 @@
 			<span v-if="currentFolder !== fileSystem.rootFolder" class="path"> ► {{ fileSystem.getFolderPath(currentFolder).slice(0, -1).replace(/\//g, ' ► ') }}</span>
 		</div>
 		<div class="dir">
-			<explorer-folder v-if="currentFolder !== fileSystem.rootFolder" v-ripple :folder="{id: -1}" @click.native="currentFolder = fileSystem.folderById[currentFolder.parent]" />
+			<!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -->
+			<explorer-folder v-if="currentFolder !== fileSystem.rootFolder" v-ripple :folder="({id: -1} as any)" @click="currentFolder = fileSystem.folderById[currentFolder.parent]" />
 			<template v-for="(item, i) in currentFolder.items" :key="i">
-				<explorer-folder v-if="item.folder" v-ripple :folder="item" @click.native="currentFolder = item" />
-				<ai v-else v-ripple :ai="item.ai" :small="false" :library="false" @click.native="$emit('select', item.ai)" />
+				<explorer-folder v-if="item.folder" v-ripple :folder="item" @click="currentFolder = item" />
+				<ai v-else v-ripple :ai="item.ai" :small="false" :library="false" @click="$emit('select', item.ai)" />
 			</template>
 		</div>
 	</div>
 </template>
 
-<script lang="ts">
-	import { fileSystem } from '@/model/filesystem'
-	import { Options, Vue } from 'vue-property-decorator'
-	import ExplorerFolder from './explorer-folder.vue'
-	import AIElement from '@/component/app/ai.vue'
+<script setup lang="ts">
+import { ref } from 'vue'
+import { fileSystem } from '@/model/filesystem'
+import { mixins } from '@/model/i18n'
+import ExplorerFolder from './explorer-folder.vue'
+import AIElement from '@/component/app/ai.vue'
 
-	@Options({ name: 'explorer', i18n: {}, components: { 'explorer-folder': ExplorerFolder, ai: AIElement } })
-	export default class Explorer extends Vue {
-		fileSystem = fileSystem
-		currentFolder = fileSystem.rootFolder
-	}
+defineOptions({ name: 'Explorer', i18n: {}, mixins: [...mixins], components: { 'explorer-folder': ExplorerFolder, ai: AIElement } })
+
+defineEmits<{
+	select: [ai: unknown]
+}>()
+
+const currentFolder = ref<import("../editor/editor-item").Folder>(fileSystem.rootFolder)
 </script>
 
 <style lang="scss" scoped>

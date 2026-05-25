@@ -5,11 +5,11 @@
 				<template v-for="team in game.teams">
 					<v-tooltip v-for="entity in team.filter(e => !e.dead)" :key="entity.id" top>
 						<template #activator="{ props }">
-							<div :style="{background: entity.lifeBarGadient, width: Math.max(1, barWidth * (entity.life / totalLife) - 3) + 'px'}" class="bar" v-bind="props"></div>
+							<div :style="{background: entity.lifeBarGadient, width: Math.max(1, barWidth * (entity.displayLife / totalLife) - 3) + 'px'}" class="bar" v-bind="props"></div>
 						</template>
 						<span v-if="entity instanceof Mob">{{ $t('entity.' + entity.name) }}</span>
 						<span v-else>{{ entity.name }}</span>
-						({{ entity.life }})
+						({{ Math.round(entity.displayLife) }})
 					</v-tooltip>
 				</template>
 			</div>
@@ -26,7 +26,7 @@
 			<v-tooltip v-for="(entity, e) of game.entityOrder" :key="e" location="top">
 				<template #activator="{ props }">
 					<div :class="{summon: entity.summon, current: entity.id === game.currentPlayer, dead: entity.dead}" :style="{background: entity === game.selectedEntity || entity === game.mouseEntity ? '#fffc' : (entity.id === game.currentPlayer ? entity.color : entity.gradient)}" class="entity" v-bind="props" @mouseenter="entity_enter(entity)" @mouseleave="entity_leave(entity)" @click="entity_click(entity)">
-						<div v-if="!entity.dead" :style="{height: 'calc(6px + ' + ((entity.life / entity.maxLife) * 100) + '%)', background: entity.lifeColor, 'border-color': entity.lifeColorLighter}" class="bar"></div>
+						<div v-if="!entity.dead" :style="{height: 'calc(6px + ' + ((entity.displayLife / entity.maxLife) * 100) + '%)', background: entity.lifeColor, 'border-color': entity.lifeColorLighter}" class="bar"></div>
 						<div class="image">
 							<img v-if="entity.summon" :src="'/image/bulb/' + entity.bulbName + '_front.png'">
 							<turret-image v-else-if="(entity instanceof Turret)" :level="entity.level" :skin="entity.team" :scale="1" />
@@ -37,11 +37,13 @@
 					</div>
 				</template>
 				<span v-if="entity instanceof Mob">{{ $t('entity.' + entity.name) }}</span>
+				<span v-else-if="entity.summon">{{ entity.translatedName }}</span>
 				<span v-else>{{ entity.name }}</span>
 			</v-tooltip>
 		</div>
-		<div v-if="!creator && !LeekWars.mobile && game.showActions && actionsWidth > 0" ref="actions" class="fight-actions" :class="{large: game.largeActions}" :style="{'width': game.largeActions ? actionsWidth + 'px' : null, 'max-width': game.largeActions ? Math.max(600, actionsWidth) + 'px' : null}">
-			<template v-for="line of game.consoleLines">
+		<div v-if="!creator && !LeekWars.mobile && game.showActions && actionsWidth > 0" ref="actionsRef" class="fight-actions" :class="{large: game.largeActions, scrolled: !followBottom}" :style="{'width': game.largeActions ? actionsWidth + 'px' : '', 'max-width': game.largeActions ? Math.max(600, actionsWidth) + 'px' : ''}" @scroll.passive="onActionsScroll" @wheel.passive="onActionsWheel">
+			<div v-if="renderStart > 0" class="load-marker">…</div>
+			<template v-for="line of renderedLines">
 				<component :is="ActionComponents[line.action.type]" v-if="line.action" :key="line.id" :action="line.action" :leeks="game.leeks" />
 				<div v-else-if="line.trophy" :key="line.id" class="notif-trophy">
 					<img :src="'/image/trophy/' + line.trophy.name + '.svg'">
@@ -54,113 +56,283 @@
 				</div>
 				<action-log v-else-if="game.displayDebugs && line.log" :key="'_' + line.id" :log="line.log" :leeks="game.leeks" :action="0" :index="0" :lines="game.displayAILines" />
 			</template>
+			<div v-if="!followBottom && renderEnd < game.consoleLines.length" class="load-marker bottom">…</div>
 		</div>
 		<div v-if="!creator && game.showActions && game.largeActions" class="resizer" :style="{left: actionsWidth + 'px'}" @mousedown="resizerMousedown"></div>
 		<entity-details v-if="game.mouseEntity" :entity="game.mouseEntity" :game="game" :dark="game.autoDark ? (game.map && game.map.options.dark) : game.dark" />
 		<entity-details v-else-if="game.selectedEntity" :entity="game.selectedEntity" :game="game" :dark="game.autoDark ? (game.map && game.map.options.dark) : game.dark" />
-		<entity-details v-else-if="!LeekWars.mobile && game.currentPlayer in game.leeks" :entity="game.leeks[game.currentPlayer]" :game="game" :dark="game.autoDark ? (game.map && game.map.options.dark) : game.dark" />
+		<entity-details v-else-if="!LeekWars.mobile && game.currentPlayer !== null && game.currentPlayer in game.leeks" :entity="game.leeks[game.currentPlayer]" :game="game" :dark="game.autoDark ? (game.map && game.map.options.dark) : game.dark" />
 	</div>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
 	import EntityDetails from '@/component/player/entity-details.vue'
-	import ActionLeekElement from '@/component/report/action-leek.vue'
-	import { ActionComponents, EffectComponents } from '@/model/action-components'
+	import ActionLeek from '@/component/report/action-leek.vue'
+	import { ActionComponents as ActionComponentsTyped } from '@/model/action-components'
 	import { LeekWars } from '@/model/leekwars'
-	import { TEAM_COLORS } from '@/model/team'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
 	import { Chest } from './game/chest'
 	import { Mob } from './game/mob'
 	import { Game } from './game/game'
+	import { FightEntity } from './game/entity'
 	import { Turret } from './game/turret'
 	import TurretImage from '@/component/turret-image.vue'
-	import { CHIPS } from '@/model/chips'
 	import ActionLog from '../report/report-log.vue'
-	import { ITEM_CATEGORY_NAME } from '@/model/item'
-	import { fileSystem } from '@/model/filesystem'
-	import router from '@/router'
+	import type { Component } from 'vue'
+	import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-	@Options({ name: 'hud', components: { EntityDetails, leek: ActionLeekElement, TurretImage, 'action-log': ActionLog } })
-	export default class Hud extends Vue {
-		@Prop({required: true}) game!: Game
-		@Prop() creator!: boolean
-		debug: boolean = false
-		hover_entity: any | null = null
-		Turret = Turret
-		Chest = Chest
-		Mob = Mob
-		actionsWidth: number = 395
-		ActionComponents = Object.freeze(ActionComponents)
-		EffectComponents = Object.freeze(EffectComponents)
-		TEAM_COLORS = TEAM_COLORS
-		CHIPS = CHIPS
-		ITEM_CATEGORY_NAME = ITEM_CATEGORY_NAME
-		fileSystem = fileSystem
+	defineOptions({ name: 'Hud', components: { leek: ActionLeek } })
 
-		get barWidth() {
-			return LeekWars.mobile ? 300 : 500
-		}
-		get totalLife() {
-			return this.game.leeks.reduce((total, e) => total + (!e.summon ? e.life : 0), 0)
-		}
-		get darkEnabledtest() {
-			return this.game.dark
-		}
-		get dark() {
-			return this.game.autoDark ? (this.game.map && this.game.map.options.dark) : this.game.dark
-		}
-		get leeks() {
-			return this.game.leeks
-		}
+	const props = defineProps<{
+		game: Game
+		creator?: boolean
+	}>()
 
-		created() {
-			this.actionsWidth = this.game.actionsWidth
-		}
+	const ActionComponents: Record<number, Component> = ActionComponentsTyped
 
-		entity_enter(entity: any) {
-			this.game.hoverEntity = entity
-			this.game.hoverEntity!.updateReachableCells()
-		}
-		entity_leave(entity: any) {
-			this.game.hoverEntity = null
-		}
-		entity_click(entity: any) {
-			this.game.selectEntity(entity)
-		}
+	const debug = ref(false)
+	const actionsWidth = ref(395)
 
-		formatTurns(turns: number) {
-			return turns === -1 ? '∞' : turns
-		}
+	const barWidth = computed(() => LeekWars.mobile ? 300 : 500)
+	const totalLife = computed(() => props.game.leeks.reduce((total, e) => total + (!e.summon ? e.displayLife : 0), 0))
+	actionsWidth.value = props.game.actionsWidth
 
-		resizerMousedown(e: MouseEvent) {
-			const startWidth = this.actionsWidth
-			const startX = e.clientX
-			const visible = this.actionsWidth > 0
-			const mousemove: any = (ev: MouseEvent) => {
-				let panelWidth = Math.max(0, Math.min(1000, startWidth + ev.clientX - startX))
-				if (visible && panelWidth < 60) {
-					panelWidth = 0
+	const MAX_WINDOW = 250
+	const LOAD_CHUNK = 80
+	const SCROLL_THRESHOLD = 80
+	const PRELOAD_RATIO = 0.5
+	const AT_EDGE_TOLERANCE = 5
+
+	const actionsRef = ref<HTMLElement | null>(null)
+	const followBottom = ref(true)
+	const renderStart = ref(0)
+	const renderEnd = ref(0)
+
+	function windowBounds() {
+		const length = props.game.consoleLines.length
+		if (followBottom.value) {
+			return { start: Math.max(0, length - MAX_WINDOW), end: length, length }
+		}
+		return { start: renderStart.value, end: renderEnd.value, length }
+	}
+
+	const renderedLines = computed(() => {
+		const { start, end } = windowBounds()
+		return props.game.consoleLines.slice(start, end)
+	})
+
+	function scrollToBottom() {
+		const el = actionsRef.value
+		if (el) el.scrollTop = el.scrollHeight
+	}
+
+	watch(() => props.game.consoleLines.length, (newLen) => {
+		if (!followBottom.value) return
+		renderEnd.value = newLen
+		renderStart.value = Math.max(0, newLen - MAX_WINDOW)
+		nextTick(scrollToBottom)
+	})
+
+	// `game.jump()` est entièrement synchrone : `jumping` passe true puis false
+	// dans le même tick. Avec le flush par défaut ('pre'), Vue compare au flush
+	// la valeur finale à l'initiale et ne voit rien changer → le watcher ne
+	// fire pas. `flush: 'sync'` exécute le callback à chaque mutation, donc on
+	// capte bien la transition false → true → false et on resynchronise.
+	watch(() => props.game.jumping, (jumping) => {
+		if (jumping) return
+		followBottom.value = true
+		resizeAnchor = null
+		const len = props.game.consoleLines.length
+		renderEnd.value = len
+		renderStart.value = Math.max(0, len - MAX_WINDOW)
+		nextTick(scrollToBottom)
+	}, { flush: 'sync' })
+
+	watch(() => props.game.largeActions, () => {
+		if (followBottom.value) nextTick(scrollToBottom)
+	})
+
+	// Au resize (hover/leave, large mode, changement de contenu), on re-bottoms
+	// si followBottom, sinon on restaure l'ancre visuelle capturée au scroll
+	// pour éviter le décalage dû au re-wrapping du texte (largeur 395 → 600).
+	let resizeObserver: ResizeObserver | null = null
+	let resizeAnchor: Anchor | null = null
+	onMounted(() => {
+		nextTick(() => {
+			const el = actionsRef.value
+			if (!el) return
+			scrollToBottom()
+			resizeObserver = new ResizeObserver(() => {
+				const target = actionsRef.value
+				if (!target) return
+				if (followBottom.value) {
+					target.scrollTop = target.scrollHeight
+				} else if (resizeAnchor) {
+					restoreAnchor(target, resizeAnchor)
 				}
-				this.actionsWidth = panelWidth
-			}
-			const mouseup: any = (ev: MouseEvent) => {
-				document.documentElement!.removeEventListener('mousemove', mousemove)
-				document.documentElement!.removeEventListener('mouseup', mouseup)
-				this.game.actionsWidth = this.actionsWidth
-				if (this.game.actionsWidth === 0) {
-					this.game.largeActions = false
-					this.actionsWidth = 395
+			})
+			resizeObserver.observe(el)
+		})
+	})
+	onBeforeUnmount(() => {
+		resizeObserver?.disconnect()
+		resizeObserver = null
+	})
+
+	let loadingMore = false
+
+	// Mémorise le DERNIER enfant visible (en bas du viewport) et son offset
+	// par rapport au bas du viewport. Au resize/re-render on restaure cet item
+	// au même bord bas → la vue réduite montre la queue de la vue agrandie.
+	function captureAnchor(el: HTMLElement) {
+		const prevScrollTop = el.scrollTop
+		const viewportBottom = prevScrollTop + el.clientHeight
+		for (let i = el.children.length - 1; i >= 0; i--) {
+			const child = el.children[i] as HTMLElement
+			if (child.offsetTop < viewportBottom) {
+				return {
+					index: i,
+					offsetFromBottom: viewportBottom - (child.offsetTop + child.offsetHeight),
+					prevScrollTop,
 				}
 			}
-			document.documentElement!.addEventListener('mousemove', mousemove, false)
-			document.documentElement!.addEventListener('mouseup', mouseup, false)
-			e.preventDefault()
 		}
+		return { index: -1, offsetFromBottom: 0, prevScrollTop }
+	}
 
-		goToAI(file: number, line: number, log: any) {
-			router.push('/editor/' + file + '?line=' + line)
+	type Anchor = ReturnType<typeof captureAnchor>
+
+	function restoreAnchor(el: HTMLElement, anchor: Anchor, indexShift = 0) {
+		const target = anchor.index >= 0 ? el.children[anchor.index + indexShift] as HTMLElement | undefined : undefined
+		if (target) {
+			const newViewportBottom = (target.offsetTop + target.offsetHeight) + anchor.offsetFromBottom
+			el.scrollTop = Math.max(0, newViewportBottom - el.clientHeight)
+		} else {
+			el.scrollTop = anchor.prevScrollTop
 		}
 	}
+
+	function loadDirection(direction: -1 | 1) {
+		if (loadingMore) return
+		const el = actionsRef.value
+		if (!el) return
+		const w = windowBounds()
+		if (direction < 0 ? w.start <= 0 : w.end >= w.length) return
+		loadingMore = true
+		const anchor = captureAnchor(el)
+		let newStart = w.start
+		let newEnd = w.end
+		if (direction < 0) {
+			newStart = Math.max(0, w.start - LOAD_CHUNK)
+			if (newEnd - newStart > MAX_WINDOW) newEnd = newStart + MAX_WINDOW
+			followBottom.value = false
+		} else {
+			newEnd = Math.min(w.length, w.end + LOAD_CHUNK)
+			if (newEnd - newStart > MAX_WINDOW) newStart = newEnd - MAX_WINDOW
+		}
+		const indexShift = w.start - newStart
+		renderStart.value = newStart
+		renderEnd.value = newEnd
+		nextTick(() => {
+			const el2 = actionsRef.value
+			if (el2) {
+				restoreAnchor(el2, anchor, indexShift)
+				// Les indices dans inner.children ont shifté : on re-capture pour
+				// que le prochain ResizeObserver (hover/leave) restaure
+				// correctement la position.
+				if (!followBottom.value) resizeAnchor = captureAnchor(el2)
+			}
+			loadingMore = false
+		})
+	}
+
+	function onActionsScroll() {
+		if (loadingMore) return
+		const el = actionsRef.value
+		if (!el) return
+		const w = windowBounds()
+		const preloadThreshold = Math.max(SCROLL_THRESHOLD, el.clientHeight * PRELOAD_RATIO)
+		const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight)
+		const nearTop = el.scrollTop < preloadThreshold
+		const nearBottom = distanceFromBottom < preloadThreshold
+		const atBottom = distanceFromBottom < SCROLL_THRESHOLD
+
+		if (nearTop && w.start > 0) return loadDirection(-1)
+		if (nearBottom && w.end < w.length) return loadDirection(1)
+
+		if (atBottom && w.end >= w.length && !followBottom.value) {
+			followBottom.value = true
+			resizeAnchor = null
+			renderEnd.value = w.length
+			renderStart.value = Math.max(0, w.length - MAX_WINDOW)
+			nextTick(scrollToBottom)
+			return
+		}
+
+		if (followBottom.value && !atBottom) {
+			followBottom.value = false
+			renderStart.value = w.start
+			renderEnd.value = w.end
+		}
+
+		if (!followBottom.value) resizeAnchor = captureAnchor(el)
+	}
+
+	function onActionsWheel(e: WheelEvent) {
+		// MAX_WINDOW saturé + trim symétrique → scrollHeight constant, scrollTop
+		// reste collé au bord → plus d'événement scroll. Le wheel reste actif.
+		if (loadingMore) return
+		const el = actionsRef.value
+		if (!el) return
+		const w = windowBounds()
+		if (e.deltaY < 0) {
+			if (el.scrollTop > AT_EDGE_TOLERANCE || w.start <= 0) return
+			loadDirection(-1)
+		} else {
+			if (el.scrollHeight - el.scrollTop - el.clientHeight > AT_EDGE_TOLERANCE || w.end >= w.length) return
+			loadDirection(1)
+		}
+	}
+
+	function entity_enter(entity: FightEntity) {
+		// eslint-disable-next-line vue/no-mutating-props
+		props.game.hoverEntity = entity
+		props.game.hoverEntity!.updateReachableCells()
+	}
+	function entity_leave(_entity: FightEntity) {
+		// eslint-disable-next-line vue/no-mutating-props
+		props.game.hoverEntity = null
+	}
+	function entity_click(entity: FightEntity) {
+		props.game.selectEntity(entity)
+	}
+
+	function resizerMousedown(e: MouseEvent) {
+		const startWidth = actionsWidth.value
+		const startX = e.clientX
+		const visible = actionsWidth.value > 0
+		const mousemove = (ev: MouseEvent) => {
+			let panelWidth = Math.max(0, Math.min(1000, startWidth + ev.clientX - startX))
+			if (visible && panelWidth < 60) {
+				panelWidth = 0
+			}
+			actionsWidth.value = panelWidth
+		}
+		const mouseup = () => {
+			document.documentElement!.removeEventListener('mousemove', mousemove)
+			document.documentElement!.removeEventListener('mouseup', mouseup)
+			// eslint-disable-next-line vue/no-mutating-props
+			props.game.actionsWidth = actionsWidth.value
+			if (props.game.actionsWidth === 0) {
+				// eslint-disable-next-line vue/no-mutating-props
+				props.game.largeActions = false
+				actionsWidth.value = 395
+			}
+		}
+		document.documentElement!.addEventListener('mousemove', mousemove, false)
+		document.documentElement!.addEventListener('mouseup', mouseup, false)
+		e.preventDefault()
+	}
+
 </script>
 
 <style lang="scss" scoped>
@@ -286,6 +458,7 @@
 		max-height: 100px;
 		width: 395px;
 		overflow: hidden;
+		overscroll-behavior: contain;
 		position: absolute;
 		background: #fff;
 		border-top-right-radius: 5px;
@@ -296,7 +469,14 @@
 		padding-bottom: 10px;
 		display: flex;
 		flex-direction: column;
-		justify-content: flex-end;
+		// `margin-top: auto` sur le 1er enfant équivaut à `min-height: 100%` sur
+		// un wrapper : quand le contenu rentre, le bloc s'absorbe l'espace
+		// libre et pousse les items en bas. Quand ça déborde, ce margin se
+		// résorbe à 0 et le contenu fluit naturellement, donc `scrollHeight`
+		// reste correct (pas de bug Chromium comme avec `justify-content: flex-end`).
+		& > *:first-child {
+			margin-top: auto;
+		}
 		&::-webkit-scrollbar {
 			width: 4px;
 		}
@@ -307,6 +487,7 @@
 				width: 600px !important;
 				background-color: #f2f2f2ee;
 				border-top-right-radius: 0;
+				overflow-y: auto;
 			}
 			.log {
 				width: 600px;
@@ -318,18 +499,25 @@
 			max-width: 1000px;
 			border-top-right-radius: 0;
 			background-color: #fff;
+			overflow-y: auto;
 			&:hover {
 				width: max(100%, 600px) !important;
 				background-color: #f2f2f2dd;
 			}
 		}
-		& > div {
-			padding: 1px 0;
+		& > div:not(.load-marker) {
 			font-size: 14px;
 			width: max(588px, 100%);
 		}
-		pre {
+		& > pre {
 			width: max(588px, 100%);
+		}
+		.load-marker {
+			text-align: center;
+			color: #888;
+			font-size: 12px;
+			padding: 4px 0;
+			user-select: none;
 		}
 	}
 	.resizer {

@@ -22,7 +22,7 @@
 				</router-link>
 				<div class="tab disabled search" icon="search" link="/search">
 					<img class="search-icon" src="/image/search.png">
-					<input v-model="query" ref="search" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+					<input ref="search" v-model="query" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
 				</div>
 				<div v-if="!popup" class="tab action" icon="search" link="/search" @click="toggleLarge">
 					<v-icon v-if="LeekWars.large">mdi-fullscreen-exit</v-icon>
@@ -35,7 +35,7 @@
 				<panel class="first">
 					<template #content>
 						<div class="items-list">
-							<div v-for="(category, c) of filteredCategories" :key="category.id">
+							<div v-for="(category, c) of filteredCategories" :key="c">
 								<h2 v-ripple @click="toggleCategory(c)">
 									<v-icon>{{ icons[c] }}</v-icon> {{ $t('doc.function_category_' + categories[c].name) }} <span v-if="query.length">({{ category.length }})</span>
 									<div class="spacer"></div>
@@ -43,8 +43,8 @@
 									<v-icon v-else>mdi-chevron-down</v-icon>
 								</h2>
 								<div v-if="query.length || categoryState[c]">
-									<div v-for="(item, i) in category" :key="i" @click="navigate(item.name)" :item="item.name" class="item">
-										{{ item.name }}<span class="arguments" v-if="item.arguments_types">(<span v-for="(arg, i) in item.arguments_names" :key="i"><span v-if="item.optional[i]">[</span><span class="argument">{{ $t('doc.arg_type_' + item.arguments_types[i]) }}</span>&nbsp;{{ arg }}<span v-if="item.optional[i]">]</span><span v-if="i < item.arguments_names.length - 1">, </span></span>)
+									<div v-for="(item, i) in (category as LSFunction[])" :key="i" :item="item.name" class="item" @click="navigate(item.name)">
+										{{ item.name }}<span v-if="item.arguments_types" class="arguments">(<span v-for="(arg, i) in item.arguments_names" :key="i"><span v-if="item.optional[i as number]">[</span><span class="argument">{{ $t('doc.arg_type_' + item.arguments_types[i as number]) }}</span>&nbsp;{{ arg }}<span v-if="item.optional[i as number]">]</span><span v-if="Number(i) < item.arguments_names.length - 1">, </span></span>)
 										<span v-if="item.return_type != 0">
 											<span class="arrow">→</span> <span class="argument"> {{ $t('doc.arg_type_' + item.return_type) }}</span>&nbsp;{{ item.return_name }}
 										</span></span>
@@ -67,264 +67,251 @@
 	</div>
 </template>
 
-<script lang="ts">
+<script lang="ts" setup>
 	import { locale } from '@/locale'
-	import { Constant } from '@/model/constant'
-	import { LSFunction } from '@/model/function'
+	import type { Constant } from '@/model/constant'
+	import type { LSFunction } from '@/model/function'
 	import { FUNCTIONS } from '@/model/functions'
 	import { FUNCTION_BY_ID } from '@/model/function_by_id'
-	import { CONSTANTS } from '@/model/constants'
 	import { CONSTANT_BY_ID } from '@/model/constant_by_id'
-	import { i18n, mixins } from '@/model/i18n'
+	import { FUNCTION_CATEGORIES } from '@/model/function_categories'
+	import { i18n, mixins , useNamespacedT } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
+	import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+	import { useI18n } from 'vue-i18n'
+	import { useRoute, useRouter } from 'vue-router'
 	import Breadcrumb from '../forum/breadcrumb.vue'
 	import DocumentationConstant from './documentation-constant.vue'
 	import DocumentationFunction from './documentation-function.vue'
 	import { emitter } from '@/model/vue'
-	import { nextTick } from 'vue'
 
-	@Options({
-		name: 'documentation',
-		components: { DocumentationFunction, DocumentationConstant, Breadcrumb },
-		i18n: {},
-		mixins: [...mixins]
+	defineOptions({ name: 'Documentation', i18n: {}, mixins: [...mixins] })
+
+	const props = defineProps<{ popup?: boolean }>()
+	const { locale: i18nLocale } = useI18n()
+	const t = useNamespacedT('documentation')
+	const route = useRoute()
+	const router = useRouter()
+
+	const categories: Record<string | number, { id: number; name: string }> = FUNCTION_CATEGORIES
+	const items = ref<(LSFunction | Constant)[]>([])
+	const query = ref('')
+	const lazy_start = ref(0)
+	const lazy_end = ref(10)
+	const categoryState = ref<Record<string | number, boolean>>({})
+	const icons = {
+		1: 'mdi-numeric',
+		2: 'mdi-format-text',
+		3: 'mdi-code-array',
+		4: 'mdi-code-braces-box',
+		13: 'mdi-code-not-equal-variant',
+		14: 'mdi-code-brackets',
+		5: 'mdi-account',
+		6: 'mdi-sword',
+		7: 'mdi-chip',
+		8: 'mdi-grid',
+		9: 'mdi-sword-cross',
+		10: 'mdi-hammer-wrench',
+		11: 'mdi-signal-variant',
+		12: 'mdi-palette'
+	} as Record<number, string>
+
+	const search = useTemplateRef<HTMLInputElement>('search')
+	const elements = useTemplateRef<HTMLElement>('elements')
+
+	const breadcrumb_items = computed(() => [
+		{name: t('main.help') as string, link: '/help'},
+		{name: t('title') as string, link: '/help/documentation'}
+	])
+
+	const lower_query = computed(() => query.value.toLowerCase())
+	const filteredItems = computed(() => {
+		if (lower_query.value.length) {
+			return items.value.filter(item => {
+				return item.lower_name!.indexOf(lower_query.value) !== -1
+					|| item.data!.indexOf(lower_query.value) !== -1
+			})
+		} else {
+			return [...items.value]
+		}
 	})
-	export default class Documentation extends Vue {
-		@Prop({ required: true }) popup!: boolean
-		categories: any[] = []
-		items: (LSFunction | Constant)[] = []
-		query: string = ''
-		lazy_start: number = 0
-		lazy_end: number = 10
-		categoryState: {[key: number]: boolean} = {}
-		icons = {
-			1: 'mdi-numeric',
-			2: 'mdi-format-text',
-			3: 'mdi-code-array',
-			4: 'mdi-code-braces-box',
-			13: 'mdi-code-not-equal-variant',
-			14: 'mdi-code-brackets',
-			5: 'mdi-account',
-			6: 'mdi-sword',
-			7: 'mdi-chip',
-			8: 'mdi-grid',
-			9: 'mdi-sword-cross',
-			10: 'mdi-hammer-wrench',
-			11: 'mdi-signal-variant',
-			12: 'mdi-palette'
+	const lazy_items = computed(() => filteredItems.value.slice(lazy_start.value, lazy_end.value))
+	const filteredCategories = computed(() => {
+		const cats: {[key: number]: (LSFunction | Constant)[]} = {}
+		for (const item of filteredItems.value) {
+			if (item.deprecated) continue
+			if (!(item.category in cats)) cats[item.category] = []
+			cats[item.category].push(item)
 		}
+		return cats
+	})
 
-		get breadcrumb_items() {
-			return [
-				{name: this.$t('main.help'), link: '/help'},
-				{name: this.$t('title'), link: '/help/documentation'}
-			]
-		}
+	;(async () => {
+		// Load doc translations
+		const docMessages = await import(/* webpackChunkName: "[request]" */ /* webpackMode: "eager" */ `@/lang/doc.${locale}.lang`)
+		i18n.global.mergeLocaleMessage(locale, { doc: docMessages.default })
 
-		get lower_query() {
-			return this.query.toLowerCase()
+		LeekWars.loadEncyclopedia(locale)
+
+		for (const category in FUNCTION_CATEGORIES) {
+			categoryState.value[category] = localStorage.getItem('documentation/category-' + category) === 'true'
 		}
-		get filteredItems() {
-			if (this.lower_query.length) {
-				return this.items.filter(item => {
-					return item.lower_name!.indexOf(this.lower_query) !== -1
-						|| item.data!.indexOf(this.lower_query) !== -1
-				})
-			} else {
-				return [...this.items]
+		let id = 0
+		for (const item of FUNCTIONS as LSFunction[]) {
+			if (item.replacement) {
+				FUNCTION_BY_ID[item.replacement].replacer = item
 			}
 		}
-		get lazy_items() {
-			return this.filteredItems.slice(this.lazy_start, this.lazy_end)
-		}
-		get filteredCategories() {
-			const categories: {[key: number]: any} = {}
-			for (const item of this.filteredItems) {
-				if (item.deprecated) continue
-				if (!(item.category in categories)) categories[item.category] = []
-				categories[item.category].push(item)
-			}
-			return categories
-		}
+		for (const item of FUNCTIONS as LSFunction[]) {
+			items.value.push(item)
+			item.lower_name = item.name.toLowerCase()
+			item.id = id++
+			item.data = ''
 
-		async created() {
-			// Load doc translations
-			const docMessages = await import(/* webpackChunkName: "[request]" */ /* webpackMode: "eager" */ `@/lang/doc.${locale}.lang`)
-			i18n.global.mergeLocaleMessage(locale, { doc: docMessages.default })
-
-			LeekWars.loadEncyclopedia(locale)
-
-			const get_categories = (callback: any) => {
-				if (localStorage.getItem('data/function_categories_v4')) {
-					callback({categories: JSON.parse(localStorage.getItem('data/function_categories_v4') || '[]')})
+			LeekWars.documentation(locale).then(functions => {
+				if (item.name in functions) {
+					const fun = functions[item.name]
+					let new_data = fun.description
+					for (const section in fun.primary) {
+						new_data += fun.primary[section]
+					}
+					for (const section in fun.secondary) {
+						new_data += fun.secondary[section]
+					}
+					item.data = new_data.toLowerCase()
 				} else {
-					LeekWars.get('function/get-categories').then(data => {
-						localStorage.setItem('data/function_categories_v4', JSON.stringify(data.categories))
-						callback(data)
-					})
-				}
-			}
-			get_categories((data: any) => {
-				this.categories = data.categories
-				for (const category in this.categories) {
-					this.categoryState[category] = localStorage.getItem('documentation/category-' + category) === 'true'
-				}
-				let id = 0
-				for (const item of FUNCTIONS) {
-					if (item.replacement) {
-						FUNCTION_BY_ID[item.replacement].replacer = item
+					let item_data = String(t('doc.func_' + item.name)).toLowerCase()
+					for (const i in item.arguments_names) {
+						item_data += String(t('doc.func_' + item.name + '_arg_' + (parseInt(i, 10) + 1))).toLowerCase()
 					}
+					item_data += String(t('doc.func_' + item.name + '_return')).toLowerCase()
+					item.data = item_data
 				}
-				for (const item of FUNCTIONS) {
-					this.items.push(item)
-					item.lower_name = item.name.toLowerCase()
-					item.id = id++
-					item.data = ''
-
-					LeekWars.documentation(locale).then(functions => {
-						if (item.name in functions) {
-							const fun = functions[item.name]
-							let new_data = fun.description
-							for (const section in fun.primary) {
-								new_data += fun.primary[section]
-							}
-							for (const section in fun.secondary) {
-								new_data += fun.secondary[section]
-							}
-							item.data = new_data.toLowerCase()
-						} else {
-							let item_data = (this.$t('doc.func_' + item.name) as any).toLowerCase()
-							for (const i in item.arguments_names) {
-								item_data += (this.$t('doc.func_' + item.name + '_arg_' + (parseInt(i, 10) + 1)) as any).toLowerCase()
-							}
-							item_data += (this.$t('doc.func_' + item.name + '_return') as any).toLowerCase()
-							item.data = item_data
-						}
-						if (item.replacer) {
-							item.data += item.replacer.lower_name!
-						}
-					})
+				if (item.replacer) {
+					item.data += item.replacer.lower_name!
 				}
-				for (const item of CONSTANTS) {
-					if (item.replacement) {
-						CONSTANT_BY_ID[item.replacement].replacer = item
-					}
-				}
-				for (const item of CONSTANTS) {
-					this.items.push(item)
-					item.lower_name = item.name.toLowerCase()
-					item.id = id++
-					item.data = (this.$t('doc.const_' + item.name) as string).toLowerCase() + item.value
-					if (item.replacer) {
-						item.data += item.replacer.lower_name!
-					}
-				}
-				LeekWars.setTitle(this.$i18n.t('title'))
-				this.update()
 			})
 		}
-		mounted() {
-			if (!this.popup) {
-				LeekWars.large = localStorage.getItem('documentation/large') === 'true'
-				LeekWars.footer = false
-				LeekWars.box = true
+		for (const item of LeekWars.constants) {
+			if (item.replacement) {
+				CONSTANT_BY_ID[item.replacement].replacer = item
 			}
-			(this.$refs.search as HTMLElement).focus()
-			emitter.on('back', this.back)
-			emitter.on('doc-navigate', this.navigate)
 		}
-		focus() {
-			(this.$refs.search as HTMLElement).focus()
-		}
-		back() {
-			this.$router.push('/help/documentation')
-		}
-		beforeUnmount() {
-			if (!this.popup) {
-				LeekWars.large = false
-				LeekWars.footer = true
-				LeekWars.box = false
+		for (const item of LeekWars.constants) {
+			items.value.push(item)
+			item.lower_name = item.name.toLowerCase()
+			item.id = id++
+			item.data = (t('doc.const_' + item.name) as string).toLowerCase() + item.value
+			if (item.replacer) {
+				item.data += item.replacer.lower_name!
 			}
-			emitter.off('back', this.back)
-			emitter.off('doc-navigate', this.navigate)
 		}
+		if (!props.popup) {
+			LeekWars.setTitle(i18nLocale.value ? t('title') as string : '')
+		}
+		update()
+	})()
 
-		@Watch('$route.params')
-		update() {
-			if (!this.popup && this.$route.params && 'item' in this.$route.params) {
-				LeekWars.splitShowContent()
-				this.selectItem(this.$route.params.item)
-				LeekWars.setTitle(this.$route.params.item)
-			} else {
-				LeekWars.splitShowList()
-				LeekWars.setTitle(this.$i18n.t('title'))
-			}
+	onMounted(() => {
+		if (!props.popup) {
+			LeekWars.large = localStorage.getItem('documentation/large') === 'true'
+			LeekWars.footer = false
+			LeekWars.box = true
 		}
+		search.value?.focus()
+		emitter.on('back', back)
+		emitter.on('doc-navigate', navigate)
+	})
 
-		navigate(item: string) {
-			// console.log("navigate", item, this.popup)
-			if (this.popup) {
-				this.selectItem(item)
-			} else {
-				this.$router.push('/help/documentation/' + item)
-			}
+	function focus() {
+		search.value?.focus()
+	}
+	function back() {
+		router.push('/help/documentation')
+	}
+	onBeforeUnmount(() => {
+		if (!props.popup) {
+			LeekWars.large = false
+			LeekWars.footer = true
+			LeekWars.box = false
 		}
+		emitter.off('back', back)
+		emitter.off('doc-navigate', navigate)
+	})
 
-		selectItem(item: string) {
-			if (!this.filteredItems.find((it) => it.name === item)) {
-				this.query = ''
-			}
-			nextTick(() => {
-				const index = this.filteredItems.findIndex((it) => it.name === item)
-				if (index !== -1) {
-					this.lazy_start = Math.max(0, index - 2)
-					this.lazy_end = this.lazy_start + 10
-				}
-				setTimeout(() => {
-					const element: any = document.querySelector('.items .item[item=' + item + ']')
-					const elements = this.$refs.elements as HTMLElement
-					if (element) {
-						const offset = LeekWars.mobile ? 100 : (this.popup ? 185 : 140)
-						elements.scrollTo(0, element.offsetTop - offset + 10)
-					}
-				}, 100)
-			})
-		}
-
-		@Watch('query')
-		queryChange() {
-			const items = this.$refs.elements as Element
-			items.scrollTop = 0
-			this.lazy_start = 0
-			this.lazy_end = 10
-			if (!this.popup && this.query.length && 'item' in this.$route.params) {
-				this.$router.push('/help/documentation')
-			}
-		}
-
-		scroll(e: Event) {
-			const items = this.$refs.elements as Element
-			if (items.scrollTop < 100 && this.lazy_start > 0) {
-				this.lazy_start = Math.max(0, this.lazy_start - 10)
-			}
-			if (this.lazy_items.length < this.filteredItems.length) {
-				if (items.scrollTop + window.innerHeight + 500 > items.scrollHeight) {
-					this.lazy_end += 10
-				}
-			}
-		}
-
-		toggleLarge() {
-			LeekWars.large = !LeekWars.large
-			localStorage.setItem('documentation/large', '' + LeekWars.large)
-		}
-
-		toggleCategory(c: number) {
-			this.categoryState[c] = !this.categoryState[c]
-			localStorage.setItem('documentation/category-' + c, '' + this.categoryState[c])
+	function update() {
+		if (!props.popup && route.params && 'item' in route.params) {
+			LeekWars.splitShowContent()
+			selectItem(route.params.item as string)
+			LeekWars.setTitle(route.params.item as string)
+		} else {
+			LeekWars.splitShowList()
 		}
 	}
+	watch(() => route.params, update)
+
+	function navigate(item: string) {
+		if (props.popup) {
+			selectItem(item)
+		} else {
+			router.push('/help/documentation/' + item)
+		}
+	}
+
+	function selectItem(item: string) {
+		if (!filteredItems.value.find((it) => it.name === item)) {
+			query.value = ''
+		}
+		nextTick(() => {
+			const index = filteredItems.value.findIndex((it) => it.name === item)
+			if (index !== -1) {
+				lazy_start.value = Math.max(0, index - 2)
+				lazy_end.value = lazy_start.value + 10
+			}
+			setTimeout(() => {
+				const element = document.querySelector<HTMLElement>('.items .item[item=' + item + ']')
+				if (element && elements.value) {
+					const offset = LeekWars.mobile ? 100 : (props.popup ? 185 : 140)
+					elements.value.scrollTo(0, element.offsetTop - offset + 10)
+				}
+			}, 100)
+		})
+	}
+
+	watch(query, () => {
+		const items = elements.value
+		if (items) items.scrollTop = 0
+		lazy_start.value = 0
+		lazy_end.value = 10
+		if (!props.popup && query.value.length && 'item' in route.params) {
+			router.push('/help/documentation')
+		}
+	})
+
+	function scroll(_e: Event) {
+		const items = elements.value
+		if (!items) return
+		if (items.scrollTop < 100 && lazy_start.value > 0) {
+			lazy_start.value = Math.max(0, lazy_start.value - 10)
+		}
+		if (lazy_items.value.length < filteredItems.value.length) {
+			if (items.scrollTop + window.innerHeight + 500 > items.scrollHeight) {
+				lazy_end.value += 10
+			}
+		}
+	}
+
+	function toggleLarge() {
+		LeekWars.large = !LeekWars.large
+		localStorage.setItem('documentation/large', '' + LeekWars.large)
+	}
+
+	function toggleCategory(c: number | string) {
+		categoryState.value[c] = !categoryState.value[c]
+		localStorage.setItem('documentation/category-' + c, '' + categoryState.value[c])
+	}
+
+	defineExpose({ focus })
 </script>
 
 <style lang="scss" scoped>

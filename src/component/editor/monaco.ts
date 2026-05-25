@@ -1,16 +1,18 @@
 import * as monaco from 'monaco-editor'
 
-// @ts-ignore
+// @ts-expect-error no types for leekscript-monarch.js
 import leekscript from './leekscript-monarch.js'
 
 import { i18n } from '@/model/i18n';
 import { fileSystem } from '@/model/filesystem';
 import { analyzer } from './analyzer';
 import { emitter } from '@/model/vue';
+import { markRaw } from 'vue';
 import { AI } from '@/model/ai.js';
 import { LeekWars } from '@/model/leekwars';
 import { getKeywords } from './keywords';
 import { Keyword, KeywordKind } from '@/model/keyword';
+import { getLanguageForPath } from './file-types';
 
 monaco.languages.register({ id: 'leekscript' })
 monaco.languages.setLanguageConfiguration('leekscript', {
@@ -44,7 +46,6 @@ monaco.languages.setLanguageConfiguration('leekscript', {
 	},
 })
 monaco.languages.setMonarchTokensProvider('leekscript', leekscript)
-monaco.languages.registerDocumentSemanticTokensProvider('leekscript', leekscript)
 
 monaco.editor.addKeybindingRules([
 	{
@@ -94,35 +95,22 @@ monaco.editor.addKeybindingRules([
 	}
 ]);
 
-monaco.editor.registerCommand('jump', (accessor, args) => {
-	// console.log("Command jump", args)
-	emitter.emit('jump', fileSystem.aiByFullPath[args.ai], args.line, args.column)
+monaco.editor.registerCommand('jump', (_accessor, args) => {
+	emitter.emit('jump', { ai: fileSystem.aiByFullPath[args.ai], line: args.line, column: args.column })
 })
 
-// monaco.languages.registerDocumentSymbolProvider("leekscript", {
-// 	provideDocumentSymbols: function (model, token) {
-// 		return [
-// 			{
-// 				range: {
-// 					startLineNumber: 1,
-// 					startColumn: 1,
-// 					endLineNumber: 2,
-// 					endColumn: 1,
-// 				},
-// 				name: "File",
-// 				kind: 0,
-// 				detail: "",
-// 				tags: [],
-// 				selectionRange: {
-// 					startLineNumber: 1,
-// 					startColumn: 1,
-// 					endLineNumber: 2,
-// 					endColumn: 1,
-// 				},
-// 			},
-// 		]
-// 	}
-// })
+monaco.editor.registerCommand('findReferencesAtPosition', (_accessor, uri: monaco.Uri, position: monaco.IPosition) => {
+	const editor = monaco.editor.getEditors().find(e => e.getModel()?.uri.toString() === uri.toString())
+	if (editor) {
+		editor.setPosition(position)
+		editor.trigger('codelens', 'editor.action.referenceSearch.trigger', null)
+	}
+})
+
+const METHOD_REGEX = /^[ \t]+(?:(?:(?:public\s+)?(?:static\s+)?(?:[\w<>,?[\]]+\s+)+(\w+))|(constructor))\s*\(/
+const NON_METHOD_KEYWORDS = new Set(['function', 'for', 'while', 'if', 'class', 'var', 'return', 'new', 'else', 'switch', 'catch'])
+const RESERVED_SYMBOLS = new Set(['true', 'false', 'null', 'this', 'super'])
+
 
 monaco.editor.defineTheme("leek-wars", {
 	base: "vs", // can also be vs-dark or hc-black
@@ -137,6 +125,7 @@ monaco.editor.defineTheme("leek-wars", {
 		{ token: "lsfunction-deprecated", foreground: '777777', fontStyle: 'italic' },
 		{ token: "atom", foreground: '0086bc', fontStyle: 'bold' },
 		{ token: "number", foreground: '007f00' },
+		{ token: "annotation", foreground: 'aa5500', fontStyle: 'bold' },
 	],
 	colors: {
 		"editor.foreground": "#000000",
@@ -158,6 +147,7 @@ monaco.editor.defineTheme("monokai", {
 		{ token: "lsfunction-deprecated", foreground: '777777', fontStyle: 'italic' },
 		{ token: "atom", foreground: 'ae81ff' },
 		{ token: "number", foreground: 'ae81ff' },
+		{ token: "annotation", foreground: 'ffaa44', fontStyle: 'bold' },
 	],
 	colors: {
 		"editor.foreground": "#f8f8f2",
@@ -167,11 +157,11 @@ monaco.editor.defineTheme("monokai", {
 })
 
 monaco.editor.registerEditorOpener({
-	openCodeEditor: async (source, resource, selectionOrPosition) => {
+	openCodeEditor: async (_source, resource, selectionOrPosition) => {
 		const ai = fileSystem.aiByFullPath[resource.path.substring(1)]
 		await fileSystem.load(ai)
-		const uri = monaco.Uri.parse('file:///' + ai.path)
-		const model = monaco.editor.getModel(resource) || monaco.editor.createModel(ai.code, 'leekscript', uri)
+		const uri = monaco.Uri.file(ai.path)
+		const model = monaco.editor.getModel(resource) || markRaw(monaco.editor.createModel(ai.code, getLanguageForPath(ai.path), uri))
 		ai.model = model
 		const range = selectionOrPosition as monaco.IRange
 		emitter.emit('jump', { ai, line: range.startLineNumber, column: range.startColumn - 1 })
@@ -179,11 +169,27 @@ monaco.editor.registerEditorOpener({
 	},
 })
 
+const ANNOTATION_NAMES = new Set(['unused', 'deprecated', 'pure', 'nodiscard', 'override', 'tailrec', 'todo'])
+
 monaco.languages.registerHoverProvider("leekscript", {
-	provideHover: async (model, position, token, context) => {
-		// console.log("hover", model.uri.path)
+	provideHover: async (model, position, _token, _context) => {
+		// Annotations hover — resolved locally, no server round-trip
+		const lineText = model.getLineContent(position.lineNumber)
+		const word = model.getWordAtPosition(position)
+		if (word && lineText[word.startColumn - 2] === '@' && ANNOTATION_NAMES.has(word.word)) {
+			const name = word.word
+			const doc = i18n.t('leekscript.annotation_' + name) as string
+			return {
+				range: new monaco.Range(position.lineNumber, word.startColumn - 1, position.lineNumber, word.endColumn),
+				contents: [
+					{ value: '**@' + name + '**' },
+					{ value: doc },
+				],
+			}
+		}
 
 		const ai = fileSystem.aiByFullPath[model.uri.path.substring(1)]
+		if (!ai) { return null }
 
 		const hover = await analyzer.hover(ai, position.lineNumber, position.column - 1)
 		// console.log(hover)
@@ -202,11 +208,13 @@ monaco.languages.registerHoverProvider("leekscript", {
 
 			const symbol = ai.searchSymbol(mainToken, previousToken)
 			if (hover.defined) {
-				const ai = fileSystem.ais[hover.defined[0]]
-				const line = hover.defined[1]
-				const column = hover.defined[2]
-				const args = encodeURIComponent(JSON.stringify({ ai: ai.path, line, column }))
-				details += "[" + i18n.t('leekscript.defined_in', [ '`' + ai.path + '`', line ]) + "](command:jump?" + args + ' "' + ai.path + ':' + line + ':' + column + '")'
+				const defAi = fileSystem.ais[hover.defined[0]]
+				if (defAi) {
+					const line = hover.defined[1]
+					const column = hover.defined[2]
+					const args = encodeURIComponent(JSON.stringify({ ai: defAi.path, line, column }))
+					details += "[" + i18n.t('leekscript.defined_in', [ '`' + defAi.path + '`', line ]) + "](command:jump?" + args + ' "' + defAi.path + ':' + line + ':' + column + '")'
+				}
 				if (symbol) {
 					fileSystem.symbols[text] = symbol
 				}
@@ -235,7 +243,7 @@ monaco.languages.registerHoverProvider("leekscript", {
 })
 
 monaco.languages.registerDefinitionProvider("leekscript", {
-	provideDefinition: async (model, position, token) => {
+	provideDefinition: async (model, position, _token) => {
 		// console.log("provideDefinition", model.uri.path, position.lineNumber, position.column)
 
 		// Make a fresh hover request instead of using potentially stale lastHover
@@ -251,7 +259,8 @@ monaco.languages.registerDefinitionProvider("leekscript", {
 				hover.defined[4],
 			)
 			const targetAi = fileSystem.ais[hover.defined[0]]
-			const uri = monaco.Uri.parse('file:///' + targetAi.path)
+			if (!targetAi) return null
+			const uri = monaco.Uri.file(targetAi.path)
 			return {
 				range,
 				uri
@@ -268,6 +277,269 @@ monaco.languages.registerDefinitionProvider("leekscript", {
 		}
 	},
 })
+
+function findEnclosingClassName(ai: AI, line: number): string {
+	let className = ''
+	for (const cn in ai.classes) {
+		if (ai.classes[cn].line! <= line) className = cn
+	}
+	return className
+}
+
+function countConstructorParams(lineContent: string): number {
+	const m = lineContent.match(/\(([^)]*)\)/)
+	return m && m[1].trim() ? m[1].split(',').length : 0
+}
+
+monaco.languages.registerReferenceProvider("leekscript", {
+	provideReferences: async (model, position, _context, _token) => {
+		const ai = fileSystem.aiByFullPath[model.uri.path.substring(1)]
+		if (!ai) { return [] }
+
+		const word = model.getWordAtPosition(position)
+		let locations: [string, number, number, number, number][]
+		if (word && word.word === 'constructor') {
+			const className = findEnclosingClassName(ai, position.lineNumber)
+			if (!className) { return [] }
+			const cls = ai.classes[className]
+			const clsContent = model.getLineContent(cls.line!)
+			const clsCol = clsContent.indexOf(className)
+			if (clsCol < 0) { return [] }
+			const paramCount = countConstructorParams(model.getLineContent(position.lineNumber))
+			locations = await analyzer.references(ai, cls.line!, clsCol, paramCount)
+		} else {
+			locations = await analyzer.references(ai, position.lineNumber, position.column - 1)
+		}
+		if (!locations || !locations.length) { return [] }
+
+		// Load all referenced files in parallel
+		const uniqueAis = new Map<string, AI>()
+		for (const loc of locations) {
+			const targetAi = fileSystem.ais[loc[0]]
+			if (targetAi && !uniqueAis.has(loc[0])) { uniqueAis.set(loc[0], targetAi) }
+		}
+		await Promise.all([...uniqueAis.values()].map((a) => fileSystem.load(a)))
+
+		const results: monaco.languages.Location[] = []
+		for (const loc of locations) {
+			const targetAi = fileSystem.ais[loc[0]]
+			if (!targetAi) { continue }
+			const uri = monaco.Uri.file(targetAi.path)
+			if (!monaco.editor.getModel(uri) && targetAi.code !== undefined) {
+				targetAi.model = markRaw(monaco.editor.createModel(targetAi.code, getLanguageForPath(targetAi.path), uri))
+			}
+			results.push({
+				uri,
+				range: new monaco.Range(loc[1], loc[2] + 1, loc[3], loc[4] + 2),
+			})
+		}
+		return results
+	},
+})
+
+monaco.languages.registerCodeLensProvider("leekscript", {
+	provideCodeLenses: (model, _token) => {
+		const ai = fileSystem.aiByFullPath[model.uri.path.substring(1)]
+		if (!ai) { return { lenses: [], dispose: () => {} } }
+
+		const lenses: monaco.languages.CodeLens[] = []
+		const addLens = (lineHint: number, label: string, isMethod: boolean) => {
+			const pattern = isMethod ? label + '(' : label
+			for (let offset = 0; offset <= 3; offset++) {
+				for (const line of [lineHint + offset, lineHint - offset]) {
+					if (line < 1 || line > model.getLineCount()) continue
+					const content = model.getLineContent(line)
+					const col = content.indexOf(pattern)
+					if (col < 0) continue
+					const indent = content.search(/\S/) + 1
+					lenses.push({
+						range: new monaco.Range(line, indent, line, indent),
+						id: 'ref:' + line + ':' + col,
+					})
+					return
+				}
+			}
+		}
+		for (const fun of ai.functions) {
+			if (fun.line) addLens(fun.line, fun.label, true)
+		}
+		for (const name in ai.globals) {
+			const glob = ai.globals[name]
+			if (glob.line) addLens(glob.line, name, false)
+		}
+		for (const name in ai.classes) {
+			const cls = ai.classes[name]
+			if (cls.line) addLens(cls.line, name, false)
+		}
+		// Scan methods directly from code (line-by-line to avoid multi-line regex issues in ai.ts)
+		for (let i = 0; i < model.getLineCount(); i++) {
+			const m = METHOD_REGEX.exec(model.getLineContent(i + 1))
+			if (!m) continue
+			const name = m[1] || m[2]
+			if (NON_METHOD_KEYWORDS.has(name)) continue
+			if (name === 'constructor') {
+				const className = findEnclosingClassName(ai, i + 1)
+				if (className) {
+					const content = model.getLineContent(i + 1)
+					const indent = content.search(/\S/) + 1
+					lenses.push({
+						range: new monaco.Range(i + 1, indent, i + 1, indent),
+						id: 'ctor:' + className + ':' + countConstructorParams(content),
+					})
+				}
+				continue
+			}
+			addLens(i + 1, name, true)
+		}
+		return { lenses, dispose: () => {} }
+	},
+	resolveCodeLens: async (model, codeLens, _token) => {
+		const ai = fileSystem.aiByFullPath[model.uri.path.substring(1)]
+		if (!ai || !codeLens.id) { return codeLens }
+
+		if (codeLens.id.startsWith('ctor:')) {
+			const parts = codeLens.id.split(':')
+			const className = parts[1]
+			const paramCount = parseInt(parts[2])
+			const cls = ai.classes[className]
+			if (!cls || !cls.line) { return codeLens }
+			const clsContent = model.getLineContent(cls.line)
+			const clsCol = clsContent.indexOf(className)
+			if (clsCol < 0) { return codeLens }
+
+			const locations = await analyzer.references(ai, cls.line, clsCol, paramCount)
+			const count = locations?.length || 0
+
+			const ctorLine = codeLens.range.startLineNumber
+			const ctorContent = model.getLineContent(ctorLine)
+			const ctorCol = ctorContent.indexOf('constructor') + 1
+			codeLens.command = {
+				id: 'findReferencesAtPosition',
+				title: count === 0 ? 'no usages' : count === 1 ? '1 usage' : count + ' usages',
+				arguments: [model.uri, new monaco.Position(ctorLine, ctorCol)],
+			}
+			return codeLens
+		}
+
+		const [, lineStr, colStr] = codeLens.id.split(':')
+		const line = parseInt(lineStr)
+		const column = parseInt(colStr)
+
+		const locations = await analyzer.references(ai, line, column)
+		const count = locations?.length || 0
+
+		codeLens.command = {
+			id: 'findReferencesAtPosition',
+			title: count === 0 ? 'no references' : count === 1 ? '1 reference' : count + ' references',
+			arguments: [model.uri, new monaco.Position(line, column + 1)],
+		}
+		return codeLens
+	},
+})
+
+monaco.languages.registerDocumentSymbolProvider("leekscript", {
+	provideDocumentSymbols(model) {
+		const ai = fileSystem.aiByFullPath[model.uri.path.substring(1)]
+		if (!ai) { return [] }
+		const lineCount = model.getLineCount()
+
+		const symbols: monaco.languages.DocumentSymbol[] = []
+
+		// Functions
+		for (const fun of ai.functions) {
+			if (!fun.line || fun.line < 1 || fun.line > lineCount) continue
+			const endLine = findBlockEnd(model, fun.line)
+			symbols.push({
+				name: fun.label + '(' + (fun.arguments || []).join(', ') + ')',
+				detail: '',
+				kind: monaco.languages.SymbolKind.Function,
+				range: new monaco.Range(fun.line, 1, endLine, model.getLineContent(endLine).length + 1),
+				selectionRange: new monaco.Range(fun.line, 1, fun.line, model.getLineContent(fun.line).length + 1),
+				tags: [],
+			})
+		}
+
+		// Classes with their members
+		for (const name in ai.classes) {
+			const cls = ai.classes[name]
+			if (!cls.line || cls.line < 1 || cls.line > lineCount) continue
+			const classEndLine = findBlockEnd(model, cls.line)
+			const children: monaco.languages.DocumentSymbol[] = []
+
+			// Methods (scan code like CodeLens does)
+			for (let i = cls.line; i <= classEndLine; i++) {
+				const m = METHOD_REGEX.exec(model.getLineContent(i))
+				if (!m) continue
+				const methodName = m[1] || m[2]
+				if (NON_METHOD_KEYWORDS.has(methodName)) continue
+				const methodEndLine = findBlockEnd(model, i)
+				children.push({
+					name: methodName,
+					detail: '',
+					kind: methodName === 'constructor' ? monaco.languages.SymbolKind.Constructor : monaco.languages.SymbolKind.Method,
+					range: new monaco.Range(i, 1, methodEndLine, model.getLineContent(methodEndLine).length + 1),
+					selectionRange: new monaco.Range(i, 1, i, model.getLineContent(i).length + 1),
+					tags: [],
+				})
+			}
+
+			// Fields
+			for (const field of [...cls.fields, ...cls.static_fields]) {
+				if (!field.line || field.line < cls.line || field.line > classEndLine) continue
+				if (!field.ai || RESERVED_SYMBOLS.has(field.label)) continue
+				children.push({
+					name: field.label,
+					detail: '',
+					kind: monaco.languages.SymbolKind.Field,
+					range: new monaco.Range(field.line, 1, field.line, model.getLineContent(field.line).length + 1),
+					selectionRange: new monaco.Range(field.line, 1, field.line, model.getLineContent(field.line).length + 1),
+					tags: [],
+				})
+			}
+
+			symbols.push({
+				name,
+				detail: '',
+				kind: monaco.languages.SymbolKind.Class,
+				range: new monaco.Range(cls.line, 1, classEndLine, model.getLineContent(classEndLine).length + 1),
+				selectionRange: new monaco.Range(cls.line, 1, cls.line, model.getLineContent(cls.line).length + 1),
+				tags: [],
+				children,
+			})
+		}
+
+		// Global variables
+		for (const name in ai.globals) {
+			if (RESERVED_SYMBOLS.has(name)) continue
+			const g = ai.globals[name]
+			if (!g.line) continue
+			symbols.push({
+				name,
+				detail: '',
+				kind: monaco.languages.SymbolKind.Variable,
+				range: new monaco.Range(g.line, 1, g.line, model.getLineContent(g.line).length + 1),
+				selectionRange: new monaco.Range(g.line, 1, g.line, model.getLineContent(g.line).length + 1),
+				tags: [],
+			})
+		}
+
+		return symbols
+	},
+})
+
+function findBlockEnd(model: monaco.editor.ITextModel, startLine: number): number {
+	let depth = 0
+	let found = false
+	for (let i = startLine; i <= model.getLineCount(); i++) {
+		const line = model.getLineContent(i)
+		for (const ch of line) {
+			if (ch === '{') { depth++; found = true }
+			else if (ch === '}') { depth-- }
+			if (found && depth === 0) return i
+		}
+	}
+	return startLine
+}
 
 monaco.languages.registerDocumentFormattingEditProvider("leekscript", {
 	async provideDocumentFormattingEdits(model) {
@@ -329,7 +601,7 @@ LeekWars.completionsProvider = monaco.languages.registerCompletionItemProvider("
 			startColumn: word.startColumn,
 			endColumn: word.endColumn,
 		}
-		const suggestions = (completions ? completions.items.map((i: any) => ({
+		const suggestions = (completions ? completions.items.map((i) => ({
 			label: i.name,
 			kind: monaco.languages.CompletionItemKind.Function,
 			documentation: "Describe your library here",
@@ -337,7 +609,7 @@ LeekWars.completionsProvider = monaco.languages.registerCompletionItemProvider("
 			range,
 		})) : []) as monaco.languages.CompletionItem[]
 
-		const visited = new Set<number>()
+		const visited = new Set<string>()
 		const maybeAdd = (data: string | Keyword) => {
 			// console.log("keyword", data)
 			if (typeof data === 'string') {
@@ -367,7 +639,7 @@ LeekWars.completionsProvider = monaco.languages.registerCompletionItemProvider("
 		}
 		if (isDot) {
 			// ClassName.<field>
-			const visited = new Set<number>()
+			const visited = new Set<string>()
 			addDotCompletionsFromAI(tokenBeforeDot, word.word, suggestions, visited, ai, range)
 
 			for (const entrypoint_id of ai.entrypoints) {
@@ -387,10 +659,9 @@ LeekWars.completionsProvider = monaco.languages.registerCompletionItemProvider("
 	}
 })
 
-function addCompletionsFromAI(start: string, completions: monaco.languages.CompletionItem[], visited: Set<number>, ai: AI, range: monaco.IRange) {
-	if (visited.has(ai.id)) { return }
-	visited.add(ai.id)
-	// console.log("add completions from ai", ai.id)
+function addCompletionsFromAI(start: string, completions: monaco.languages.CompletionItem[], visited: Set<string>, ai: AI, range: monaco.IRange) {
+	if (visited.has(ai.path)) { return }
+	visited.add(ai.path)
 	// Globales
 	for (const variable in ai.globals) {
 		if (variable.toLowerCase().indexOf(start.toLowerCase()) === 0) {
@@ -426,12 +697,10 @@ function addCompletionsFromAI(start: string, completions: monaco.languages.Compl
 	}
 }
 
-function addDotCompletionsFromAI(tokenBeforeDot: string, start: string, completions: monaco.languages.CompletionItem[], visited: Set<number>, ai: AI, range: monaco.IRange) {
+function addDotCompletionsFromAI(tokenBeforeDot: string, start: string, completions: monaco.languages.CompletionItem[], visited: Set<string>, ai: AI, range: monaco.IRange) {
 
-	// console.log("dot completions", ai)
-
-	if (visited.has(ai.id)) { return }
-	visited.add(ai.id)
+	if (visited.has(ai.path)) { return }
+	visited.add(ai.path)
 
 	if (tokenBeforeDot in ai.classes) {
 		const clazz = ai.classes[tokenBeforeDot]

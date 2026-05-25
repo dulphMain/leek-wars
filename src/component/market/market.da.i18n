@@ -8,7 +8,7 @@
 	"cannot_buy": "Denne vare kan ikke købes",
 	"chip": "Chip",
 	"chip_bought": "Chip købt!",
-	"chips": "Lopper",
+	"chips": "Chips",
 	"chip_selled": "Chip solgt!",
 	"confirm_purchase": "Bekræft køb",
 	"confirm_sell": "Bekræft salget",
@@ -18,6 +18,7 @@
 	"error_already_bought_fights_with_habs": "Du kan kun købe én kamppakke i Habs om dagen",
 	"error_not_enough_habs": "Du har ikke nok Habs",
 	"error_not_enough_crystals": "Du har ikke nok krystaller",
+	"not_enough_crystals": "Nogle få krystaller mere, og den er din!",
 	"fights": "Kampe",
 	"fights_bought": "Købte kampe!",
 	"habs_after_purchase": "Habs efter køb",
@@ -30,7 +31,7 @@
 	"n_fights": "{0} kampe",
 	"new_item_unlocked": "Ny vare låst op!",
 	"not_sellable": "Varen kan ikke gensalgs",
-	"pomps": "Apparat",
+	"pomps": "Pynt",
 	"potion": "Potion",
 	"potion_bought": "Drik købt!",
 	"potions": "Potions",
@@ -42,9 +43,10 @@
 	"summon_characteristics": "Funktioner",
 	"title": "Marked",
 	"unlocked_with": "Låst op med {trophy}-trofæet",
-	"weapon": "Bevæbnet",
+	"weapon": "Våben",
 	"weapon_bought": "Våben købt!",
 	"weapons": "Våben",
 	"weapon_selled": "Våben solgt!",
-	"item_progress": "Varefremskridt"
+	"item_progress": "Varefremskridt",
+	"schemes": "Skemaer"
 }

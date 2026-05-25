@@ -59,6 +59,7 @@ class Sound {
 	}
 	public changeVolume(volume: number) {
 		this.sound.volume = volume * this.volume;
+		this.sound.muted = volume === 0;
 	}
 
 	public play(game: Game) {
@@ -163,4 +164,4 @@ class S {
 	}
 }
 
-export { S, Sound, VOL_MAP_SOUND }
+export { S, Sound }

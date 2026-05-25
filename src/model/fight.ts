@@ -10,6 +10,16 @@ enum FightType {
 	TEAM = 2,
 	BATTLE_ROYALE = 3,
 	BOSS = 4,
+	WAR = 5,
+	CHEST_HUNT = 6,
+	COLOSSUS = 7,
+}
+
+enum ArenaMode {
+	BATTLE_ROYALE = 0,
+	WAR = 1,
+	CHEST_HUNT = 2,
+	COLOSSUS = 3,
 }
 
 enum FightContext {
@@ -29,10 +39,16 @@ class ReportLeek {
 	next_xp!: number
 	prev_xp!: number
 	aiTime!: number
-	weapon!: any
+	weapon!: number | null
 	resources!: {[key: number]: number}
 	mob!: boolean
 	xp_locked!: boolean
+	dead?: boolean
+	level?: number
+	money?: number
+	talent?: number
+	talent_gain?: number
+	[key: string]: unknown
 }
 
 class ReportFarmer {
@@ -45,12 +61,19 @@ class ReportFarmer {
 class ReportTeam {
 	id!: number
 	name!: string
+	level!: number
+	talent!: number
+	talent_gain!: number
+	xp!: number
+	cur_xp!: number
+	prev_xp!: number
+	next_xp!: number
 }
 
 class Report {
 	public win!: number
 	public bonus!: number
-	public ai_times!: any[]
+	public ai_times!: number[]
 	public leeks!: ReportLeek[]
 	public leeks1!: ReportLeek[]
 	public leeks2!: ReportLeek[]
@@ -58,6 +81,8 @@ class Report {
 	public farmer2!: ReportFarmer
 	public team1!: ReportTeam
 	public team2!: ReportTeam
+	public flags1!: string[]
+	public flags2!: string[]
 	public duration!: number
 }
 
@@ -71,6 +96,10 @@ class Fight {
 	public leeks2!: Leek[]
 	public farmer1!: number
 	public farmer2!: number
+	public farmer1_name?: string
+	public farmer2_name?: string
+	public composition1?: number
+	public composition2?: number
 	public team1!: Team | null
 	public team2!: Team | null
 	public title!: string
@@ -84,12 +113,19 @@ class Fight {
 	public report!: Report
 	public winner!: number
 	public queue!: number
-	public trophies!: any[]
+	public trophies!: { trophy: number, name: string, farmer: Farmer }[]
 	public boss_name?: string
 	public chests!: number
 	public size!: number
+	public generation_time!: number
 	public levelups!: number
 	public rareloot!: number
+	public starter?: number
+	public views?: number
+	public too_long?: boolean
+	public tournament?: number
+	public seed?: number
+	[key: string]: unknown
 }
 
 class FightMap {
@@ -99,7 +135,7 @@ class FightMap {
 	public obstacles!: {[key: number]: number[]}
 	public type!: number
 	public pattern!: number[]
-	public players!: any
+	public players!: {[key: number]: number[]}
 }
 
 class FightLeek {
@@ -136,13 +172,21 @@ class FightLeek {
 	public orientation!: number
 }
 
+/**
+ * Raw action array from the server: [ActionType, ...params].
+ * Most elements are numbers; in MOVE_TO actions, element [3] is a number[].
+ * Typed as number[] for ergonomics; cast element [3] to number[] in MOVE_TO.
+ */
+type RawAction = number[]
+
 class FightData {
-	public actions!: any[][]
+	public actions!: RawAction[]
 	public map!: FightMap
 	public leeks!: FightLeek[]
 	public team1!: number[]
 	public team2!: number[]
-	public ops!: any
+	public ops!: {[key: number]: number}
 }
 
-export { Fight, FightType, FightContext, Report, ReportLeek, ReportFarmer, ReportTeam, FightLeek, FightMap, FightData }
+export { Fight, FightType, FightContext, ArenaMode, Report, ReportLeek, ReportFarmer, ReportTeam, FightLeek, FightMap, FightData }
+export type { RawAction }

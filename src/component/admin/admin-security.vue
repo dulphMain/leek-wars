@@ -1,0 +1,597 @@
+<template>
+	<div class="page">
+		<div class="page-header page-bar">
+			<h1><breadcrumb :items="[{name: 'Administration', link: '/admin'}, {name: 'Sécurité', link: '/admin/security'}]" :raw="true" /></h1>
+		</div>
+
+		<panel class="first">
+			<template #content>
+				<div class="aggregates">
+					<div class="period-bar">
+						<span>Fenêtre :</span>
+						<v-btn-toggle v-model="periodHours" mandatory density="compact" @update:modelValue="loadAggregates">
+							<v-btn :value="1" size="small">1h</v-btn>
+							<v-btn :value="24" size="small">24h</v-btn>
+							<v-btn :value="168" size="small">7j</v-btn>
+							<v-btn :value="720" size="small">30j</v-btn>
+						</v-btn-toggle>
+						<span v-if="aggregates" class="total">{{ aggregates.total.toLocaleString() }} événements</span>
+						<v-btn size="small" :loading="aggLoading" @click="loadAggregates"><v-icon>mdi-refresh</v-icon></v-btn>
+					</div>
+
+					<loader v-if="aggLoading && !aggregates" />
+
+					<div v-if="aggregates" class="agg-grid">
+						<div class="agg-card">
+							<h4>Top IPs</h4>
+							<table>
+								<thead><tr><th>IP</th><th>Hits</th><th>Codes</th><th>👤</th></tr></thead>
+								<tbody>
+									<tr v-for="row in aggregates.top_ips" :key="row.ip" class="clickable" @click="openIpDetail(row.ip)">
+										<td class="mono">{{ row.ip }}</td>
+										<td class="num">{{ row.count }}</td>
+										<td class="num">{{ row.error_codes }}</td>
+										<td class="num">{{ row.farmers || '' }}</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+
+						<div class="agg-card">
+							<h4>Top endpoints</h4>
+							<table>
+								<thead><tr><th>Endpoint</th><th>Erreur</th><th>Hits</th></tr></thead>
+								<tbody>
+									<tr v-for="(row, i) in aggregates.top_endpoints" :key="i" class="clickable" @click="filterByEndpoint(row.module, row.function)">
+										<td class="mono">{{ row.module }}/{{ row.function }}</td>
+										<td><span class="code-badge" :class="codeSeverity(row.error_code)">{{ row.error_code }}</span></td>
+										<td class="num">{{ row.count }}</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+
+						<div class="agg-card">
+							<h4>Top User-Agents</h4>
+							<table>
+								<thead><tr><th>UA</th><th>Hits</th><th>IPs</th></tr></thead>
+								<tbody>
+									<tr v-for="(row, i) in aggregates.top_user_agents" :key="i" class="clickable" @click="filterByQuery(row.user_agent)">
+										<td class="mono ua">{{ row.user_agent }}</td>
+										<td class="num">{{ row.count }}</td>
+										<td class="num">{{ row.ips }}</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+
+						<div class="agg-card">
+							<h4>Top codes d'erreur</h4>
+							<table>
+								<thead><tr><th>Code</th><th>HTTP</th><th>Hits</th></tr></thead>
+								<tbody>
+									<tr v-for="(row, i) in aggregates.top_errors" :key="i" class="clickable" @click="filterByErrorCode(row.error_code)">
+										<td><span class="code-badge" :class="codeSeverity(row.error_code)">{{ row.error_code }}</span></td>
+										<td class="num">{{ row.http_status }}</td>
+										<td class="num">{{ row.count }}</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</template>
+		</panel>
+
+		<panel class="last">
+			<template #content>
+				<div class="filters">
+					<input v-model="filters.ip" placeholder="IP" class="filter-input" @keyup.enter="searchLogs" />
+					<input v-model="filters.error_code" placeholder="error_code" class="filter-input" @keyup.enter="searchLogs" />
+					<input v-model="filters.module" placeholder="module" class="filter-input" @keyup.enter="searchLogs" />
+					<input v-model="filters.function" placeholder="function" class="filter-input" @keyup.enter="searchLogs" />
+					<input v-model="filters.farmer_id" placeholder="farmer_id" type="number" class="filter-input" @keyup.enter="searchLogs" />
+					<input v-model="filters.http_status" placeholder="HTTP" type="number" class="filter-input small" @keyup.enter="searchLogs" />
+					<input v-model="filters.query" placeholder="cherche dans URI / UA" class="filter-input grow" @keyup.enter="searchLogs" />
+					<v-btn size="small" color="primary" :loading="logsLoading" @click="searchLogs">Filtrer</v-btn>
+					<v-btn size="small" @click="resetFilters">Reset</v-btn>
+				</div>
+
+				<loader v-if="logsLoading && !logs" />
+				<div v-else-if="logs && logs.length === 0" class="empty">Aucun événement.</div>
+				<div v-else-if="logs" class="log-list">
+					<div class="log-summary">{{ total.toLocaleString() }} résultat(s) — page {{ page }} / {{ totalPages }}</div>
+					<div v-for="row in logs" :key="row.id" class="log-row" :class="{ expanded: expanded[row.id] }" @click="toggleExpand(row.id)">
+						<div class="log-line">
+							<span class="status" :class="httpClass(row.http_status)">{{ row.http_status }}</span>
+							<span class="code-badge" :class="codeSeverity(row.error_code)">{{ row.error_code }}</span>
+							<span class="method">{{ row.method }}</span>
+							<span class="uri" :title="row.uri">{{ row.uri }}</span>
+							<span class="spacer"></span>
+							<router-link v-if="row.farmer_id" :to="'/farmer/' + row.farmer_id" class="farmer-badge" @click.stop>
+								{{ row.farmer_name || ('#' + row.farmer_id) }}
+							</router-link>
+							<span class="ip clickable" @click.stop="openIpDetail(row.ip)">{{ row.ip }}</span>
+							<span v-if="row.user_agent" class="ua-short" :title="row.user_agent">{{ formatUA(row.user_agent) }}</span>
+							<span class="date">{{ formatDate(row.date) }}</span>
+						</div>
+						<div v-if="expanded[row.id]" class="log-detail">
+							<div v-if="row.user_agent"><b>UA :</b> <span class="mono">{{ row.user_agent }}</span></div>
+							<div v-if="row.referer"><b>Referer :</b> <span class="mono">{{ row.referer }}</span></div>
+							<div v-if="row.params"><b>Params :</b> <pre>{{ JSON.stringify(row.params, null, 2) }}</pre></div>
+							<div v-if="row.extra"><b>Extra :</b> <pre>{{ JSON.stringify(row.extra, null, 2) }}</pre></div>
+						</div>
+					</div>
+
+					<div v-if="totalPages > 1" class="pagination">
+						<v-btn size="small" :disabled="page <= 1" @click="goToPage(page - 1)">Précédent</v-btn>
+						<span>Page {{ page }} / {{ totalPages }}</span>
+						<v-btn size="small" :disabled="page >= totalPages" @click="goToPage(page + 1)">Suivant</v-btn>
+					</div>
+				</div>
+			</template>
+		</panel>
+
+		<v-dialog v-model="ipDialogOpen" max-width="900">
+			<div class="ip-dialog">
+				<div class="ip-dialog-header">
+					<h2>{{ ipDialogIp }}</h2>
+					<v-btn icon @click="ipDialogOpen = false"><v-icon>mdi-close</v-icon></v-btn>
+				</div>
+				<loader v-if="ipDialogLoading" />
+				<div v-else-if="ipDialogData">
+					<div class="ip-stats">
+						<div><b>{{ ipDialogData.total }}</b> événements</div>
+						<div v-if="ipDialogData.farmers && ipDialogData.farmers.length">
+							<b>Joueurs liés :</b>
+							<router-link v-for="f in ipDialogData.farmers" :key="f.id" :to="'/farmer/' + f.id" class="farmer-link">{{ f.name }}</router-link>
+						</div>
+					</div>
+					<div class="ip-logs">
+						<div v-for="row in ipDialogData.logs" :key="row.id" class="log-row compact">
+							<span class="status" :class="httpClass(row.http_status)">{{ row.http_status }}</span>
+							<span class="code-badge" :class="codeSeverity(row.error_code)">{{ row.error_code }}</span>
+							<span class="method">{{ row.method }}</span>
+							<span class="uri">{{ row.uri }}</span>
+							<span class="date">{{ formatDate(row.date) }}</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</v-dialog>
+	</div>
+</template>
+
+<script lang="ts" setup>
+	import { LeekWars } from '@/model/leekwars'
+	import { store } from '@/model/store'
+	import { computed, ref } from 'vue'
+	import { useRoute, useRouter } from 'vue-router'
+	import Breadcrumb from '@/component/forum/breadcrumb.vue'
+
+	interface Filters {
+		ip: string
+		error_code: string
+		module: string
+		function: string
+		farmer_id: string
+		http_status: string
+		query: string
+	}
+
+	interface SecurityAggregates {
+		total: number
+		top_ips: { ip: string; count: number; error_codes: string; farmers: number }[]
+		top_endpoints: { module: string; function: string; error_code: string; count: number }[]
+		top_user_agents: { user_agent: string; count: number; ips: number }[]
+		top_errors: { error_code: string; http_status: number; count: number }[]
+	}
+
+	interface SecurityLogEntry {
+		id: number
+		date: number
+		ip: string
+		http_status: number
+		error_code: string
+		method: string
+		uri: string
+		farmer_id?: number
+		farmer_name?: string
+		user_agent?: string
+		referer?: string
+		params?: unknown
+		extra?: unknown
+	}
+
+	interface IpDialogData {
+		total: number
+		farmers?: { id: number; name: string }[]
+		logs: SecurityLogEntry[]
+	}
+
+	function emptyFilters(): Filters {
+		return { ip: '', error_code: '', module: '', function: '', farmer_id: '', http_status: '', query: '' }
+	}
+
+	const router = useRouter()
+	const route = useRoute()
+
+	const periodHours = ref(24)
+	const aggregates = ref<SecurityAggregates | null>(null)
+	const aggLoading = ref(false)
+
+	const filters = ref<Filters>(emptyFilters())
+	const logs = ref<SecurityLogEntry[] | null>(null)
+	const total = ref(0)
+	const page = ref(1)
+	const pageSize = ref(50)
+	const logsLoading = ref(false)
+	const expanded = ref<Record<number, boolean>>({})
+
+	const ipDialogOpen = ref(false)
+	const ipDialogIp = ref('')
+	const ipDialogData = ref<IpDialogData | null>(null)
+	const ipDialogLoading = ref(false)
+
+	if (!store.getters.admin) router.replace('/')
+	LeekWars.setTitle('Sécurité')
+	if (route.query.module) filters.value.module = String(route.query.module)
+	if (route.query.function) filters.value.function = String(route.query.function)
+	loadAggregates()
+	searchLogs()
+
+	const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+
+	function loadAggregates() {
+		aggLoading.value = true
+		LeekWars.post('admin/security-log-aggregates', { period_hours: periodHours.value }).then((data) => {
+			aggregates.value = data
+			aggLoading.value = false
+		}).catch(() => {
+			aggLoading.value = false
+		})
+	}
+
+	function searchLogs() {
+		logsLoading.value = true
+		const f: Record<string, string | number> = {}
+		for (const key of Object.keys(filters.value) as (keyof Filters)[]) {
+			const v = filters.value[key]
+			if (v !== '' && v !== null && v !== undefined) {
+				f[key] = (key === 'farmer_id' || key === 'http_status') ? parseInt(v, 10) : v
+			}
+		}
+		LeekWars.post('admin/security-log', { filters: f, page: page.value, page_size: pageSize.value }).then((data) => {
+			logs.value = (data as { logs: SecurityLogEntry[]; total: number }).logs
+			total.value = (data as { logs: SecurityLogEntry[]; total: number }).total
+			logsLoading.value = false
+		}).catch(() => {
+			logsLoading.value = false
+		})
+	}
+
+	function goToPage(p: number) {
+		page.value = p
+		searchLogs()
+	}
+
+	function resetFilters() {
+		filters.value = emptyFilters()
+		page.value = 1
+		searchLogs()
+	}
+
+	function filterByErrorCode(code: string) {
+		filters.value = { ...emptyFilters(), error_code: code }
+		page.value = 1
+		searchLogs()
+	}
+
+	function filterByEndpoint(module: string, fn: string) {
+		filters.value = { ...emptyFilters(), module, function: fn }
+		page.value = 1
+		searchLogs()
+	}
+
+	function filterByQuery(q: string) {
+		filters.value = { ...emptyFilters(), query: q }
+		page.value = 1
+		searchLogs()
+	}
+
+	function toggleExpand(id: number) {
+		expanded.value = { ...expanded.value, [id]: !expanded.value[id] }
+	}
+
+	function openIpDetail(ip: string) {
+		ipDialogIp.value = ip
+		ipDialogOpen.value = true
+		ipDialogLoading.value = true
+		ipDialogData.value = null
+		LeekWars.get('admin/security-log-ip/' + encodeURIComponent(ip)).then((data) => {
+			ipDialogData.value = data
+			ipDialogLoading.value = false
+		}).catch(() => {
+			ipDialogLoading.value = false
+		})
+	}
+
+	function formatDate(ms: number): string {
+		return LeekWars.formatDateTime(Math.floor(ms / 1000))
+	}
+
+	function formatUA(ua: string): string {
+		return LeekWars.parseUserAgent(ua)
+	}
+
+	function httpClass(status: number): string {
+		if (status >= 500) return 'http-5xx'
+		if (status === 429) return 'http-429'
+		if (status >= 400) return 'http-4xx'
+		return 'http-ok'
+	}
+
+	function codeSeverity(code: string): string {
+		if (!code) return 'sev-low'
+		if (code.includes('admin') || code.includes('moderator')) return 'sev-high'
+		if (code === 'rate_limit' || code === 'wrong_token_invalid') return 'sev-mid'
+		if (code === 'no_such_service') return 'sev-mid'
+		return 'sev-low'
+	}
+</script>
+
+<style lang="scss" scoped>
+	.aggregates {
+		padding: 10px;
+	}
+	.period-bar {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin-bottom: 12px;
+		.total {
+			font-weight: bold;
+			color: var(--text-color-secondary);
+		}
+	}
+	.agg-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+		gap: 10px;
+	}
+	.agg-card {
+		background: var(--pure-white);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		padding: 8px;
+		h4 {
+			margin: 0 0 6px;
+			font-size: 14px;
+			color: var(--text-color-secondary);
+		}
+		table {
+			width: 100%;
+			border-collapse: collapse;
+			font-size: 12px;
+		}
+		th, td {
+			padding: 3px 4px;
+			text-align: left;
+			border-bottom: 1px solid var(--border);
+		}
+		th {
+			color: var(--text-color-secondary);
+			font-weight: normal;
+		}
+		.num { text-align: right; font-variant-numeric: tabular-nums; }
+		.mono { font-family: monospace; }
+		.ua { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.clickable { cursor: pointer; }
+		.clickable:hover { background: var(--background-secondary); }
+	}
+
+	.filters {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		padding: 10px;
+		background: var(--background-header);
+		border-bottom: 1px solid var(--border);
+	}
+	.filter-input {
+		padding: 4px 8px;
+		border: 1px solid var(--border);
+		border-radius: 3px;
+		font-size: 13px;
+		flex: 0 0 auto;
+		width: 130px;
+		background: var(--pure-white);
+		color: var(--text-color);
+		&.small { width: 70px; }
+		&.grow { flex: 1 1 200px; min-width: 180px; }
+	}
+
+	.empty {
+		padding: 30px;
+		text-align: center;
+		color: var(--text-color-secondary);
+	}
+	.log-list {
+		padding: 8px 10px;
+	}
+	.log-summary {
+		font-size: 12px;
+		color: var(--text-color-secondary);
+		margin-bottom: 6px;
+	}
+	.log-row {
+		border-bottom: 1px solid var(--border);
+		padding: 6px 4px;
+		cursor: pointer;
+		font-size: 13px;
+		&:hover { background: var(--background-secondary); }
+		&.expanded { background: var(--background-secondary); }
+		&.compact {
+			cursor: default;
+			&:hover { background: transparent; }
+		}
+	}
+	.log-line {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.spacer { flex: 1; }
+	.status {
+		font-family: monospace;
+		font-weight: bold;
+		padding: 1px 6px;
+		border-radius: 3px;
+		font-size: 12px;
+		&.http-ok { background: #c8e6c9; color: #2e7d32; }
+		&.http-4xx { background: #ffe0b2; color: #e65100; }
+		&.http-429 { background: #ffcc80; color: #c2410c; }
+		&.http-5xx { background: #ffcdd2; color: #b71c1c; }
+	}
+	.code-badge {
+		font-family: monospace;
+		font-size: 11px;
+		padding: 1px 6px;
+		border-radius: 3px;
+		&.sev-low { background: #eceff1; color: #455a64; }
+		&.sev-mid { background: #fff3e0; color: #e65100; }
+		&.sev-high { background: #ffcdd2; color: #b71c1c; font-weight: bold; }
+	}
+	.method {
+		font-family: monospace;
+		font-size: 11px;
+		color: var(--text-color-secondary);
+		min-width: 40px;
+	}
+	.uri {
+		font-family: monospace;
+		font-size: 12px;
+		max-width: 380px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.farmer-badge {
+		background: #e3f2fd;
+		color: #0277bd;
+		padding: 1px 6px;
+		border-radius: 3px;
+		font-size: 11px;
+		font-weight: bold;
+		text-decoration: none;
+		&:hover { background: #bbdefb; }
+	}
+	.ua-short {
+		font-family: monospace;
+		font-size: 11px;
+		color: var(--text-color-secondary);
+		max-width: 160px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.ip {
+		font-family: monospace;
+		font-size: 12px;
+		color: var(--text-color-secondary);
+		cursor: pointer;
+		&:hover { text-decoration: underline; }
+	}
+	.date {
+		font-size: 11px;
+		color: var(--text-color-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+	.log-detail {
+		padding: 8px 10px;
+		background: var(--pure-white);
+		border-left: 3px solid #2196f3;
+		margin-top: 4px;
+		font-size: 12px;
+		div { margin-bottom: 4px; }
+		pre {
+			background: var(--background-secondary);
+			padding: 6px;
+			border-radius: 3px;
+			max-height: 300px;
+			overflow: auto;
+			margin: 4px 0;
+			font-size: 11px;
+		}
+		.mono { font-family: monospace; word-break: break-all; }
+	}
+	.pagination {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 12px;
+		padding: 12px;
+	}
+	.ip-dialog {
+		background: var(--pure-white);
+		color: var(--text-color);
+		padding: 16px;
+		border-radius: 6px;
+	}
+	.ip-dialog-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+		h2 { margin: 0; font-family: monospace; }
+	}
+	.ip-stats {
+		margin-bottom: 12px;
+		padding: 8px;
+		background: var(--background-secondary);
+		border-radius: 4px;
+		display: flex;
+		gap: 20px;
+		flex-wrap: wrap;
+	}
+	.farmer-link {
+		display: inline-block;
+		margin: 0 4px;
+		padding: 2px 6px;
+		background: #e3f2fd;
+		color: #0277bd;
+		border-radius: 3px;
+		text-decoration: none;
+		font-weight: bold;
+	}
+	.ip-logs {
+		max-height: 60vh;
+		overflow-y: auto;
+	}
+
+	body.dark {
+		.status {
+			&.http-ok { background: #1b3a1f; color: #81c784; }
+			&.http-4xx { background: #4a2e0f; color: #ffb74d; }
+			&.http-429 { background: #5a2e0a; color: #ffa726; }
+			&.http-5xx { background: #4a1717; color: #ef9a9a; }
+		}
+		.code-badge {
+			&.sev-low { background: #2a2f33; color: #b0bec5; }
+			&.sev-mid { background: #4a2e0f; color: #ffb74d; }
+			&.sev-high { background: #4a1717; color: #ef9a9a; }
+		}
+		.farmer-badge {
+			background: #0d2a3d;
+			color: #4fc3f7;
+			&:hover { background: #143a52; }
+		}
+		.farmer-link {
+			background: #0d2a3d;
+			color: #4fc3f7;
+		}
+		.log-detail {
+			border-left-color: #4fc3f7;
+		}
+	}
+</style>

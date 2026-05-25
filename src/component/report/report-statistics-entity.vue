@@ -12,14 +12,12 @@
 	</tr>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	@Options({})
-	export default class ReportStatisticsEntity extends Vue {
-		@Prop({required: true}) entity!: any
-		@Prop({required: true}) stats!: string[]
-		@Prop({required: true}) best!: any
-	}
+<script setup lang="ts">
+defineProps<{
+	entity: Record<string, unknown>
+	stats: string[]
+	best: Record<string, unknown>
+}>()
 </script>
 
 <style lang="scss" scoped>

@@ -5,5 +5,11 @@
 	"name": "Naam",
 	"level": "Niveau",
 	"date": "Datum",
-	"rarity": "Schaarste"
+	"rarity": "Schaarste",
+	"type": "Type",
+	"no_group": "Geen groep",
+	"size": "Grootte",
+	"size_small": "Klein",
+	"size_normal": "Normaal",
+	"size_large": "Groot"
 }

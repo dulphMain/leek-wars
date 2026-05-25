@@ -1,39 +1,39 @@
 <template lang="html">
 	<div class="tutorial-menu">
-		<router-link v-for="(item, i) of items" :key="i" class="item" :style="{'background-image': 'url(' + item.image + ')'}" :to="'/encyclopedia/' + locale + '/' + $t(item.name).replace(/ /g, '_')">
+		<router-link v-for="(item, i) of items" :key="i" class="item" :style="{'background-image': 'url(' + item.image + ')'}" :to="'/encyclopedia/' + locale + '/' + $t(item.name, locale).replace(/ /g, '_')">
 			<v-icon class="icon">mdi-{{ item.icon }}</v-icon>
 			<div class="bottom">
 				<div class="name">
-					<span>{{ i + 1 }} - {{ $t(item.name) }}</span>
+					<span>{{ i + 1 }} - {{ $t(item.name, locale) }}</span>
 					<v-icon v-if="i < progress">mdi-check-bold</v-icon>
 				</div>
-				<ul class="items"><li>{{ $t(item.name + '_items') }}</li></ul>
+				<ul class="items"><li>{{ $t(item.name + '_items', locale) }}</li></ul>
 			</div>
 		</router-link>
 	</div>
 </template>
 
-<script lang="ts">
-	import { store } from '@/model/store'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	import { tutorial_items } from './tutorial-items'
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { store } from '@/model/store'
+import { mixins } from '@/model/i18n'
+import { tutorial_items } from './tutorial-items'
 
-	@Options({ name: 'tutorial-menu', i18n: {} })
-	export default class TutorialMenu extends Vue {
-		@Prop() locale!: string
-		items = tutorial_items
+defineOptions({ name: 'TutorialMenu', i18n: {}, mixins: [...mixins] })
 
-		created() {
-			const locale = this.locale
-			import(/* webpackChunkName: "tutorial-[request]" */ `@/lang/${locale}/tutorial.json`).then(module => {
-				this.$i18n.mergeLocaleMessage(locale, module)
-			})
-		}
+const props = defineProps<{
+	locale: string
+}>()
 
-		get progress() {
-			return store.state.farmer ? store.state.farmer.tutorial_progress : 0
-		}
-	}
+const { mergeLocaleMessage } = useI18n()
+const items = tutorial_items
+
+import(/* webpackChunkName: "tutorial-[request]" */ `@/lang/${props.locale}/tutorial.json`).then(module => {
+	mergeLocaleMessage(props.locale, module.default)
+})
+
+const progress = computed(() => store.state.farmer ? store.state.farmer.tutorial_progress : 0)
 </script>
 
 <style lang="scss" scoped>
@@ -76,7 +76,9 @@
 						background: #5fad1b;
 						border-radius: 50%;
 						padding: 2px;
-						font-size: 15px;
+						font-size: 11px;
+						width: 15px;
+						height: 15px;
 					}
 				}
 			}
@@ -91,7 +93,7 @@
 			}
 			.icon {
 				position: absolute;
-				font-size: 40px;
+				font-size: 36px;
 				background: white;
 				border-radius: 50%;
 				box-shadow: rgba(0, 0, 0, 0.3) 0px 5px 5px;
@@ -99,6 +101,8 @@
 				top: 9px;
 				padding: 7px;
 				color: #222;
+				width: 50px;
+				height: 50px;
 			}
 			.items {
 				font-size: 14px;

@@ -1,5 +1,5 @@
 <template>
-	<popup @update:modelValue="close" :width="700">
+	<popup :width="700" @update:modelValue="close">
 		<template #icon>
 			<v-icon>mdi-new-box</v-icon>
 		</template>
@@ -83,7 +83,7 @@
 				<div>{{ $t('br_desc') }}</div>
 				<img class="screenshot" height=200 src="/image/feature/fight_battle_royale.webp" />
 			</div>
-			<div v-if="leek.level == 50 && Object.values($store.state.farmer.leeks).length === 4">
+			<div v-if="leek.level == 50 && $store.state.farmer && Object.values($store.state.farmer.leeks).length < 4">
 				<h4><v-icon>mdi-leek</v-icon> {{ $t('main.new_leek') }}</h4>
 				<div>{{ $t('newleek_desc') }}</div>
 				<leek-image class="screenshot" :leek="{level: 1}" :scale="0.7" />
@@ -92,21 +92,21 @@
 	</popup>
 </template>
 
-<script lang="ts">
-	import { mixins } from '@/model/i18n'
-	import { Leek } from '@/model/leek'
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
+<script setup lang="ts">
+import { mixins } from '@/model/i18n'
+import { Leek } from '@/model/leek'
+import { LeekWars } from '@/model/leekwars'
 
-	@Options({ name: 'level-dialog', i18n: {}, mixins: [...mixins] })
-	export default class LevelDialog extends Vue {
-		@Prop({required: true}) leek!: Leek
-		@Prop({required: true}) levelData!: any
+defineOptions({ name: 'LevelDialog', i18n: {}, mixins: [...mixins] })
 
-		close() {
-			LeekWars.post('leek/set-popup-level-seen', {leek_id: this.leek.id})
-		}
-	}
+const props = defineProps<{
+	leek: Leek
+	levelData: Record<string, unknown> | null
+}>()
+
+function close() {
+	LeekWars.post('leek/set-popup-level-seen', {leek_id: props.leek.id})
+}
 </script>
 
 <style lang="scss" scoped>

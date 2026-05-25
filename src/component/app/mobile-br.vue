@@ -1,13 +1,10 @@
 <template>
-	<router-link v-if="LeekWars.battleRoyale.enabled" to="/garden/battle-royale" class="br">
-		BR <b class="progress">{{ LeekWars.battleRoyale.progress }} / 10</b>
+	<router-link v-if="LeekWars.arena.enabled" to="/garden/arena" class="br">
+		Arène <b class="progress">{{ LeekWars.arena.progress }} / 20</b>
 	</router-link>
 </template>
 
-<script lang="ts">
-	import { Options, Vue } from 'vue-property-decorator'
-	@Options({})
-	export default class MobileBR extends Vue {}
+<script setup lang="ts">
 </script>
 
 <style lang="scss" scoped>
@@ -15,7 +12,7 @@
 		z-index: 100;
 		position: fixed;
 		top: 50%;
-		right: -25px;
+		right: -34px;
 		background: #2a2a2a;
 		color: white;
 		transform: rotate(-90deg);

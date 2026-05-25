@@ -7,6 +7,7 @@ class ChatMessage {
 	chat!: number
 	farmer!: Farmer
 	content!: string
+	raw_content?: string
 	contents: string[] = []
 	date!: number
 	day!: number
@@ -26,6 +27,7 @@ class ChatWindow {
 	id!: number
 	type!: ChatType
 	title!: string
+	name?: string
 	expanded: boolean = true
 }
 
@@ -59,6 +61,7 @@ class Chat {
 
 	add(message: ChatMessage) {
 		// console.log("chat add", message, this)
+		if (this.messages.length && this.messages[this.messages.length - 1].id === message.id) return
 		this.prepare(message)
 		this.messages.push(message)
 		message.subMessages = []

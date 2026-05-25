@@ -1,28 +1,39 @@
 <template lang="html">
 	<div class="tabs-wrapper" :class="{active}">
 		<div ref="list" class="list" @wheel.prevent="mousewheel">
-			<div v-for="(ai, i) in tabs" ref="tabsEl" :key="ai" :class="{selected: ai === current, modified: fileSystem.ais[ai]?.modified}" :title="fileSystem.ais[ai]?.path" class="tab" @click="click($event, fileSystem.ais[ai])" @contextmenu.prevent="openMenu(i)" @mouseup.middle="close(ai)">
+			<div v-for="(tab, i) in allTabs" ref="tabsEl" :key="tabKey(tab)" class="tab" :class="tabClass(tab, i)" :title="tabTitle(tab)" @click="clickTab(tab)" @contextmenu.prevent="openMenu($event, tab, i)" @mouseup.middle="closeTab(tab)">
 				<div class="name">
-					<v-icon v-if="fileSystem.ais[ai]?.errors" class="icon error">mdi-close-circle</v-icon>
-					<v-icon v-else-if="fileSystem.ais[ai]?.warnings" class="icon warning">mdi-alert-circle</v-icon>
-					<v-icon v-else class="icon valid">mdi-check-bold</v-icon>
-					{{ fileSystem.ais[ai]?.name || ai }}
+					<template v-if="tab.type === 'file'">
+						<v-icon v-if="fileSystem.ais[tab.id]?.hasConflict" class="icon conflict">mdi-source-merge</v-icon>
+						<v-icon v-else-if="fileSystem.ais[tab.id]?.errors" class="icon error">mdi-close-circle</v-icon>
+						<v-icon v-else-if="fileSystem.ais[tab.id]?.warnings" class="icon warning">mdi-alert-circle</v-icon>
+						<v-icon v-else class="icon valid">mdi-check-bold</v-icon>
+						{{ fileSystem.ais[tab.id]?.name || tab.id }}
+					</template>
+					<template v-else>
+						<v-icon class="icon git" :class="{'merge-icon': tab.type === 'merge'}">{{ tab.type === 'commit' ? 'mdi-source-commit' : tab.type === 'merge' ? 'mdi-source-merge' : 'mdi-source-branch' }}</v-icon>
+						{{ tab.file.split('/').pop() }}
+						<span v-if="tab.hash" class="commit-hash">{{ tab.hash.substring(0, 7) }}</span>
+					</template>
 				</div>
-				<span @click.stop="close(ai)">
-					<v-icon class="modified">mdi-record</v-icon>
-					<v-icon class="close" :class="{hidden: group === 'tabs' && tabs.length === 1}">mdi-close</v-icon>
+				<span @click.stop="closeTab(tab)">
+					<v-icon v-if="tab.type === 'file'" class="modified">mdi-record</v-icon>
+					<v-icon class="close" :class="{hidden: group === 'tabs' && allTabs.length === 1 && tab.type === 'file'}">mdi-close</v-icon>
 				</span>
 			</div>
 		</div>
-		<v-menu ref="menu" :key="currentI" v-model="menuOpened" :activator="activator" offset-y @update:model-value="menuChange">
+		<v-menu v-model="menuOpened" :target="menuTarget" :theme="isDark ? 'dark' : 'light'" @update:model-value="menuChange">
 			<v-list class="menu" :dense="true">
-				<v-list-item v-ripple @click="close(tabs[currentI])" prepend-icon="mdi-close-box-outline">
+				<v-list-item v-if="menuTab" v-ripple prepend-icon="mdi-close-box-outline" @click="closeTab(menuTab)">
 					<v-list-item-title>{{ $t('close') }}</v-list-item-title>
 				</v-list-item>
-				<v-list-item v-ripple @click="closeOthers(currentAI)" prepend-icon="mdi-close-box-multiple-outline">
+				<v-list-item v-if="menuTab" v-ripple prepend-icon="mdi-close-box-multiple-outline" @click="closeOthers(menuTab)">
 					<v-list-item-title>{{ $t('close_others') }}</v-list-item-title>
 				</v-list-item>
-				<v-list-item v-if="!splitted" v-ripple @click="split()" prepend-icon="mdi-dock-right">
+				<v-list-item v-if="menuTab && menuTab.type !== 'file'" v-ripple prepend-icon="mdi-file-outline" @click="$emit('open-file', menuTab)">
+					<v-list-item-title>{{ $t('open_file') }}</v-list-item-title>
+				</v-list-item>
+				<v-list-item v-if="menuTab && menuTab.type === 'file' && !splitted" v-ripple prepend-icon="mdi-dock-right" @click="split()">
 					<v-list-item-title>{{ $t('split') }}</v-list-item-title>
 				</v-list-item>
 			</v-list>
@@ -30,162 +41,155 @@
 	</div>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
 	import { AI } from '@/model/ai'
 	import { mixins } from '@/model/i18n'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
 	import { fileSystem } from '@/model/filesystem'
-	import { nextTick } from 'vue'
+	import { computed, nextTick, ref, watch } from 'vue'
+	import { useI18n } from 'vue-i18n'
 
-	class Tab {
-		public id!: number
-		public ai!: AI
+	export interface FileTab {
+		type: 'file'
+		id: string
+	}
+	export interface DiffTab {
+		type: 'diff' | 'commit' | 'merge'
+		id: string
+		folder: string
+		file: string
+		staged?: boolean
+		hash?: string
+		original: string
+		modified: string
+		ready: boolean
+	}
+	export type EditorTab = FileTab | DiffTab
+
+	defineOptions({ name: 'EditorTabs', i18n: {}, mixins: [...mixins] })
+
+	const props = withDefaults(defineProps<{
+		ais: {[key: string]: AI}
+		history2: AI[]
+		group: string
+		current: EditorTab | null
+		active: boolean
+		splitted: boolean
+		allTabs?: EditorTab[]
+		theme?: string
+	}>(), {
+		allTabs: () => [],
+		theme: 'leek-wars',
+	})
+
+	const emit = defineEmits<{
+		'select': [tab: EditorTab]
+		'close-tab': [tab: EditorTab]
+		'close-all': [tab: EditorTab]
+		'split': [tab: EditorTab | null]
+		'close-panel': []
+		'open-file': [tab: EditorTab]
+	}>()
+
+	const { t } = useI18n()
+
+	const isDark = computed(() => ['monokai', 'vs-dark', 'hc-black'].includes(props.theme))
+
+	const menuOpened = ref(false)
+	const menuTarget = ref<[number, number]>([0, 0])
+	const menuTab = ref<EditorTab | null>(null)
+	const list = ref<HTMLElement | null>(null)
+	const tabsEl = ref<HTMLElement[] | null>(null)
+
+	watch(() => props.current, () => {
+		nextTick(() => {
+			if (!props.current) return
+			const i = props.allTabs.findIndex(t => tabsMatch(t, props.current!))
+			if (i !== -1) {
+				const tab = (tabsEl.value as HTMLElement[])?.[i]
+				tab?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+			}
+		})
+	})
+
+	function mousewheel(event: WheelEvent) {
+		const target = list.value as HTMLElement
+		const delta = event.deltaY || event.deltaX
+		const toLeft  = delta < 0 && target.scrollLeft > 0
+		const toRight = delta > 0 && target.scrollLeft < target.scrollWidth - target.clientWidth
+		if (toLeft || toRight) {
+			target.scrollLeft += delta
+		}
 	}
 
-	@Options({ name: 'editor-tabs', i18n: {}, mixins: [...mixins] })
-	export default class EditorTabs extends Vue {
+	function tabKey(tab: EditorTab): string {
+		if (tab.type === 'file') return 'f-' + tab.id
+		if (tab.type === 'merge') return 'm-' + tab.file
+		return 'd-' + tab.file + '-' + (tab.hash || (tab.staged ? 's' : 'w'))
+	}
 
-		@Prop({required: true}) ais!: AI[]
-		@Prop({required: true}) history2!: AI[]
-		@Prop({required: true}) group!: string
-		@Prop({required: true}) current!: number
-		@Prop({required: true}) active!: boolean
-		@Prop({required: true}) splitted!: boolean
-
-		fileSystem = fileSystem
-		loaded: boolean = false
-		tabs: number[] = []
-		menuOpened: boolean = false
-		activator: any = null
-		currentI: number = 0
-		currentAI: AI | null = null
-
-		@Watch('ais', {immediate: true})
-		updateAis() {
-			if (this.loaded) { return }
-			this.loaded = true
-			const tabs = JSON.parse(localStorage.getItem('editor/' + this.group) || '[]')
-			// console.log("update tabs", tabs, Object.values(this.ais).length)
-			for (const t of tabs) {
-				this.tabs.push(parseInt(t))
-			}
-			if (tabs.length === 0 && this.current) {
-				this.tabs.push(this.current)
-			}
-			this.update()
+	function tabClass(tab: EditorTab, _i: number): Record<string, boolean> {
+		const selected = props.current && tabsMatch(tab, props.current)
+		if (tab.type === 'file') {
+			return { selected, modified: fileSystem.ais[tab.id]?.modified, conflict: fileSystem.ais[tab.id]?.hasConflict }
 		}
+		return { selected, 'diff-tab': true, 'commit-tab': tab.type === 'commit', 'merge-tab': tab.type === 'merge' }
+	}
 
-		@Watch('current')
-		update() {
-			nextTick(() => {
-				const i = this.tabs.indexOf(this.current)
-				if (i !== -1) {
-					const tab = (this.$refs.tabsEl as HTMLElement[])[i]
-					tab?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-				}
-			})
+	function tabTitle(tab: EditorTab): string {
+		if (tab.type === 'file') return fileSystem.ais[tab.id]?.path || ''
+		if (tab.hash) return tab.file + ' @ ' + tab.hash.substring(0, 7)
+		return tab.file
+	}
+
+	function tabsMatch(a: EditorTab, b: EditorTab): boolean {
+		if (a.type === 'file' && b.type === 'file') return a.id === b.id
+		if (a.type !== 'file' && b.type !== 'file') {
+			return a.file === b.file && a.folder === b.folder && a.staged === b.staged && a.hash === b.hash
 		}
+		return false
+	}
 
-		mousewheel(event: WheelEvent) {
-			const target = this.$refs.list as HTMLElement
-			const delta = event.deltaY || event.deltaX
-			const toLeft  = delta < 0 && target.scrollLeft > 0
-			const toRight = delta > 0 && target.scrollLeft < target.scrollWidth - target.clientWidth
-			if (toLeft || toRight) {
-				target.scrollLeft += delta
-			}
+	function clickTab(tab: EditorTab) {
+		emit('select', tab)
+	}
+
+	function openMenu(event: MouseEvent, tab: EditorTab, _i: number) {
+		menuTab.value = tab
+		menuTarget.value = [event.clientX, event.clientY]
+		nextTick(() => {
+			menuOpened.value = true
+		})
+	}
+
+	function menuChange() {
+		menuTab.value = null
+		menuOpened.value = false
+	}
+
+	function closeTab(tab: EditorTab) {
+		if (tab.type === 'file' && props.group === 'tabs') {
+			const fileTabs = props.allTabs.filter(t => t.type === 'file')
+			if (fileTabs.length === 1) return
 		}
-
-		add(ai: number) {
-			if (this.tabs.findIndex(t => t === ai) !== -1) {
+		if (tab.type === 'file' && fileSystem.ais[tab.id]?.modified) {
+			if (!window.confirm(t('confirm_close', [1]) as string)) {
 				return
 			}
-			this.tabs.push(ai)
-			this.save()
 		}
+		emit('close-tab', tab)
+	}
 
-		click(e: MouseEvent, ai: AI) {
-			if (!ai) return // AI was deleted
-			if (this.group === 'tabs') {
-				if (this.$route.path !== '/editor/' + ai.id) {
-					this.$router.push('/editor/' + ai.id)
-				}
-			}
-			this.$emit('open', ai.id)
-		}
+	function closeOthers(tab: EditorTab) {
+		emit('close-all', tab)
+	}
 
-		openMenu(i: number) {
-			this.currentI = i
-			this.currentAI = fileSystem.ais[this.tabs[i]]
-			nextTick(() => {
-				this.activator = (this.$refs.tabsEl as HTMLElement[])[i]
-				nextTick(() => {
-					this.menuOpened = true
-				})
-			})
-		}
-
-		menuChange() {
-			this.currentI = -1
-			this.activator = null
-			this.menuOpened = false
-		}
-
-		close(id: number, confirm: boolean = true) {
-			if (this.group === 'tabs' && this.tabs.length === 1) {
-				return
-			}
-			const i = this.tabs.indexOf(id)
-			if (confirm && fileSystem.ais[id]?.modified) {
-				if (!window.confirm(this.$i18n.t('confirm_close', [1]) as string)) {
-					return
-				}
-			}
-			this.tabs.splice(i, 1)
-			this.save()
-			if (fileSystem.ais[id]?.selected) {
-				this.openLast()
-			}
-			this.currentI = -1
-			this.$emit('close', id)
-			if (this.tabs.length === 0) {
-				this.$emit('close-panel')
-			}
-		}
-
-		closeOthers(ai: AI) {
-			this.tabs = []
-			this.$emit('close-all')
-			this.tabs.push(ai.id)
-			this.save()
-			if (this.$route.path !== '/editor/' + ai.id) {
-				this.$router.push('/editor/' + ai.id)
-			}
-		}
-
-		openLast() {
-			if (this.history2.length >= 2) {
-				const ai = this.history2[1]
-				this.$router.push('/editor/' + ai.id)
-			} else if (this.history2.length) {
-				const ai = this.history2[0]
-				this.$router.push('/editor/' + ai.id)
-			}
-		}
-
-		save() {
-			localStorage.setItem('editor/' + this.group, JSON.stringify(this.tabs))
-		}
-
-		split() {
-			this.$emit('split', this.currentAI)
-		}
+	function split() {
+		emit('split', menuTab.value)
 	}
 </script>
 
 <style lang="scss" scoped>
 	.tabs-wrapper {
-		// flex: 36px 1 0;
 		user-select: none;
 		overflow: hidden;
 		display: flex;
@@ -210,14 +214,14 @@
 		}
 	}
 	.tab {
-		line-height: 35px;
 		height: 36px;
+		border-top: 2px solid transparent;
+		box-sizing: border-box;
 		cursor: pointer;
 		display: inline-flex;
 		align-items: center;
 		max-width: 200px;
 		background: rgba(0, 0, 0, 0.2);
-		min-width: 0;
 		min-width: 120px;
 		flex-shrink: 0;
 		overflow: hidden;
@@ -287,6 +291,36 @@
 	}
 	.tab.modified:hover .close {
 		display: block;
+	}
+	.tab.conflict {
+		border-top-color: #e53935;
+		.name .v-icon.icon.conflict {
+			color: #e53935 !important;
+		}
+	}
+	.tab.diff-tab {
+		border-top-color: #e8a838;
+		.name .v-icon.icon.git {
+			color: #e8a838 !important;
+		}
+		.commit-hash {
+			font-family: monospace;
+			font-size: 10px;
+			opacity: 0.6;
+			margin-left: 4px;
+		}
+	}
+	.tab.diff-tab.commit-tab {
+		border-top-color: #7c8eda;
+		.name .v-icon.icon.git {
+			color: #7c8eda !important;
+		}
+	}
+	.tab.diff-tab.merge-tab {
+		border-top-color: #e06c75;
+		.name .v-icon.icon.git {
+			color: #e06c75 !important;
+		}
 	}
 	.menu .v-icon {
 		margin-right: 8px;

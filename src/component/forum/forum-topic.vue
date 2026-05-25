@@ -5,20 +5,19 @@
 				<h1>
 					<router-link to="/forum">{{ $t('main.forum') }}</router-link>
 					<v-icon>mdi-chevron-right</v-icon>
-					<router-link v-if="topic" :to="'/forum/category-' + category.id">{{ categoryName }}</router-link>
+					<router-link v-if="topic && category" :to="'/forum/category-' + category.id">{{ categoryName }}</router-link>
 					<v-icon>mdi-chevron-right</v-icon>
 					<flag v-if="category && forumLanguages.length >= 2 && category.lang" :code="LeekWars.languages[category.lang].country" />
 					<span ref="topicTitle" :contenteditable="topicEditing" class="topic-title">{{ topic ? topic.name : '...' }}</span>
 					<div v-if="topic" class="info attrs">
-						<v-icon v-if="topic.resolved" :title="$t('resolved')" class="attr">mdi-check-circle</v-icon>
 						<v-icon v-if="topic.locked" :title="$t('locked')" class="attr">mdi-lock</v-icon>
 						<v-icon v-if="topic.pinned" :title="$t('pinned')" class="attr">mdi-pin</v-icon>
-						<a v-if="topic.issue" :href="'https://github.com/leek-wars/leek-wars/issues/' + topic.issue" class="attr issue" target="_blank" rel="noopener">
-							<img src="/image/github_white.png"><span>#{{ topic.issue }}</span>
-						</a>
-						<a v-if="topic.private_issue && $store.state.farmer && $store.state.farmer.admin" :href="'https://github.com/5pilow/leek-wars/issues/' + topic.private_issue" class="attr issue private-issue" target="_blank" rel="noopener">
-							<img src="/image/github_white.png"><span>#{{ topic.private_issue }}</span>
-						</a>
+						<v-icon v-if="topic.status === ForumTopicStatus.RESOLVED" :title="$t('status_resolved')" class="attr status-resolved">mdi-check-circle</v-icon>
+						<v-icon v-if="topic.status === ForumTopicStatus.NOT_REPRODUCED" :title="$t('status_not_reproduced')" class="attr status-not-reproduced">mdi-help-circle</v-icon>
+						<v-icon v-if="topic.status === ForumTopicStatus.NOT_PLANNED" :title="$t('status_not_planned')" class="attr status-not-planned">mdi-minus-circle</v-icon>
+						<v-icon v-if="topic.status === ForumTopicStatus.NOT_A_BUG" :title="$t('status_not_a_bug')" class="attr status-not-a-bug">mdi-close-circle</v-icon>
+						<v-icon v-if="topic.status === ForumTopicStatus.OBSOLETE" :title="$t('status_obsolete')" class="attr status-obsolete">mdi-archive</v-icon>
+						<v-icon v-if="topic.hidden" :title="$t('hide_topic')" class="attr hidden-icon">mdi-eye-off</v-icon>
 					</div>
 				</h1>
 				<div v-if="!LeekWars.mobile" class="tabs">
@@ -38,8 +37,11 @@
 			<template #content>
 				<div class="content">
 				<breadcrumb v-if="LeekWars.mobile" :items="breadcrumb_items" />
-				<pagination v-if="topic" :current="page" :total="pages" :url="'/forum/category-' + category.id + '/topic-' + topic.id" />
-				<loader v-if="!topic || !topic.messages" />
+				<pagination v-if="topic && category" :current="page" :total="pages" :url="'/forum/category-' + category.id + '/topic-' + topic.id" />
+				<i18n-t v-if="notFound" keypath="topic_not_found" tag="div" class="not-found">
+					<template #topic><b>{{ $route.params.topic }}</b></template>
+				</i18n-t>
+			<loader v-else-if="!topic || !topic.messages" />
 				<div v-else>
 					<div v-for="message in topic.messages" :id="'message-' + message.id" :key="message.id" class="message-wrapper">
 						<div v-if="!message.writer.deleted" class="profile">
@@ -84,89 +86,156 @@
 							</template>
 
 							<div v-if="message.deleted" class="text deleted">{{ $t('deleted_message') }}</div>
-							<textarea v-else-if="message.editing" ref="textarea" v-model="message.message" :style="{height: message.height + 'px'}" class="original"></textarea>
+							<textarea v-else-if="message.editing" ref="textarea" v-model="message.message" :style="{height: message.height + 'px'}" class="original" @input="autoResize(message, $event)"></textarea>
 							<div v-else-if="message.html" v-emojis v-code class="text" v-html="message.html"></div>
 							<markdown v-else :content="message.message" mode="forum" />
 
-							<emoji-picker v-if="message.editing" class="emoji-picker" @pick="addEmoji(message, $event, $refs.textarea[0])" />
+							<emoji-picker v-if="message.editing" class="emoji-picker" @pick="textarea && addEmoji(message, $event, textarea[0])" />
+
+							<router-link v-if="message.id === -1 && topic.release" :to="'/release/' + releaseVersion.substring(1)" class="changelog-banner">
+								<img :src="'/image/mail/mail_' + topic.release + '.webp'" class="changelog-banner-image" @error="($event.target as HTMLImageElement).style.display = 'none'">
+								<span class="changelog-banner-link">
+									<v-icon>mdi-newspaper-variant-outline</v-icon>
+									{{ $t('see_changelog', [releaseVersion]) }}
+								</span>
+							</router-link>
+
+							<div v-if="message.id === -1 && topic.user_agent" class="user-agent" :title="topic.user_agent"><v-icon size="small">mdi-monitor</v-icon> {{ LeekWars.parseUserAgent(topic.user_agent) }}</div>
 
 							<div class="bottom">
 
-								<div class="edit-wrapper">
-									<div v-if="!message.deleted" class="votes">
-										<v-tooltip :key="votes_up_names[message.id] ? message.id * 101 + votes_up_names[message.id].length : message.id * 101" :open-delay="0" :close-delay="0" :disabled="message.votes_up === 0" bottom @update:model-value="loadVotesUp(message)">
-											<template #activator="{ props }">
-												<div :class="{active: message.my_vote == 1, zero: message.votes_up === 0}" class="vote up" @click="voteUp(message)" v-bind="props">
-													<v-icon>mdi-thumb-up</v-icon>
-													<span class="counter">{{ message.votes_up }}</span>
-												</div>
-											</template>
-											<loader v-if="!votes_up_names[message.id]" :size="30" />
-											<div v-else>
-												<div v-for="name in votes_up_names[message.id]" :key="name">{{ name }}</div>
-											</div>
-										</v-tooltip>
-										<v-tooltip :key="votes_down_names[message.id] ? message.id * 100 + votes_down_names[message.id].length : message.id" :open-delay="0" :close-delay="0" :disabled="message.votes_down === 0" bottom @update:model-value="loadVotesDown(message)">
-											<template #activator="{ props }">
-												<div :class="{active: message.my_vote == -1, zero: !message.votes_down}" class="vote down" @click="voteDown(message)" v-bind="props">
-													<v-icon>mdi-thumb-down</v-icon>
-													<span class="counter">{{ message.votes_down }}</span>
-												</div>
-											</template>
-											<loader v-if="!votes_down_names[message.id]" :size="30" />
-											<div v-else>
-												<div v-for="name in votes_down_names[message.id]" :key="name">{{ name }}</div>
-											</div>
-										</v-tooltip>
-									</div>
-
-									<template v-if="message.id == -1 && $store.state.connected && category.moderator">
-										<span class="action lock" @click="lock"><v-icon>mdi-lock</v-icon> {{ topic.locked ? $t('unlock') : $t('lock') }}</span>
-										&nbsp;&nbsp;
-										<span class="action pin" @click="pin"><v-icon>mdi-pin</v-icon> {{ topic.pinned ? $t('unpin') : $t('pin') }}</span>
-									</template>
-									<template v-if="message.id == -1 && $store.state.connected && (($store.state.farmer && topic.owner === $store.state.farmer.id) || category.moderator)">
-										&nbsp;&nbsp;
-										<span class="action resolve" @click="resolve"><v-icon>mdi-check</v-icon> {{ topic.resolved ? $t('unsolved') : $t('solved') }}</span>
-									</template>
-									<template v-if="message.id == -1 && $store.state.farmer && $store.state.farmer.admin && !topic.private_issue && !topic.resolved">
-										&nbsp;&nbsp;
-										<span class="action create-issue" @click="createIssue"><v-icon>{{ creatingIssue ? 'mdi-loading mdi-spin' : 'mdi-source-branch' }}</v-icon> {{ $t('create_issue') }}</span>
-									</template>
-								</div>
-								<div class="spacer"></div>
-								<div class="date">
-									<div>
-										<div>{{ LeekWars.formatDateTime(message.date) }}</div>
-										<div v-if="message.edition_date != null">
-											{{ $t('edited_the', [LeekWars.formatDateTime(message.edition_date)]) }}
-										</div>
-									</div>
-
-									<v-menu v-if="$store.state.farmer && !message.deleted && !message.editing && ((message.writer.id === $store.state.farmer.id || category.moderator) || (category.team === -1 && message.writer.id !== $store.state.farmer.id && message.writer.color !== 'admin'))" offset-y>
+								<div v-if="!message.deleted" class="votes">
+									<v-tooltip :key="votes_up_names[message.id] ? message.id * 101 + votes_up_names[message.id]!.length : message.id * 101" :open-delay="0" :close-delay="0" :disabled="message.votes_up === 0" bottom @update:model-value="loadVotesUp(message)">
 										<template #activator="{ props }">
-											<v-btn variant="text" size="small" icon="mdi-dots-vertical" color="grey" v-bind="props" />
+											<div :class="{active: message.my_vote == 1, zero: message.votes_up === 0}" class="vote up" v-bind="props" @click="voteUp(message)">
+												<v-icon>mdi-thumb-up</v-icon>
+												<span class="counter">{{ message.votes_up }}</span>
+											</div>
 										</template>
-										<v-list dense class="message-actions">
-											<v-list-item v-if="$store.state.farmer && (message.writer.id === $store.state.farmer.id || category.moderator)" v-ripple @click="edit(message)" prepend-icon="mdi-pencil">
-												<span>{{ $t('edit') }}</span>
-											</v-list-item>
-											<v-list-item v-if="$store.state.farmer && (message.writer.id === $store.state.farmer.id || category.moderator)" v-ripple @click="deleteGeneric(message)" prepend-icon="mdi-delete">
-												<span>{{ $t('delete') }}</span>
-											</v-list-item>
-											<v-list-item v-if="category.team === -1 && message.writer.id !== $store.state.farmer.id && message.writer.color !== 'admin'" v-ripple @click="report(message)" prepend-icon="mdi-flag">
-												<span>{{ $t('warning.report') }}</span>
-											</v-list-item>
-										</v-list>
-									</v-menu>
+										<loader v-if="!votes_up_names[message.id]" :size="30" />
+										<div v-else>
+											<div v-for="name in votes_up_names[message.id]" :key="name">{{ name }}</div>
+										</div>
+									</v-tooltip>
+									<v-tooltip :key="votes_down_names[message.id] ? message.id * 100 + votes_down_names[message.id]!.length : message.id" :open-delay="0" :close-delay="0" :disabled="message.votes_down === 0" bottom @update:model-value="loadVotesDown(message)">
+										<template #activator="{ props }">
+											<div :class="{active: message.my_vote == -1, zero: !message.votes_down}" class="vote down" v-bind="props" @click="voteDown(message)">
+												<v-icon>mdi-thumb-down</v-icon>
+												<span class="counter">{{ message.votes_down }}</span>
+											</div>
+										</template>
+										<loader v-if="!votes_down_names[message.id]" :size="30" />
+										<div v-else>
+											<div v-for="name in votes_down_names[message.id]" :key="name">{{ name }}</div>
+										</div>
+									</v-tooltip>
 								</div>
+
+								<span v-if="message.id == -1" class="views-counter"><v-icon>mdi-eye</v-icon> {{ $t('main.n_views', topic.views) }}</span>
+
+								<template v-if="message.id == -1 && $store.state.connected && category && category.moderator">
+									<span class="action lock" @click="lock"><v-icon>mdi-lock</v-icon> {{ topic.locked ? $t('unlock') : $t('lock') }}</span>
+									<span class="action pin" @click="pin"><v-icon>mdi-pin</v-icon> {{ topic.pinned ? $t('unpin') : $t('pin') }}</span>
+								</template>
+								<template v-if="message.id == -1 && canEditStatus">
+									<v-select v-model="topic.status" :items="statusItems" hide-details dense variant="outlined" class="status-select" @update:model-value="setStatus">
+										<template #selection="{ item }">
+											<v-icon :color="item.raw.color">{{ item.raw.icon }}</v-icon>&nbsp;{{ item.raw.title }}
+										</template>
+										<template #item="{ props, item }">
+											<v-list-item v-bind="props">
+												<template #prepend>
+													<v-icon :color="item.raw.color" class="status-icon">{{ item.raw.icon }}</v-icon>
+												</template>
+											</v-list-item>
+										</template>
+									</v-select>
+								</template>
+								<span v-else-if="message.id == -1 && topic.status !== ForumTopicStatus.OPEN && currentStatusInfo" class="status-text">
+									<v-icon :color="currentStatusInfo.color">{{ currentStatusInfo.icon }}</v-icon> {{ currentStatusInfo.title }}
+								</span>
+								<template v-if="message.id == -1 && $store.state.farmer && $store.state.farmer.admin">
+									<span v-if="topic.release" class="action" @click="releaseInput = topic.release; releaseDialog = true">
+										<v-icon>mdi-tag</v-icon> {{ 'v' + String(topic.release).charAt(0) + '.' + String(topic.release).slice(1) }}
+									</span>
+									<v-select v-if="hasPriority" v-model="topic.priority" :items="priorityItems" hide-details dense variant="outlined" class="priority-select" @update:model-value="setPriority">
+										<template #selection="{ item }">
+											<v-icon :color="item.raw.color" size="small">{{ item.raw.icon }}</v-icon>&nbsp;{{ item.raw.title }}
+										</template>
+										<template #item="{ props, item }">
+											<v-list-item v-bind="props">
+												<template #prepend>
+													<v-icon :color="item.raw.color" size="small">{{ item.raw.icon }}</v-icon>
+												</template>
+											</v-list-item>
+										</template>
+									</v-select>
+								</template>
+								<span v-if="message.id == -1 && hasPriority && topic.priority && !($store.state.farmer && $store.state.farmer.admin)" class="priority-label" :class="'priority-' + topic.priority">
+									<v-icon :color="topic.priority === 1 ? '#e53935' : topic.priority === 2 ? '#fb8c00' : '#757575'" size="small">mdi-flag</v-icon>
+									{{ topic.priority === 1 ? $t('priority_high') : topic.priority === 2 ? $t('priority_medium') : $t('priority_low') }}
+								</span>
+								<template v-if="message.id == -1">
+									<span v-if="topic.acknowledged && !topic.private_issue && !($store.state.farmer && $store.state.farmer.admin)" class="status-text"><v-icon color="#6f42c1">mdi-eye</v-icon> {{ $t('status_acknowledged') }}</span>
+									<a v-if="topic.issue" :href="'https://github.com/leek-wars/leek-wars/issues/' + topic.issue" class="issue-badge" target="_blank" rel="noopener">
+										<img src="/image/github_white.png"><span>#{{ topic.issue }}</span>
+									</a>
+									<a v-if="topic.private_issue && $store.state.farmer && $store.state.farmer.admin" :href="'https://github.com/5pilow/leek-wars/issues/' + topic.private_issue" class="issue-badge private-issue" target="_blank" rel="noopener">
+										<img src="/image/github_white.png"><span>#{{ topic.private_issue }}</span>
+									</a>
+									<span v-if="$store.state.farmer && $store.state.farmer.admin && !topic.private_issue && topic.status === ForumTopicStatus.OPEN" class="action create-issue" @click="createIssue"><v-icon :class="{ 'mdi-spin': creatingIssue }">{{ creatingIssue ? 'mdi-loading' : 'mdi-source-branch' }}</v-icon> {{ $t('create_issue') }}</span>
+								</template>
+
+								<v-spacer />
+
+								<div class="date">
+									<div>{{ LeekWars.formatDateTime(message.date) }}</div>
+									<div v-if="message.edition_date != null">
+										{{ $t('edited_the', [LeekWars.formatDateTime(message.edition_date)]) }}
+									</div>
+								</div>
+
+								<v-menu v-if="$store.state.farmer && category && !message.deleted && !message.editing && ((message.writer.id === $store.state.farmer.id || category.moderator) || (category.team === -1 && message.writer.id !== $store.state.farmer.id && message.writer.color !== 'admin'))" offset-y>
+									<template #activator="{ props }">
+										<v-btn variant="text" density="compact" icon="mdi-dots-vertical" color="grey" v-bind="props" />
+									</template>
+									<v-list dense class="message-actions">
+										<v-list-item v-if="$store.state.farmer && category && (message.writer.id === $store.state.farmer.id || category.moderator)" v-ripple prepend-icon="mdi-pencil" @click="edit(message)">
+											<span>{{ $t('edit') }}</span>
+										</v-list-item>
+										<v-list-item v-if="$store.state.farmer && category && (message.id !== -1 ? (message.writer.id === $store.state.farmer.id || category.moderator) : canDeleteTopic)" v-ripple prepend-icon="mdi-delete" @click="deleteGeneric(message)">
+											<span>{{ $t('delete') }}</span>
+										</v-list-item>
+										<v-list-item v-if="category && $store.state.farmer && category.team === -1 && message.writer.id !== $store.state.farmer.id && message.writer.color !== 'admin'" v-ripple prepend-icon="mdi-flag" @click="report(message)">
+											<span>{{ $t('warning.report') }}</span>
+										</v-list-item>
+										<v-menu v-if="message.id === -1 && canMoveTopic" submenu open-on-hover>
+											<template #activator="{ props }">
+												<v-list-item v-ripple v-bind="props" prepend-icon="mdi-folder-move" append-icon="mdi-chevron-right" @click.stop>
+													<span>{{ $t('move') }}</span>
+												</v-list-item>
+											</template>
+											<v-list dense>
+												<v-list-item v-for="cat in moveCategories" :key="cat.id" v-ripple @click="moveTopic(cat.id)">
+													<span>{{ cat.name }}</span>
+												</v-list-item>
+											</v-list>
+										</v-menu>
+										<v-list-item v-if="message.id === -1 && $store.state.farmer && $store.state.farmer.admin" v-ripple :prepend-icon="topic.hidden ? 'mdi-eye' : 'mdi-eye-off'" @click="toggleHidden">
+											<span>{{ topic.hidden ? $t('show_topic') : $t('hide_topic') }}</span>
+										</v-list-item>
+										<v-list-item v-if="message.id === -1 && $store.state.farmer && $store.state.farmer.admin && !topic.release" v-ripple prepend-icon="mdi-tag" @click="releaseInput = topic.release; releaseDialog = true">
+											<span>{{ $t('set_release') }}</span>
+										</v-list-item>
+									</v-list>
+								</v-menu>
 							</div>
 
 							<div v-if="message.editing" class="edit-buttons">
-								<v-btn color="primary" class="confirm-edit send" @click="confirmEdit(message)"><v-icon>mdi-send-outline</v-icon> {{ $t('main.send') }}</v-btn>
+								<v-btn color="primary" class="confirm-edit send" :disabled="!message.message || !message.message.trim()" @click="confirmEdit(message)"><v-icon>mdi-send-outline</v-icon> {{ $t('main.send') }}</v-btn>
 								<v-btn class="cancel-edit" @click="endEdit(message)">{{ $t('main.cancel') }}</v-btn>
 								<span v-if="message.id == -1">
-									&nbsp;GitHub Issue <input v-model.number="topic.issue" type="number">
+									GitHub Issue <input v-model.number="topic.issue" type="number">
 								</span>
 							</div>
 
@@ -175,7 +244,7 @@
 					</div>
 				</div>
 
-				<pagination v-if="topic" :current="page" :total="pages" :url="'/forum/category-' + category.id + '/topic-' + topic.id" />
+				<pagination v-if="topic && category" :current="page" :total="pages" :url="'/forum/category-' + category.id + '/topic-' + topic.id" />
 
 				<div v-if="topic && !topic.locked && $store.state.farmer && $store.state.farmer.verified" class="editor">
 					<h4>{{ $t('answer') }}</h4>
@@ -185,7 +254,8 @@
 					</div>
 					<div class="center">
 						<div v-if="page != pages" class="warning"><v-icon>mdi-alert</v-icon> {{ $t('not_last_page') }}</div>
-						<v-btn color="primary" class="send" @click="send"><v-icon>mdi-send-outline</v-icon> {{ $t('send') }}</v-btn>
+						<div v-if="isOldTopic" class="warning"><v-icon>mdi-alert</v-icon> {{ $t('old_topic_warning') }}</div>
+						<v-btn color="primary" class="send" :disabled="!newMessage || !newMessage.trim()" @click="send"><v-icon>mdi-send-outline</v-icon> {{ $t('send') }}</v-btn>
 					</div>
 					<formatting-rules />
 					<br>
@@ -226,304 +296,516 @@
 			</template>
 		</popup>
 
-		<report-dialog v-if="reportFarmer" v-model="reportDialog" :target="reportFarmer" :reasons="reasons" :parameter="reportContent" class="report-dialog" />
+		<popup v-model="releaseDialog" :width="400">
+			<template #icon><v-icon>mdi-tag</v-icon></template>
+			<template #title>{{ $t('set_release') }}</template>
+			<div>
+				<v-text-field ref="releaseField" v-model.number="releaseInput" type="number" placeholder="245" style="width: 100%" :hint="$t('release_hint')" autofocus />
+			</div>
+			<template #actions>
+				<div v-ripple @click="releaseDialog = false">{{ $t('cancel') }}</div>
+				<div v-ripple class="action green" @click="setRelease">OK</div>
+			</template>
+		</popup>
+
+		<popup v-model="oldTopicDialog" :width="600">
+			<template #icon>
+				<v-icon>mdi-alert</v-icon>
+			</template>
+			<template #title>
+				<span>{{ $t('old_topic_title') }}</span>
+			</template>
+			{{ $t('old_topic_confirm') }}
+			<template #actions>
+				<div v-ripple @click="oldTopicDialog = false">{{ $t('cancel') }}</div>
+				<div v-ripple class="green" @click="send">{{ $t('send') }}</div>
+			</template>
+		</popup>
+
+		<report-dialog v-if="reportFarmer" v-model="showReport" :target="reportFarmer" :reasons="reasons" :parameter="reportContent" class="report-dialog" />
 	</div>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
 	import Markdown from '@/component/encyclopedia/markdown.vue'
 	import { locale } from '@/locale'
 	import { Farmer } from '@/model/farmer'
-	import { ForumCategory, ForumMessage, ForumTopic } from '@/model/forum'
-	import { mixins } from '@/model/i18n'
+	import { ForumCategory, ForumMessage, ForumTopic, ForumTopicStatus } from '@/model/forum'
+	import { i18n, mixins, useNamespacedT } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
 	import { Warning } from '@/model/moderation'
-	import { Options, Vue, Watch } from 'vue-property-decorator'
 	import EmojiPicker from '../chat/emoji-picker.vue'
 	import Breadcrumb from './breadcrumb.vue'
-	const FormattingRules = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/forum/forum-formatting-rules.${locale}.i18n`))
 	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
-	import ReportDialog from '@/component/moderation/report-dialog.vue'
 	import Pagination from '@/component/pagination.vue'
-	import LWTitle from '@/component/title/title.vue'
-import { defineAsyncComponent } from 'vue'
-import { emitter } from '@/model/vue'
+	import LwTitle from '@/component/title/title.vue'
+	import { computed, defineAsyncComponent, nextTick, onMounted, reactive, ref, useTemplateRef, watch } from 'vue'
+	import { useI18n } from 'vue-i18n'
+	import { useRoute, useRouter } from 'vue-router'
+	import { store } from '@/model/store'
+	import { emitter } from '@/model/vue'
 
-	@Options({ name: 'forum_topic', i18n: {}, mixins: [...mixins], components: { Breadcrumb, EmojiPicker, Markdown, FormattingRules, RichTooltipFarmer, ReportDialog, Pagination, 'lw-title': LWTitle } })
-	export default class ForumTopicPage extends Vue {
-		topic: ForumTopic | null = null
-		category: ForumCategory | null = null
-		page: number = 0
-		pages: number = 0
-		votes_up_names: {[key: number]: string[]} = {}
-		votes_down_names: {[key: number]: string[]} = {}
-		deleteTopicDialog: boolean = false
-		deleteMessageDialog: boolean = false
-		toDeleteMessage: ForumMessage | null = null
-		newMessage: string = ''
-		topicEditing: boolean = false
-		action = {icon: 'mdi-newspaper-plus', click: () => this.toggleSubscribe()}
-		sendingMessage: boolean = false
-		creatingIssue: boolean = false
-		forumLanguages: string[] = []
-		reportDialog: boolean = false
-		reportFarmer: Farmer | null = null
-		reportContent: string = ''
-		reasons = [
-			Warning.RUDE_FORUM,
-			Warning.FLOOD_FORUM,
-			Warning.PROMO_FORUM,
-			Warning.INCORRECT_FARMER_NAME,
-			Warning.INCORRECT_AVATAR,
-		]
+	const ReportDialog = defineAsyncComponent(() => import('@/component/moderation/report-dialog.vue'))
+	const FormattingRules = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/forum/forum-formatting-rules.${locale}.i18n`))
 
-		get categoryName() {
-			return this.category ? this.category.team > 0 ? this.category.name : this.$t('forum-category.' + this.category.name) : ''
+	defineOptions({ name: 'ForumTopic', i18n: {}, mixins: [...mixins] })
+
+	const { locale: i18nLocale } = useI18n()
+	const t = useNamespacedT('forum_topic')
+	const route = useRoute()
+	const router = useRouter()
+	const topicTitle = useTemplateRef<HTMLElement>('topicTitle')
+	const responseTextarea = useTemplateRef<HTMLTextAreaElement>('responseTextarea')
+	const textarea = useTemplateRef<HTMLTextAreaElement[]>('textarea')
+
+	const topic = ref<ForumTopic | null>(null)
+	const category = ref<ForumCategory | null>(null)
+	const page = ref(0)
+	const pages = ref(0)
+	const votes_up_names = reactive<{[key: number]: string[] | null}>({})
+	const votes_down_names = reactive<{[key: number]: string[] | null}>({})
+	const deleteTopicDialog = ref(false)
+	const deleteMessageDialog = ref(false)
+	const toDeleteMessage = ref<ForumMessage | null>(null)
+	const newMessage = ref('')
+	const topicEditing = ref(false)
+	const action = { icon: 'mdi-newspaper-plus', click: () => toggleSubscribe() }
+	const sendingMessage = ref(false)
+	const oldTopicDialog = ref(false)
+	const creatingIssue = ref(false)
+	const forumLanguages = ref<string[]>([])
+	const notFound = ref(false)
+	const showReport = ref(false)
+	const reportFarmer = ref<Farmer | null>(null)
+	const reportContent = ref('')
+	const moveCategories = ref<{id: number, name: string}[]>([])
+	const releaseDialog = ref(false)
+	const releaseInput = ref<number | null>(null)
+
+	const hasPriority = computed(() => category.value && (category.value.name === 'bug_reports' || category.value.name === 'suggestions_ideas'))
+	const priorityItems = computed(() => [
+		{ value: 0, title: t('priority_none') as string, icon: 'mdi-flag-outline', color: '' },
+		{ value: 1, title: t('priority_high') as string, icon: 'mdi-flag', color: '#e53935' },
+		{ value: 2, title: t('priority_medium') as string, icon: 'mdi-flag', color: '#fb8c00' },
+		{ value: 3, title: t('priority_low') as string, icon: 'mdi-flag', color: '#757575' },
+	])
+
+	const reasons = [
+		Warning.RUDE_FORUM,
+		Warning.FLOOD_FORUM,
+		Warning.PROMO_FORUM,
+		Warning.INCORRECT_FARMER_NAME,
+		Warning.INCORRECT_AVATAR,
+	]
+
+	const releaseVersion = computed(() => {
+		if (!topic.value || !topic.value.release) { return '' }
+		return 'v' + String(topic.value.release).charAt(0) + '.' + String(topic.value.release).slice(1)
+	})
+
+	const categoryName = computed(() => category.value ? (category.value.team > 0 ? category.value.name : t('forum-category.' + category.value.name)) : '')
+
+	const breadcrumb_items = computed(() => [
+		{name: t('main.forum'), link: '/forum'},
+		{name: categoryName.value, link: '/forum/category-' + (category.value ? category.value.id : 0)},
+		{name: topic.value ? topic.value.name : '...', link: '/forum-category-' + (category.value ? category.value.id : 0) + '/topic-' + (topic.value ? topic.value.id : 0)}
+	])
+
+	onMounted(() => {
+		if (topicTitle.value) {
+			LeekWars.contenteditable_paste_protect(topicTitle.value)
 		}
-		get breadcrumb_items() {
-			return [
-				{name: this.$t('main.forum'), link: '/forum'},
-				{name: this.categoryName, link: '/forum/category-' + (this.category ? this.category.id : 0)},
-				{name: this.topic ? this.topic.name : '...', link: '/forum-category-' + (this.category ? this.category.id : 0) + '/topic-' + (this.topic ? this.topic.id : 0)}
-			]
-		}
+	})
 
-		mounted() {
-			LeekWars.contenteditable_paste_protect(this.$refs.topicTitle as HTMLElement)
-		}
-		@Watch("$route.params", {immediate: true})
-		update(force: boolean = false) {
-			const topic = parseInt(this.$route.params.topic, 10)
-			const page = 'page' in this.$route.params ? parseInt(this.$route.params.page, 10) : 1
-			if (!force && this.topic && this.topic.id === topic && this.page === page) {
-				emitter.emit('loaded')
-				return
-			}
-			this.page = page
+	watch(() => route.params, () => update(), { immediate: true })
 
-			if (this.topic) { this.topic.messages = null }
-			this.forumLanguages = (localStorage.getItem('forum/languages') as string || this.$i18n.locale).split(',')
-			LeekWars.get('forum/get-messages/' + topic + '/' + this.forumLanguages + '/' + this.page).then(data => {
-				this.topic = data.topic
-				if (!this.topic) { return }
-				this.category = data.category
-				if (this.topic) {
-					this.topic.messages = data.messages
-					if (this.topic.messages) {
-						for (const message of this.topic.messages) {
-							message.editing = false
-							message.height = 100
-						}
+	function update(force: boolean = false) {
+		const t_id = parseInt(route.params.topic as string, 10)
+		const p = 'page' in route.params ? parseInt(route.params.page as string, 10) : 1
+		if (!force && topic.value && topic.value.id === t_id && page.value === p) {
+			emitter.emit('loaded')
+			return
+		}
+		page.value = p
+
+		if (topic.value) { topic.value.messages = null }
+		notFound.value = false
+		forumLanguages.value = (localStorage.getItem('forum/languages') as string || i18nLocale.value).split(',')
+		LeekWars.get('forum/get-messages/' + t_id + '/' + forumLanguages.value + '/' + page.value).then(data => {
+			topic.value = data.topic
+			if (!topic.value) { return }
+			category.value = data.category
+			if (topic.value) {
+				topic.value.messages = data.messages
+				if (topic.value.messages) {
+					for (const message of topic.value.messages) {
+						message.editing = false
+					message.height = 100
 					}
 				}
-				this.pages = data.pages
-				LeekWars.setTitle(this.topic.name, this.$t('n_messages', [data.total]))
-				LeekWars.setActions([this.action])
-				if (this.topic.subscribed) { this.action.icon = 'mdi-newspaper-minus' }
-				emitter.emit('loaded')
-				this.newMessage = localStorage.getItem('forum/draft-' + this.topic.id) as string
-			})
-		}
-		createIssue() {
-			if (!this.topic || this.creatingIssue) { return }
-			this.creatingIssue = true
-			LeekWars.post('forum/create-issue', {topic_id: this.topic.id}).then((data: any) => {
-				if (this.topic) {
-					this.topic.private_issue = data.private_issue
-				}
-				this.creatingIssue = false
-			})
-		}
-		resolve() {
-			if (!this.topic) { return }
-			const service = this.topic.resolved ? 'forum/unresolve-topic' : 'forum/resolve-topic'
-			LeekWars.post(service, {topic_id: this.topic.id})
-			this.topic.resolved = !this.topic.resolved
-		}
-		lock() {
-			if (!this.topic) { return }
-			const service = this.topic.locked ? 'forum/unlock-topic' : 'forum/lock-topic'
-			LeekWars.post(service, {topic_id: this.topic.id})
-			this.topic.locked = !this.topic.locked
-		}
-		pin() {
-			if (!this.topic) { return }
-			const service = this.topic.pinned ? 'forum/unpin-topic' : 'forum/pin-topic'
-			LeekWars.post(service, {topic_id: this.topic.id})
-			this.topic.pinned = !this.topic.pinned
-		}
-		vote(message: ForumMessage, vote: number) {
-			if (!this.topic) { return }
-			const method = ['vote-message-down', 'remove-message-vote', 'vote-message-up'][vote + 1]
-			LeekWars.post('forum/' + method, {topic_id: this.topic.id, message_id: message.id})
-		}
-		voteUp(message: ForumMessage) {
-			if (message.my_vote === 1) {
-				this.vote(message, 0)
-				message.votes_up--
-				message.my_vote = 0
-			} else {
-				this.vote(message, 1)
-				message.votes_up++
-				if (message.my_vote === -1) {
-					message.votes_down--
-				}
-				message.my_vote = 1
 			}
-			delete this.votes_up_names[message.id]
-			delete this.votes_down_names[message.id]
-		}
-		voteDown(message: ForumMessage) {
-			if (message.my_vote === -1) {
-				this.vote(message, 0)
-				message.votes_down--
-				message.my_vote = 0
-			} else {
-				this.vote(message, -1)
-				message.votes_down++
-				if (message.my_vote === 1) {
-					message.votes_up--
-				}
-				message.my_vote = -1
+			pages.value = data.pages
+			LeekWars.setTitle(topic.value.name, t('n_messages', [data.total]))
+			LeekWars.setActions([action])
+			if (topic.value.subscribed) { action.icon = 'mdi-newspaper-minus' }
+			emitter.emit('loaded')
+			newMessage.value = localStorage.getItem('forum/draft-' + topic.value.id) as string
+			if (canMoveTopic.value) {
+				loadMoveCategories()
 			}
-			delete this.votes_up_names[message.id]
-			delete this.votes_down_names[message.id]
-		}
-		loadVotesUp(message: ForumMessage) {
-			if (!this.topic || this.votes_up_names[message.id] !== undefined) { return }
-			this.votes_up_names[message.id] = null
-			LeekWars.post('forum/get-message-up-votes-names', {topic_id: this.topic.id, message_id: message.id}).then(data => {
-				this.votes_up_names[message.id] = data.farmers.map((f: any) => f[1])
-			})
-		}
-		loadVotesDown(message: ForumMessage) {
-			if (!this.topic || this.votes_down_names[message.id] !== undefined) { return }
-			this.votes_down_names[message.id] = null
-			LeekWars.post('forum/get-message-down-votes-names', {topic_id: this.topic.id, message_id: message.id}).then(data => {
-				this.votes_down_names[message.id] = data.farmers.map((f: any) => f[1])
-			})
-		}
-		deleteGeneric(message: ForumMessage) {
-			if (message.id === -1) {
-				this.deleteTopicDialog = true
-			} else {
-				this.toDeleteMessage = message
-				this.deleteMessageDialog = true
-			}
-		}
-		deleteMessage() {
-			if (!this.toDeleteMessage) { return }
-			LeekWars.delete("forum/delete-message", {message_id: this.toDeleteMessage.id}).then(data => {
-				if (this.toDeleteMessage) {
-					this.toDeleteMessage = null
-					this.deleteMessageDialog = false
-					this.update(true)
-				}
-			})
-		}
-		deleteTopic() {
-			if (!this.topic) { return }
-			LeekWars.delete("forum/delete-topic", {topic_id: this.topic.id}).then(data => {
-				if (this.category) {
-					this.deleteTopicDialog = false
-					this.$router.push("/forum/category-" + this.category.id)
-				}
-			})
-		}
-		updateDraft() {
-			localStorage.setItem('forum/draft-' + this.topic!.id, this.newMessage)
-		}
-		send() {
-			if (!this.topic || this.sendingMessage) { return }
-			this.sendingMessage = true
-			LeekWars.post("forum/post-message", {topic_id: this.topic.id, message: this.newMessage}).then(data => {
-				localStorage.removeItem('forum/draft-' + this.topic!.id)
-				this.newMessage = ''
-				this.update(true)
-				this.sendingMessage = false
-			})
-		}
-		toggleSubscribe() {
-			if (!this.topic) { return }
-			this.topic.subscribed ? this.unsubscribe() : this.subscribe()
-		}
-		subscribe() {
-			if (!this.topic) { return }
-			LeekWars.post('forum/subscribe-topic', {topic_id: this.topic.id})
-			this.topic.subscribed = true
-			this.action.icon = 'mdi-newspaper-minus'
-			LeekWars.toast(this.$i18n.t('notifications_on') as string)
-		}
-		unsubscribe() {
-			if (!this.topic) { return }
-			LeekWars.post('forum/unsubscribe-topic', {topic_id: this.topic.id})
-			this.topic.subscribed = false
-			this.action.icon = 'mdi-newspaper-plus'
-			LeekWars.toast(this.$i18n.t('notifications_off') as string)
-		}
-		edit(message: ForumMessage) {
-			message.editing = true
-			if (message.id === -1) {
-				this.topicEditing = true
-			}
-			const textElement = document.querySelector('#message-' + message.id + ' .text') as HTMLElement
-			if (textElement) {
-				message.height = textElement.offsetHeight - 14
-			}
-		}
-		endEdit(message: ForumMessage) {
-			message.editing = false
-			if (message.id === -1) {
-				this.topicEditing = false
-			}
-		}
-		confirmEdit(message: ForumMessage) {
-			if (!this.topic) { return }
-			const callback = (data: any) => {
-				message.html = null
-				message.editing = false
-				message.edition_date = LeekWars.time
-				if (message.id === -1) {
-					this.topicEditing = false
-				}
-			}
-			if (message.id !== -1) {
-				LeekWars.post("forum/edit-message", {message_id: message.id, new_message: message.message}).then(callback)
-			} else {
-				const input = this.$refs.topicTitle as HTMLElement
-				const title = input.innerText
-				LeekWars.post("forum/edit-topic", {topic_id: this.topic.id, title, message: message.message, issue: this.topic.issue || 0}).then(callback)
-			}
-		}
-		addEmoji(message: ForumMessage, emoji: string, textarea: any) {
-			const index = textarea.selectionStart
-			message.message = message.message.slice(0, index) + emoji + message.message.slice(index, message.message.length)
-		}
-		addEmojiNewMessage(emoji: string) {
-			const textarea = this.$refs.responseTextarea as HTMLTextAreaElement
-			const index = textarea.selectionStart
-			const text = this.newMessage || ''
-			this.newMessage = text.slice(0, index) + emoji + text.slice(index)
-			this.$nextTick(() => {
-				textarea.focus()
-				textarea.selectionStart = textarea.selectionEnd = index + emoji.length
-			})
-		}
+		}).error(() => {
+			notFound.value = true
+			emitter.emit('loaded')
+		})
+	}
 
-		report(message: ForumMessage) {
-			this.reportFarmer = message.writer
-			this.reportContent = message.id === -1 ? 't' + this.topic!.id : 'm' + message.id
-			this.reportDialog = true
+	function createIssue() {
+		if (!topic.value || creatingIssue.value) { return }
+		creatingIssue.value = true
+		LeekWars.post('forum/create-issue', {topic_id: topic.value.id}).then((data) => {
+			if (topic.value) {
+				topic.value.private_issue = data.private_issue
+			}
+			creatingIssue.value = false
+		})
+	}
+
+	const canMoveTopic = computed(() => {
+		if (!category.value || !store.state.farmer) { return false }
+		if (category.value.team !== -1 || category.value.name === 'admin' || category.value.name === 'moderation') { return false }
+		return category.value.moderator || topic.value?.owner === store.state.farmer.id
+	})
+
+	const canEditStatus = computed(() => store.state.connected && ((store.state.farmer && topic.value?.owner === store.state.farmer.id) || category.value?.moderator))
+
+	const canDeleteTopic = computed(() => {
+		if (!category.value || !store.state.farmer) { return false }
+		if (category.value.moderator) { return true }
+		return topic.value?.owner === store.state.farmer.id && pages.value <= 1 && topic.value?.messages?.length === 1
+	})
+
+	const allStatuses = computed<{[key: number]: {title: string, value: ForumTopicStatus, icon: string, color: string}}>(() => ({
+		[ForumTopicStatus.OPEN]: { title: t('status_open') as string, value: ForumTopicStatus.OPEN, icon: 'mdi-circle-outline', color: 'grey' },
+		[ForumTopicStatus.RESOLVED]: { title: t('status_resolved') as string, value: ForumTopicStatus.RESOLVED, icon: 'mdi-check-circle', color: 'green' },
+		[ForumTopicStatus.NOT_REPRODUCED]: { title: t('status_not_reproduced') as string, value: ForumTopicStatus.NOT_REPRODUCED, icon: 'mdi-help-circle', color: 'orange' },
+		[ForumTopicStatus.NOT_PLANNED]: { title: t('status_not_planned') as string, value: ForumTopicStatus.NOT_PLANNED, icon: 'mdi-minus-circle', color: 'grey' },
+		[ForumTopicStatus.NOT_A_BUG]: { title: t('status_not_a_bug') as string, value: ForumTopicStatus.NOT_A_BUG, icon: 'mdi-close-circle', color: 'grey' },
+		[ForumTopicStatus.OBSOLETE]: { title: t('status_obsolete') as string, value: ForumTopicStatus.OBSOLETE, icon: 'mdi-archive', color: 'grey' },
+	}))
+
+	const currentStatusInfo = computed(() => topic.value ? allStatuses.value[topic.value.status] : null)
+
+	const statusItems = computed(() => {
+		const items = [allStatuses.value[ForumTopicStatus.OPEN], allStatuses.value[ForumTopicStatus.RESOLVED]]
+		if (category.value?.moderator) {
+			const isBug = category.value?.name === 'bug_reports'
+			const isSuggestion = category.value?.name === 'suggestions_ideas'
+			if (isBug) {
+				items.push(allStatuses.value[ForumTopicStatus.NOT_REPRODUCED])
+				items.push(allStatuses.value[ForumTopicStatus.NOT_A_BUG])
+			}
+			if (isSuggestion) {
+				items.push(allStatuses.value[ForumTopicStatus.NOT_PLANNED])
+				items.push(allStatuses.value[ForumTopicStatus.OBSOLETE])
+			}
 		}
+		return items
+	})
+
+	function setStatus(status: ForumTopicStatus) {
+		if (!topic.value) { return }
+		LeekWars.post('forum/set-topic-status', {topic_id: topic.value.id, status})
+		topic.value.status = status
+	}
+
+	function lock() {
+		if (!topic.value) { return }
+		const service = topic.value.locked ? 'forum/unlock-topic' : 'forum/lock-topic'
+		LeekWars.post(service, {topic_id: topic.value.id})
+		topic.value.locked = !topic.value.locked
+	}
+
+	function pin() {
+		if (!topic.value) { return }
+		const service = topic.value.pinned ? 'forum/unpin-topic' : 'forum/pin-topic'
+		LeekWars.post(service, {topic_id: topic.value.id})
+		topic.value.pinned = !topic.value.pinned
+	}
+
+	function vote(message: ForumMessage, v: number) {
+		if (!topic.value) { return Promise.resolve() }
+		const method = ['vote-message-down', 'remove-message-vote', 'vote-message-up'][v + 1]
+		return LeekWars.post('forum/' + method, {topic_id: topic.value.id, message_id: message.id})
+	}
+
+	// Invalidate the cached voters list AFTER the vote POST resolves. Otherwise the
+	// optimistic counter update and a hover-triggered names fetch can race: the GET
+	// can land before the server has applied the POST, returning stale names that
+	// disagree with the freshly-bumped counter.
+	function invalidateVotesAfter(message: ForumMessage, votePromise: Promise<unknown>) {
+		votePromise.finally(() => {
+			delete votes_up_names[message.id]
+			delete votes_down_names[message.id]
+		})
+	}
+
+	function voteUp(message: ForumMessage) {
+		if (message.my_vote === 1) {
+			invalidateVotesAfter(message, vote(message, 0))
+			message.votes_up--
+			message.my_vote = 0
+		} else {
+			invalidateVotesAfter(message, vote(message, 1))
+			message.votes_up++
+			if (message.my_vote === -1) {
+				message.votes_down--
+			}
+			message.my_vote = 1
+		}
+	}
+
+	function voteDown(message: ForumMessage) {
+		if (message.my_vote === -1) {
+			invalidateVotesAfter(message, vote(message, 0))
+			message.votes_down--
+			message.my_vote = 0
+		} else {
+			invalidateVotesAfter(message, vote(message, -1))
+			message.votes_down++
+			if (message.my_vote === 1) {
+				message.votes_up--
+			}
+			message.my_vote = -1
+		}
+	}
+
+	function loadVotesUp(message: ForumMessage) {
+		if (!topic.value || votes_up_names[message.id] !== undefined) { return }
+		votes_up_names[message.id] = null
+		LeekWars.post('forum/get-message-up-votes-names', {topic_id: topic.value.id, message_id: message.id}).then(data => {
+			votes_up_names[message.id] = data.farmers.map((f: unknown[]) => f[1])
+		})
+	}
+
+	function loadVotesDown(message: ForumMessage) {
+		if (!topic.value || votes_down_names[message.id] !== undefined) { return }
+		votes_down_names[message.id] = null
+		LeekWars.post('forum/get-message-down-votes-names', {topic_id: topic.value.id, message_id: message.id}).then(data => {
+			votes_down_names[message.id] = data.farmers.map((f: unknown[]) => f[1])
+		})
+	}
+
+	function deleteGeneric(message: ForumMessage) {
+		if (message.id === -1) {
+			deleteTopicDialog.value = true
+		} else {
+			toDeleteMessage.value = message
+			deleteMessageDialog.value = true
+		}
+	}
+
+	function deleteMessage() {
+		if (!toDeleteMessage.value) { return }
+		LeekWars.delete("forum/delete-message", {message_id: toDeleteMessage.value.id}).then(() => {
+			if (toDeleteMessage.value) {
+				toDeleteMessage.value = null
+				deleteMessageDialog.value = false
+				update(true)
+			}
+		})
+	}
+
+	function deleteTopic() {
+		if (!topic.value) { return }
+		LeekWars.delete("forum/delete-topic", {topic_id: topic.value.id}).then(() => {
+			if (category.value) {
+				deleteTopicDialog.value = false
+				router.push("/forum/category-" + category.value.id)
+			}
+		})
+	}
+
+	function loadMoveCategories() {
+		if (!category.value) { return }
+		const languages = forumLanguages.value.join(',')
+		LeekWars.get('forum/get-categories/' + languages).then((data) => {
+			moveCategories.value = data.categories
+				.filter((c: ForumCategory) => c.id !== category.value!.id && c.type !== 'team' && c.name !== 'admin' && c.name !== 'moderation')
+				.map((c: ForumCategory) => ({
+					id: c.id,
+					name: t('forum-category.' + c.name) as string
+				}))
+		})
+	}
+
+	function moveTopic(categoryId: number) {
+		if (!topic.value) { return }
+		LeekWars.post('forum/move-topic', {topic_id: topic.value.id, category_id: categoryId}).then(() => {
+			router.push('/forum/category-' + categoryId + '/topic-' + topic.value!.id)
+			category.value!.id = categoryId
+		})
+	}
+
+	function updateDraft() {
+		localStorage.setItem('forum/draft-' + topic.value!.id, newMessage.value)
+	}
+
+	function send() {
+		if (!topic.value || sendingMessage.value) { return }
+		if (!newMessage.value || !newMessage.value.trim()) { return }
+		if (isOldTopic.value && !oldTopicDialog.value) {
+			oldTopicDialog.value = true
+			return
+		}
+		oldTopicDialog.value = false
+		sendingMessage.value = true
+		LeekWars.post("forum/post-message", {topic_id: topic.value.id, message: newMessage.value}).then(() => {
+			localStorage.removeItem('forum/draft-' + topic.value!.id)
+			newMessage.value = ''
+			update(true)
+			sendingMessage.value = false
+		})
+	}
+
+	function toggleSubscribe() {
+		if (!topic.value) { return }
+		if (topic.value.subscribed) { unsubscribe() } else { subscribe() }
+	}
+
+	function subscribe() {
+		if (!topic.value) { return }
+		LeekWars.post('forum/subscribe-topic', {topic_id: topic.value.id})
+		topic.value.subscribed = true
+		action.icon = 'mdi-newspaper-minus'
+		LeekWars.toast(i18n.t('notifications_on') as string)
+	}
+
+	function unsubscribe() {
+		if (!topic.value) { return }
+		LeekWars.post('forum/unsubscribe-topic', {topic_id: topic.value.id})
+		topic.value.subscribed = false
+		action.icon = 'mdi-newspaper-plus'
+		LeekWars.toast(i18n.t('notifications_off') as string)
+	}
+
+	function edit(message: ForumMessage) {
+		const textElement = document.querySelector('#message-' + message.id + ' .text, #message-' + message.id + ' .md') as HTMLElement
+		if (textElement) {
+			message.height = textElement.offsetHeight - 14
+		}
+		message.editing = true
+		if (message.id === -1) {
+			topicEditing.value = true
+		}
+	}
+
+	function autoResize(message: ForumMessage, e: Event) {
+		const textarea = e.target as HTMLTextAreaElement
+		if (textarea.scrollHeight > message.height) {
+			message.height = textarea.scrollHeight
+		}
+	}
+
+	function endEdit(message: ForumMessage) {
+		message.editing = false
+		if (message.id === -1) {
+			topicEditing.value = false
+		}
+	}
+
+	function confirmEdit(message: ForumMessage) {
+		if (!topic.value) { return }
+		if (!message.message || !message.message.trim()) { return }
+		const callback = () => {
+			message.html = null
+			message.editing = false
+			message.edition_date = LeekWars.time
+			if (message.id === -1) {
+				topicEditing.value = false
+			}
+		}
+		if (message.id !== -1) {
+			LeekWars.post("forum/edit-message", {message_id: message.id, new_message: message.message}).then(callback)
+		} else {
+			const input = topicTitle.value
+			if (!input) return
+			const title = input.innerText
+			LeekWars.post("forum/edit-topic", {
+				topic_id: topic.value.id,
+				title,
+				message: message.message,
+				issue: topic.value.issue || 0,
+				release: topic.value.release || 0,
+			}).then(callback)
+		}
+	}
+
+	function addEmoji(message: ForumMessage, emoji: string, textarea: HTMLTextAreaElement) {
+		const index = textarea.selectionStart
+		message.message = message.message.slice(0, index) + emoji + message.message.slice(index, message.message.length)
+	}
+
+	function addEmojiNewMessage(emoji: string) {
+		const textarea = responseTextarea.value
+		if (!textarea) return
+		const index = textarea.selectionStart
+		const text = newMessage.value || ''
+		newMessage.value = text.slice(0, index) + emoji + text.slice(index)
+		nextTick(() => {
+			textarea.focus()
+			textarea.selectionStart = textarea.selectionEnd = index + emoji.length
+		})
+	}
+
+	function toggleHidden() {
+		if (!topic.value) { return }
+		LeekWars.post('forum/toggle-hidden', {topic_id: topic.value.id}).then((data) => {
+			if (topic.value) {
+				topic.value.hidden = data.hidden
+			}
+		})
+	}
+
+	function setRelease() {
+		if (!topic.value) { return }
+		LeekWars.post('forum/set-release', {topic_id: topic.value.id, release: releaseInput.value || 0}).then(() => {
+			if (topic.value) {
+				topic.value.release = releaseInput.value || null
+				releaseDialog.value = false
+			}
+		})
+	}
+
+	function setPriority(priority: number) {
+		if (!topic.value) { return }
+		LeekWars.post('forum/set-topic-priority', {topic_id: topic.value.id, priority})
+	}
+
+	const isOldTopic = computed(() => {
+		if (!topic.value || !topic.value.last_message_date) { return false }
+		const oneYearAgo = (Date.now() / 1000) - 365 * 24 * 3600
+		return topic.value.last_message_date < oneYearAgo
+	})
+
+	function report(message: ForumMessage) {
+		reportFarmer.value = message.writer
+		reportContent.value = message.id === -1 ? 't' + topic.value!.id : 'm' + message.id
+		showReport.value = true
 	}
 </script>
 
+
 <style lang="scss" scoped>
+	.not-found {
+		padding: 40px;
+		text-align: center;
+		font-size: 18px;
+		color: #888;
+	}
 	.title-wrapper {
 		flex: 1;
 	}
 	h1 {
-		font-size: 22px;
 		display: inline;
 		line-height: 36px;
 		min-height: 36px;
@@ -693,9 +975,6 @@ import { emitter } from '@/model/vue'
 	.message:hover .link {
 		display: block;
 	}
-	.edit-wrapper > span:hover {
-		color: black;
-	}
 	.message .text {
 		word-break: break-word;
 		flex: 1;
@@ -723,36 +1002,115 @@ import { emitter } from '@/model/vue'
 		min-height: 200px;
 		margin-bottom: 15px;
 	}
+	.message .user-agent {
+		font-size: 12px;
+		color: var(--text-color-secondary);
+		padding: 6px 10px;
+		background: var(--background-secondary);
+		border-radius: 4px;
+		margin-top: 10px;
+		word-break: break-all;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
 	.message .bottom {
 		display: flex;
 		align-items: center;
 		margin-top: 10px;
-	}
-	.message .action {
-		display: inline-flex;
-		i {
-			margin-right: 4px;
-		}
-	}
-	.message .date {
-		color: var(--text-color-secondary);
-		font-size: 12px;
-		text-align: right;
-		display: flex;
-		align-items: center;
-		margin-left: -5px;
-		.v-btn {
-			margin-right: 0;
-		}
-	}
-	.edit-wrapper {
 		color: var(--text-color-secondary);
 		font-size: 14px;
-		cursor: pointer;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 12px;
 		span .v-icon {
 			font-size: 17px;
 			vertical-align: bottom;
 		}
+		.action {
+			cursor: pointer;
+			display: inline-flex;
+			gap: 4px;
+			padding: 6px;
+			border-radius: 6px;
+		}
+		.action:hover {
+			color: var(--text-color);
+			background: var(--background);
+			.v-icon {
+				opacity: 1 !important;
+			}
+		}
+		.date {
+			color: var(--text-color-secondary);
+			font-size: 12px;
+			line-height: 1.5;
+			text-align: right;
+		}
+	}
+	.status-text {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		font-size: 14px;
+	}
+	.status-select {
+		display: inline-flex;
+		vertical-align: middle;
+		flex-grow: 0;
+		:deep(.v-field) {
+			font-size: 13px;
+			min-height: 28px;
+			padding: 4px 8px;
+		}
+		:deep(.v-field__input) {
+			padding: 0;
+			min-height: unset;
+			align-items: center;
+		}
+		:deep(.v-icon) {
+			opacity: 1 !important;
+		}
+		:deep(.v-select__selection) {
+			color: var(--text-color);
+		}
+	}
+	:global(.v-list-item__prepend .v-icon.status-icon) {
+		opacity: 1 !important;
+	}
+	:global(.v-list-item__prepend .v-icon) {
+		opacity: 1 !important;
+	}
+	.priority-select {
+		display: inline-flex;
+		vertical-align: middle;
+		flex-grow: 0;
+		:deep(.v-field) {
+			font-size: 13px;
+			min-height: 28px;
+			padding: 4px 8px;
+		}
+		:deep(.v-field__input) {
+			padding: 0;
+			min-height: unset;
+			align-items: center;
+		}
+		:deep(.v-icon) {
+			opacity: 1 !important;
+		}
+		:deep(.v-select__selection) {
+			color: var(--text-color);
+		}
+	}
+	.priority-label {
+		font-size: 13px;
+		font-weight: 500;
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		&.priority-1 { color: #e53935; }
+		&.priority-2 { color: #fb8c00; }
+		&.priority-3 { color: #757575; }
 	}
 	.editor {
 		margin-left: 140px;
@@ -794,36 +1152,65 @@ import { emitter } from '@/model/vue'
 	i.attr {
 		font-size: 22px;
 		margin: 0 6px;
+		&.status-not-a-bug {
+			color: white;
+		}
+		&.status-acknowledged {
+			color: #6f42c1;
+		}
+		&.status-obsolete {
+			color: var(--text-color);
+			opacity: 0.7;
+		}
+		&.hidden-icon {
+			color: white;
+		}
 	}
-	.issue {
+	.release-badge {
+		background: #28a745;
+		color: white;
+		border-radius: 5px;
+		font-size: 13px;
+		font-weight: 500;
+		padding: 2px 6px;
+		display: inline-block;
+		vertical-align: middle;
+		margin: 0 4px;
+	}
+	.issue-badge {
 		background: #0366d6;
 		color: white;
 		border-radius: 5px;
-		font-size: 15px;
+		font-size: 13px;
 		font-weight: 500;
-		padding: 0 4px;
+		padding: 0 6px;
 		display: inline-flex;
 		align-items: center;
-		height: 25px;
-		line-height: auto;
+		height: 22px;
 		img {
-			height: 20px;
-			margin: 2px;
-			margin-right: 5px;
+			height: 16px;
+			margin-right: 4px;
 		}
 		&.private-issue {
 			background: #6f42c1;
 		}
 	}
 	.votes {
-		display: inline-block;
+		display: inline-flex;
+		gap: 6px;
 	}
 	.vote {
 		display: inline-block;
+		cursor: pointer;
 		font-size: 16px;
-		margin-right: 6px;
 		padding: 2px 6px;
 		border-radius: 6px;
+		&.up:hover {
+			background: #5fad1b22;
+		}
+		&.down:hover {
+			background: #ff000022;
+		}
 	}
 	.vote i {
 		vertical-align: bottom;
@@ -853,7 +1240,6 @@ import { emitter } from '@/model/vue'
 	}
 	.vote.down, .vote.down.zero:hover {
 		color: red;
-		margin-right: 20px;
 		.v-icon {
 			color: red;
 		}
@@ -885,6 +1271,8 @@ import { emitter } from '@/model/vue'
 		font-size: 28px;
 		margin-top: 10px;
 		display: block;
+		height: auto;
+		line-height: normal;
 		background: transparent;
 		color: var(--text-color-secondary);
 		padding: 0px;
@@ -937,8 +1325,54 @@ import { emitter } from '@/model/vue'
 	.v-btn.send .v-icon {
 		margin-right: 6px;
 	}
+	.center {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 15px;
+	}
 	.warning {
 		color: #ff5f00;
-		padding: 10px;
+	}
+	#app:not(.app) .pagination {
+		margin-bottom: 15px;
+	}
+	.changelog-banner {
+		display: flex;
+		flex-direction: column;
+		margin: 15px 0;
+		border-radius: 4px;
+		overflow: hidden;
+		text-decoration: none;
+		transition: opacity 0.2s;
+		&:hover {
+			opacity: 0.9;
+		}
+	}
+	.changelog-banner-image {
+		width: 100%;
+		display: block;
+	}
+	.changelog-banner-link {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 12px 16px;
+		background: #5fad1b;
+		color: white;
+		font-weight: 500;
+		font-size: 15px;
+		.v-icon {
+			color: white;
+		}
+	}
+	.views-counter {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		color: var(--text-color-secondary);
+		font-size: 14px;
+		padding: 5px 10px;
+		i { font-size: 18px; }
 	}
 </style>

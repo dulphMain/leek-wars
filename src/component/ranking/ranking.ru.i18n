@@ -3,7 +3,7 @@
 	"allies_killed_title": "Количество убитых союзников",
 	"br": "Королевские битвы",
 	"br_title": "Выиграл Королевскую битву",
-	"chips": "Блохи",
+	"chips": "Чипы",
 	"chips_title": "Количество используемых чипов",
 	"connection_title": "Подключенные дни",
 	"clovers": "Клевер",
@@ -27,7 +27,7 @@
 	"results": "Полученные результаты",
 	"richest_title": "Заработанные деньги",
 	"search_in_ranking": "Поиск в рейтинге",
-	"search_name": "Имя",
+	"search_name": "Имя или ID",
 	"shots": "Выстрелы",
 	"shots_title": "Общее количество выстрелов",
 	"summons": "Призывы",
@@ -51,5 +51,10 @@
 	"boss_killed_title": "Боссов убито",
 	"boss_killed": "Боссы",
 	"turrets_killed": "Турели",
-	"turrets_killed_title": "Турелей уничтожено"
+	"turrets_killed_title": "Турелей уничтожено",
+	"damage": "Урон",
+	"damage_title": "Нанесённый урон",
+	"compositions": "Композиции",
+	"composition": "Композиция",
+	"won": "Победы"
 }

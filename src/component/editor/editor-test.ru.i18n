@@ -34,6 +34,7 @@
 	"select_ai": "Выберите ИИ",
 	"select_chip": "Выберите чип",
 	"select_leek": "Выберите лук-порей",
+	"select_skin": "Выберите внешний вид",
 	"select_map": "Выберите карту",
 	"select_weapon": "Выберите оружие",
 	"scenario_name": "Название сценария",
@@ -43,7 +44,7 @@
 	"type_farmer": "Заводчик",
 	"type_free": "Бесплатно",
 	"type_solo": "Соло",
-	"type_team": "Экипаж",
+	"type_team": "Команда",
 	"test_validate": "Начать тест",
 	"test_scenario": "Скрипт",
 	"test_map": "Карта",
@@ -51,6 +52,9 @@
 	"test_advanced": "Продвигать",
 	"templates": "Модели",
 	"free": "Бесплатно",
-	"select_chips": "Выбор пуль",
-	"select_weapons": "Выбор оружия"
+	"select_chips": "Выбор чипов",
+	"select_weapons": "Выбор оружия",
+	"max_turns": "Максимум ходов",
+	"max_turns_desc": "Максимальное количество ходов в бою (по умолчанию 64)",
+	"max_turns_placeholder": "Целое число от 1 до 64. По умолчанию = 64"
 }

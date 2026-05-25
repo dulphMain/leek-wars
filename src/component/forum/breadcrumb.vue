@@ -1,48 +1,38 @@
 <template lang="html">
 	<div :class="{raw: raw}" class="breadcrumb">
 		<template v-for="(item, i) in items" :key="item.name">
-			<router-link v-ripple :to="item.link" class="item">{{ item.name }}</router-link>
+			<component :is="item.link ? 'router-link' : 'span'" v-ripple :to="item.link || undefined" class="item">{{ item.name }}</component>
 			<v-icon v-if="i < items.length - 1" :key="i">mdi-chevron-right</v-icon>
 		</template>
 	</div>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	@Options({})
-	export default class Breadcrumb extends Vue {
-		@Prop({required: true}) items!: any[]
-		@Prop() raw!: boolean
-	}
+<script setup lang="ts">
+defineProps<{
+	items: unknown[]
+	raw?: boolean
+}>()
 </script>
 
 <style lang="scss" scoped>
 	.breadcrumb {
-		display: inline-flex;
-		margin: 0 -6px;
-		height: 100%;
-		.item {
-			padding: 0 6px;
-			height: 100%;
-		}
-		.item:not(:first-child) {
-			white-space: nowrap;
-			text-overflow: ellipsis;
-			overflow: hidden;
-		}
+		display: inline;
 		i {
-			align-self: center;
+			vertical-align: middle;
 			font-size: 24px;
 		}
 	}
 	.breadcrumb:not(.raw) {
 		font-size: 16px;
+		line-height: 30px;
+		padding: 10px;
+		display: block;
 		i {
-			margin-left: -6px;
-			margin-right: -6px;
+			padding-right: 8px;
+			margin-bottom: 2px;
 		}
 		.item {
-			padding: 10px;
+			padding-right: 8px;
 		}
 	}
 </style>

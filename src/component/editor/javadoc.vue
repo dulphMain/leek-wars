@@ -30,32 +30,41 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue } from 'vue-property-decorator'
+<script setup lang="ts">
 	import Type from '../type.vue'
 	import { KeywordKind } from '@/model/keyword'
+	import { computed } from 'vue'
 
-	@Options({ name: "javadoc", components: { Type } })
-	export default class Javadoc extends Vue {
-		
-		KeywordKind = KeywordKind
+	defineOptions({ name: "Javadoc" })
 
-		@Prop() javadoc!: any
-		@Prop() keyword!: any
-
-
-		get args() {
-			return this.javadoc.items.filter((i: any) => i.type === 'param')
-		}
-		get return_() {
-			const ret = this.javadoc.items.filter((i: any) => i.type === 'return')
-			if (ret.length) { return ret[0] }
-			return null
-		}
-		get other() {
-			return this.javadoc.items.filter((i: any) => i.type !== 'param' && i.type !== 'return')
-		}
+	interface JavadocItem {
+		type: string
+		name?: string
+		text?: string
+		lstype?: unknown
 	}
+
+	interface Javadoc {
+		name: string
+		description?: string
+		lstype?: unknown
+		items: JavadocItem[]
+	}
+
+	const props = defineProps<{
+		javadoc: Javadoc
+		keyword: Record<string, unknown>
+	}>()
+
+	const args = computed<JavadocItem[]>(() => props.javadoc.items.filter((i) => i.type === 'param'))
+
+	const return_ = computed(() => {
+		const ret = props.javadoc.items.filter((i) => i.type === 'return')
+		if (ret.length) { return ret[0] }
+		return null
+	})
+
+	const other = computed(() => props.javadoc.items.filter((i) => i.type !== 'param' && i.type !== 'return'))
 </script>
 
 <style lang="scss" scoped>

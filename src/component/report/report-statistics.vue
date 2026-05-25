@@ -26,51 +26,55 @@
 		</tr>
 		<template v-for="entity in statistics.team1" :key="entity.leek.id">
 			<report-statistics-entity :entity="entity" :stats="stats" :best="best" />
-			<report-statistics-entity v-for="summon in entity.summons" :entity="summon" :stats="stats" :best="best" />
+			<report-statistics-entity v-for="summon in entity.summons" :key="summon.leek.id" :entity="summon" :stats="stats" :best="best" />
 		</template>
 		<tr>
 			<td colspan="19" class="header"><b :style="{color: TEAM_COLORS[1]}">{{ $t('team_n', [2]) }}</b></td>
 		</tr>
 		<template v-for="entity in statistics.team2" :key="entity.leek.id">
 			<report-statistics-entity :entity="entity" :stats="stats" :best="best" />
-			<report-statistics-entity v-for="summon in entity.summons" :entity="summon" :stats="stats" :best="best" />
+			<report-statistics-entity v-for="summon in entity.summons" :key="summon.leek.id" :entity="summon" :stats="stats" :best="best" />
 		</template>
 	</table>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
+	import { mixins } from '@/model/i18n'
 	import { TEAM_COLORS } from '@/model/team'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
 	import ReportStatisticsEntity from './report-statistics-entity.vue'
 	import { FightStatistics } from './statistics'
+	import { Fight } from '@/model/fight'
+	import { computed } from 'vue'
 
-	@Options({ components: { ReportStatisticsEntity } })
-	export default class ReportStatistics extends Vue {
-		@Prop({required: true}) fight!: any
-		@Prop({required: true}) statistics!: FightStatistics
-		stats = ['dmg_out', 'dmg_in', 'heal_out', 'heal_in', 'kills', 'ops_format', 'ops_per_turn_format', 'usedPT', 'usedPTperTurn', 'usedPM', 'roundsPlayed', 'actionsWeapon', 'actionsChip', 'invocation', 'resurrection', 'critical', 'crashes']
-		TEAM_COLORS = TEAM_COLORS
+	defineOptions({ name: 'ReportStatistics', i18n: {}, mixins: [...mixins] })
 
-		get best() {
-			const result: any = {}
-			for (const stat of this.stats) {
-				let best = 0
-				let bestEntities:number[] = []
-				const real_stat = stat === 'ops_format' ? 'operations' : (stat === 'ops_per_turn_format' ? 'operations_per_turn' : stat)
-				for (const e in this.statistics.entities) {
-					if ((this.statistics.entities[e] as any)[real_stat] > best) {
-						best = (this.statistics.entities[e] as any)[real_stat]
-						bestEntities = [this.statistics.entities[e].leek.id]
-					} else if ((this.statistics.entities[e] as any)[real_stat] === best && best !== 0) {
-						bestEntities.push(this.statistics.entities[e].leek.id)
-					}
+	const props = defineProps<{
+		fight: Fight
+		statistics: FightStatistics
+	}>()
+
+	const stats = ['dmg_out', 'dmg_in', 'heal_out', 'heal_in', 'kills', 'ops_format', 'ops_per_turn_format', 'usedPT', 'usedPTperTurn', 'usedPM', 'roundsPlayed', 'actionsWeapon', 'actionsChip', 'invocation', 'resurrection', 'critical', 'crashes']
+
+	const best = computed(() => {
+		const result: Record<string, number[]> = {}
+		for (const stat of stats) {
+			let best = 0
+			let bestEntities:number[] = []
+			const real_stat = stat === 'ops_format' ? 'operations' : (stat === 'ops_per_turn_format' ? 'operations_per_turn' : stat)
+			for (const e in props.statistics.entities) {
+				const entity = props.statistics.entities[e] as Record<string, number>
+				if (entity[real_stat] > best) {
+					best = entity[real_stat]
+					bestEntities = [props.statistics.entities[e].leek.id]
+				} else if (entity[real_stat] === best && best !== 0) {
+					bestEntities.push(props.statistics.entities[e].leek.id)
 				}
-				
-				result[stat] = bestEntities
 			}
-			return result
+
+			result[stat] = bestEntities
 		}
-	}
+		return result
+	})
 </script>
 
 <style lang="scss" scoped>

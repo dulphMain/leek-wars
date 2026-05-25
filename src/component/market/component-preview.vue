@@ -8,12 +8,12 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	@Options({ name: 'component-preview' })
-	export default class ComponentPreview extends Vue {
-		@Prop() component!: any
-	}
+<script setup lang="ts">
+defineOptions({ name: 'ComponentPreview' })
+
+defineProps<{
+	component?: Record<string, unknown>
+}>()
 </script>
 
 <style src='./item-preview.scss' lang='scss'></style>

@@ -1,9 +1,15 @@
 {
-	"price": "Premio",
+	"price": "Precio",
 	"price_lot": "Precio del lote",
 	"quantity": "Cantidad",
-	"name": "Apellido",
+	"name": "Nombre",
 	"level": "Nivel",
 	"date": "Fecha",
-	"rarity": "Escasez"
+	"rarity": "Rareza",
+	"type": "Tipo",
+	"no_group": "Sin grupo",
+	"size": "Tamaño",
+	"size_small": "Pequeño",
+	"size_normal": "Normal",
+	"size_large": "Grande"
 }

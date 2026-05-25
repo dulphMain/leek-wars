@@ -20,7 +20,7 @@
 	"unlocked_the_x": "Unlocked on {date}",
 	"see_fight": "See the fight",
 	"progress": "Progress",
-	"n_pocessors": "{n} possessors",
+	"n_pocessors": "no owner | 1 owner | {0} owners",
 	"first_farmers": "First farmers",
 	"last_farmers": "Last farmers",
 	"group_by_categories": "Categories",
@@ -30,5 +30,6 @@
 	"fastest_farmers": "Fastest farmers",
 	"slowest_farmers": "Slowest farmers",
 	"title_farmers": "Farmers with it in their title",
-	"created_the": "Added on {0}"
+	"created_the": "Added on {0}",
+	"show_in_chat": "Shown in chat"
 }

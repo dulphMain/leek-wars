@@ -21,14 +21,14 @@
 					<div class="add-wrapper">
 						<v-tooltip v-for="cost in [1, 10, 100]" :key="cost">
 							<template #activator="{ props }">
-								<span :q="cost" :class="{locked: costs[c + cost].cost > capital}" class="add" @click="add(c, cost)" v-bind="props"></span>
+								<span :q="cost" :class="{locked: costs[c + cost].cost > capital}" class="add" v-bind="props" @click="add(c, cost)"></span>
 							</template>
 							<div>{{ costs[c + cost].cost + ' capital ⇔ ' + costs[c + cost].bonus + ' ' + $t('characteristic.' + c) }}</div>
 							<b v-if="useful_level[c] > leek.level">{{ $t('characteristic.too_high', [useful_level[c]]) }}</b>
 						</v-tooltip>
 						<v-tooltip v-if="bonuses[c]">
 							<template #activator="{ props }">
-								<span q="0" class="add" @click="clear(c)" v-bind="props"></span>
+								<span q="0" class="add" v-bind="props" @click="clear(c)"></span>
 							</template>
 							{{ $t('main.clear') }}
 						</v-tooltip>
@@ -49,208 +49,212 @@
 	</popup>
 </template>
 
-<script lang="ts">
-	import { COSTS, Leek } from '@/model/leek'
-	import { LeekWars } from '@/model/leekwars'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
-	import CharacteristicTooltip from './characteristic-tooltip.vue'
+<script setup lang="ts">
+import { COSTS, Leek } from '@/model/leek'
+import { LeekWars } from '@/model/leekwars'
+import { store } from '@/model/store'
+import { computed, reactive, ref, watch } from 'vue'
+import CharacteristicTooltip from './characteristic-tooltip.vue'
 
-	@Options({ name: 'capital-dialog', components: { "characteristic-tooltip": CharacteristicTooltip } })
-	export default class CapitalDialog extends Vue {
-		@Prop({required: true}) leek!: Leek
-		@Prop({required: true}) totalCapital!: number
-		@Prop() restat!: boolean
-		bonuses: {[key: string]: any} = {}
-		base: {[key: string]: any} = {}
-		added: {[key: string]: any} = {}
-		costs: {[key: string]: any} = {}
-		usedCapital: number = 0
-		validating: boolean = false
+defineOptions({ name: 'CapitalDialog', components: { "characteristic-tooltip": CharacteristicTooltip } })
 
-		useful_level = {
-			life : 1,
-			strength : 1,
-			wisdom : 1,
-			agility : 1,
-			resistance : 10,
-			science : 53,
-			magic : 42,
-			frequency : 1,
-			cores: 1,
-			ram: 1,
-			tp : 1,
-			mp : 1,
+const props = defineProps<{
+	leek: Leek
+	totalCapital: number
+	restat?: boolean
+}>()
+
+const emit = defineEmits<{
+	'update:modelValue': [value: boolean]
+}>()
+
+const bonuses = reactive<{[key: string]: number}>({})
+const base = reactive<{[key: string]: number}>({})
+const added = reactive<{[key: string]: number}>({})
+const costs = reactive<{[key: string]: {cost: number, bonus: number}}>({})
+const usedCapital = ref(0)
+const validating = ref(false)
+
+const useful_level: Record<string, number> = {
+	life : 1,
+	strength : 1,
+	wisdom : 1,
+	agility : 1,
+	resistance : 10,
+	science : 53,
+	magic : 42,
+	frequency : 1,
+	cores: 1,
+	ram: 1,
+	tp : 1,
+	mp : 1,
+}
+
+watch(() => props.leek.level, () => {
+	reset()
+})
+
+reset()
+
+function reset() {
+	if (!props.leek) { return }
+	usedCapital.value = 0
+	const newBase = {
+		life: 100 + (props.leek.level - 1) * 3,
+		strength: 0,
+		wisdom: 0,
+		agility: 0,
+		resistance: 0,
+		science: 0,
+		magic: 0,
+		frequency: 100,
+		cores: 1,
+		ram: 6,
+		tp: 10,
+		mp: 3
+	}
+	for (const k in newBase) base[k] = (newBase as Record<string, number>)[k]
+	if (props.restat) {
+		const newAdded: Record<string, number> = {
+			life: 0, strength: 0, wisdom: 0, agility: 0, resistance: 0,
+			frequency: 0, science: 0, magic: 0, cores: 0, ram: 0, tp: 0, mp: 0
 		}
-
-		@Watch('leek.level')
-		updateLevel() {
-			this.reset()
-		}
-
-		created() {
-			this.reset()
-		}
-
-		reset() {
-			if (!this.leek) { return }
-			this.usedCapital = 0
-			this.base = {
-				life: 100 + (this.leek.level - 1) * 3,
-				strength: 0,
-				wisdom: 0,
-				agility: 0,
-				resistance: 0,
-				science: 0,
-				magic: 0,
-				frequency: 100,
-				cores: 1,
-				ram: 6,
-				tp: 10,
-				mp: 3
-			}
-			if (this.restat) {
-				this.added = {
-					life: 0, strength: 0, wisdom: 0, agility: 0, resistance: 0,
-					frequency: 0, science: 0, magic: 0, cores: 0, ram: 0, tp: 0, mp: 0
-				}
-				for (const charac in this.added) {
-					let characLeft = (this.leek as any)[charac] - this.base[charac]
-					// console.log(charac, characLeft)
-					let characAdded = 0
-					let step = 0
-					while (characAdded < characLeft) {
-						if (step < COSTS[charac].length - 1 && characAdded >= COSTS[charac][step + 1].step) {
-							step++
-						}
-						const cost = COSTS[charac][step]
-						characAdded += cost.sup
-						// characLeft -= cost.sup
-						this.usedCapital += cost.capital
-					}
-					// this.bonuses[charac] = capitalUsed
-					this.bonuses[charac] = characLeft
-				}
-			} else {
-				this.added = {
-					life: this.leek.life - this.base.life,
-					strength: this.leek.strength,
-					wisdom: this.leek.wisdom,
-					agility: this.leek.agility,
-					resistance: this.leek.resistance,
-					science: this.leek.science,
-					magic: this.leek.magic,
-					frequency: this.leek.frequency - this.base.frequency,
-					cores: this.leek.cores - this.base.cores,
-					ram: this.leek.ram - this.base.ram,
-					tp: this.leek.tp - this.base.tp,
-					mp: this.leek.mp - this.base.mp
-				}
-				this.bonuses = {
-					life: 0, strength: 0, wisdom: 0, agility: 0, resistance: 0,
-					frequency: 0, science: 0, magic: 0, cores: 0, ram: 0, tp: 0, mp: 0
-				}
-			}
-			this.update()
-		}
-
-		buttonCost(capital: number, charac: string) {
-			let tmpBonus = this.bonuses[charac]
-			this.costs[charac + capital] = {cost: 0, bonus: 0}
-			let q = capital
-			while (q > 0) {
-				const total = this.added[charac] + tmpBonus
-				let step = 0
-				for (; step < COSTS[charac].length; ++step) {
-					if (COSTS[charac][step].step > total) { break }
-				}
-				if (step > 0) { step-- }
-				const cost = COSTS[charac][step].capital
-				const bonus = COSTS[charac][step].sup
-				q -= bonus
-				tmpBonus += bonus
-				this.costs[charac + capital].cost += cost
-				this.costs[charac + capital].bonus += bonus
-			}
-		}
-
-		update() {
-			for (const charac in this.bonuses) {
-				for (const q of [1, 10, 100]) {
-					this.buttonCost(q, charac)
-				}
-			}
-		}
-
-		add(charac: string, q: number) {
-			const cost = this.costs[charac + q]
-			if (this.capital >= cost.cost) {
-				this.usedCapital += cost.cost
-				this.bonuses[charac] += cost.bonus
-			}
-			this.update()
-		}
-
-		clear(charac: string) {
-			const added = this.added[charac]
-			const invested = this.bonuses[charac]
-			let current = 0
-			let capital = 0
-			while (current < invested) {
-				let step = COSTS[charac].length - 1
-				for (; step >= 0; --step) {
-					if (COSTS[charac][step].step <= added + current) { break }
+		for (const k in newAdded) added[k] = newAdded[k]
+		for (const charac in added) {
+			let characLeft = (props.leek[charac] as number) - base[charac]
+			let characAdded = 0
+			let step = 0
+			while (characAdded < characLeft) {
+				if (step < COSTS[charac].length - 1 && characAdded >= COSTS[charac][step + 1].step) {
+					step++
 				}
 				const cost = COSTS[charac][step]
-				capital += cost.capital
-				current += cost.sup
+				characAdded += cost.sup
+				usedCapital.value += cost.capital
 			}
-			this.usedCapital -= capital
-			this.bonuses[charac] = 0
-			this.update()
+			bonuses[charac] = characLeft
 		}
-
-		validate() {
-			if (this.validating) return
-			this.validating = true
-			if (this.restat) {
-				for (const stat in this.bonuses) {
-					(this.leek as any)[stat] = this.base[stat] + this.bonuses[stat]
-				}
-				this.close()
-				return
-			}
-			LeekWars.post('leek/spend-capital', {leek_id: this.leek.id, characteristics: JSON.stringify(this.bonuses)}).then(data => {
-				for (const stat in this.bonuses) {
-					;(this.leek as any)[stat] += this.bonuses[stat]
-					;(this.leek as any)['total_' + stat] += this.bonuses[stat]
-				}
-				this.leek.capital = this.capital
-				this.$store.commit('update-capital', {leek: this.leek.id, capital: this.capital})
-				this.close()
-			}).error((error) => {
-				LeekWars.toast(error)
-			})
+	} else {
+		const newAdded: Record<string, number> = {
+			life: props.leek.life - base.life,
+			strength: props.leek.strength,
+			wisdom: props.leek.wisdom,
+			agility: props.leek.agility,
+			resistance: props.leek.resistance,
+			science: props.leek.science,
+			magic: props.leek.magic,
+			frequency: props.leek.frequency - base.frequency,
+			cores: props.leek.cores - base.cores,
+			ram: props.leek.ram - base.ram,
+			tp: props.leek.tp - base.tp,
+			mp: props.leek.mp - base.mp
 		}
-
-		updateValue() {
-			if (!this.value) {
-				this.close()
-				if (LeekWars.didactitial_step === 1) {
-					LeekWars.didactitial_next()
-				}
-			}
+		for (const k in newAdded) added[k] = newAdded[k]
+		const newBonuses: Record<string, number> = {
+			life: 0, strength: 0, wisdom: 0, agility: 0, resistance: 0,
+			frequency: 0, science: 0, magic: 0, cores: 0, ram: 0, tp: 0, mp: 0
 		}
+		for (const k in newBonuses) bonuses[k] = newBonuses[k]
+	}
+	update()
+}
 
-		close() {
-			this.validating = false
-			this.reset()
-			this.$emit('update:modelValue', false)
+function buttonCost(capital: number, charac: string) {
+	let tmpBonus = bonuses[charac]
+	costs[charac + capital] = {cost: 0, bonus: 0}
+	let q = capital
+	while (q > 0) {
+		const total = added[charac] + tmpBonus
+		let step = 0
+		for (; step < COSTS[charac].length; ++step) {
+			if (COSTS[charac][step].step > total) { break }
 		}
+		if (step > 0) { step-- }
+		const cost = COSTS[charac][step].capital
+		const bonus = COSTS[charac][step].sup
+		q -= bonus
+		tmpBonus += bonus
+		costs[charac + capital].cost += cost
+		costs[charac + capital].bonus += bonus
+	}
+}
 
-		get capital() {
-			return this.totalCapital - this.usedCapital
+function update() {
+	for (const charac in bonuses) {
+		for (const q of [1, 10, 100]) {
+			buttonCost(q, charac)
 		}
 	}
+}
+
+function add(charac: string, q: number) {
+	const cost = costs[charac + q]
+	if (capital.value >= cost.cost) {
+		usedCapital.value += cost.cost
+		bonuses[charac] += cost.bonus
+	}
+	update()
+}
+
+function clear(charac: string) {
+	const charAdded = added[charac]
+	const invested = bonuses[charac]
+	let current = 0
+	let capitalUsed = 0
+	while (current < invested) {
+		let step = COSTS[charac].length - 1
+		for (; step >= 0; --step) {
+			if (COSTS[charac][step].step <= charAdded + current) { break }
+		}
+		const cost = COSTS[charac][step]
+		capitalUsed += cost.capital
+		current += cost.sup
+	}
+	usedCapital.value -= capitalUsed
+	bonuses[charac] = 0
+	update()
+}
+
+function validate() {
+	if (validating.value) return
+	validating.value = true
+	if (props.restat) {
+		for (const stat in bonuses) {
+			(props.leek as Leek & Record<string, number>)[stat] = base[stat] + bonuses[stat]
+		}
+		close()
+		return
+	}
+	LeekWars.post('leek/spend-capital', {leek_id: props.leek.id, characteristics: JSON.stringify(bonuses)}).then(_data => {
+		for (const stat in bonuses) {
+			(props.leek as Leek & Record<string, number>)[stat] += bonuses[stat]
+			;(props.leek as Leek & Record<string, number>)['total_' + stat] += bonuses[stat]
+		}
+		// eslint-disable-next-line vue/no-mutating-props
+		props.leek.capital = capital.value
+		store.commit('update-capital', {leek: props.leek.id, capital: capital.value})
+		close()
+	}).error(error => {
+		LeekWars.toast(error)
+	})
+}
+
+function updateValue(value: boolean) {
+	if (!value) {
+		close()
+		if (LeekWars.didactitial_step === 1) {
+			LeekWars.didactitial_next()
+		}
+	}
+}
+
+function close() {
+	validating.value = false
+	reset()
+	emit('update:modelValue', false)
+}
+
+const capital = computed(() => props.totalCapital - usedCapital.value)
 </script>
 
 <style lang="scss" scoped>
@@ -283,6 +287,7 @@
 		margin-right: 10px;
 	}
 	.add {
+		display: inline-block;
 		vertical-align: top;
 		width: 20px;
 		height: 27px;

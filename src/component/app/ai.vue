@@ -1,38 +1,51 @@
 <template lang="html">
-	<div draggable="true" class="ai" :class="{[ai.color]: true, small, locked}">
-		<div class="name">
+	<div draggable="true" class="ai" :class="{[ai.color || '']: true, small, locked}">
+		<div class="name" :style="{ fontSize: nameSize + 'px' }">
 			{{ ai.bot ? $t('leekscript.' + ai.name) : ai.name }}
 			<v-icon v-if="!ai.valid">mdi-close-circle</v-icon>
 		</div>
-		<div v-if="show_lines" class="lines">{{ $tc('main.n_lines', ai.total_lines) }}</div>
+		<div v-if="show_lines" class="lines">{{ $t('main.n_lines', ai.total_lines) }}</div>
 		<div v-if="ai.version" class="version">LS {{ ai.version }}</div>
 	</div>
 </template>
 
-<script lang="ts">
-	import { AI } from '@/model/ai'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
+<script setup lang="ts">
+import { AI } from '@/model/ai'
+import { fileSystem } from '@/model/filesystem'
+import { store } from '@/model/store'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-	@Options({ name: "ai" })
-	export default class AIElement extends Vue {
-		@Prop({required: true}) ai!: AI
-		@Prop({required: true}) library!: boolean
-		@Prop({required: true}) small!: boolean
-		@Prop() locked!: boolean
+defineOptions({ name: "Ai" })
 
-		get my_ai() {
-			return this.$store.state.farmer && this.$store.state.farmer.ais.some((ai: AI) => ai.id === this.ai.id)
-		}
+const props = defineProps<{
+	ai: AI
+	library: boolean
+	small: boolean
+	locked?: boolean
+}>()
 
-		get show_lines() {
-			if (this.small) { return false }
-			if (this.library) { return true }
-			if (this.my_ai) {
-				return this.$store.state.farmer.show_ai_lines
-			}
-			return this.ai.total_lines !== undefined
-		}
+const { t } = useI18n()
+
+const my_ai = computed(() => props.ai.path && props.ai.path in fileSystem.ais)
+
+const displayName = computed(() => props.ai.bot ? t('leekscript.' + props.ai.name) as string : props.ai.name)
+
+const nameSize = computed(() => {
+	const base = props.small ? 12 : 16
+	const length = displayName.value.length
+	if (length <= 16) return base
+	return Math.max(base * 0.75, base * 16 / length)
+})
+
+const show_lines = computed(() => {
+	if (props.small) { return false }
+	if (props.library) { return true }
+	if (my_ai.value) {
+		return store.state.farmer!.show_ai_lines
 	}
+	return props.ai.total_lines !== undefined
+})
 </script>
 
 <style lang="scss" scoped>
@@ -45,6 +58,7 @@
 		align-items: center;
 		justify-content: center;
 		padding: 12px;
+    	padding-top: 20px;
 		width: 103px;
 		height: 120px;
 		position: relative;

@@ -27,13 +27,13 @@
 						</template>
 						<div class="dialog">
 							<div class="dialog-items">
-								<notification v-for="notification in $store.state.notifications" :key="notification.id" :notification="notification" @click.native="readNotification(notification)" />
+								<notification v-for="notification in $store.state.notifications" :key="notification.id" :notification="notification" @click="readNotification(notification)" />
 							</div>
-							<router-link to="/notifications" class="see-all" @click.native="LeekWars.closeMenu()">{{ $t('main.all_notifications') }}</router-link>
+							<router-link to="/notifications" class="see-all" @click="LeekWars.closeMenu()">{{ $t('main.all_notifications') }}</router-link>
 						</div>
 					</v-menu>
 				</div>
-				<router-link v-show="LeekWars.menuExpanded" v-ripple to="/settings" class="action header-button mobile settings" @click.native="closeMenu">
+				<router-link v-show="LeekWars.menuExpanded" v-ripple to="/settings" class="action header-button mobile settings" @click="closeMenu">
 					<v-icon>mdi-cog-outline</v-icon>
 				</router-link>
 			</div>
@@ -48,36 +48,38 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { LeekWars } from '@/model/leekwars'
-	import { emitter } from '@/model/vue'
-	import { Options, Vue } from 'vue-property-decorator'
+<script setup lang="ts">
+import { LeekWars } from '@/model/leekwars'
+import { store } from '@/model/store'
+import { emitter } from '@/model/vue'
+import { ref } from 'vue'
+import type { Notification } from '@/model/notification'
 
-	@Options({ name: 'lw-bar' })
-	export default class Bar extends Vue {
-		dark: boolean = false
-		mainButton() {
-			if (LeekWars.menuExpanded || !LeekWars.splitBack) {
-				LeekWars.toggleMenu()
-			} else {
-				emitter.emit('back')
-			}
-		}
-		closeMenu() {
-			LeekWars.menuExpanded = false
-			LeekWars.dark = 0
-		}
-		readNotifications(e: any) {
-			if (e === false && this.$store.state.unreadNotifications) {
-				LeekWars.post('notification/read-all')
-				this.$store.commit('read-notifications')
-			}
-			this.dark = e
-		}
-		readNotification(notification: any) {
-			LeekWars.post('notification/read', {notification_id: notification.id})
-		}
+defineOptions({ name: 'LwBar' })
+
+const dark = ref(false)
+
+function mainButton() {
+	if (LeekWars.menuExpanded || !LeekWars.splitBack) {
+		LeekWars.toggleMenu()
+	} else {
+		emitter.emit('back')
 	}
+}
+function closeMenu() {
+	LeekWars.menuExpanded = false
+	LeekWars.dark = 0
+}
+function readNotifications(e: boolean) {
+	if (e === false && store.state.unreadNotifications) {
+		LeekWars.post('notification/read-all')
+		store.commit('read-notifications')
+	}
+	dark.value = e
+}
+function readNotification(notification: Notification) {
+	LeekWars.post('notification/read', {notification_id: notification.id})
+}
 </script>
 
 <style lang="scss" scoped>
@@ -175,11 +177,10 @@
 		vertical-align: top;
 		position: relative;
 	}
-	.action i {
-		font-size: 26px;
+	.action .v-icon {
 		width: 56px;
 		height: 56px;
-		padding: 12px;
+		padding: 15px;
 		color: white;
 	}
 	.action img {

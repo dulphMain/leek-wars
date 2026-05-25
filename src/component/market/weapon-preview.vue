@@ -18,7 +18,7 @@
 			</div>
 
 			<i18n-t v-if="weapon.max_uses != -1" keypath="effect.max_uses" tag="div">
-				<template #uses><span v-html="$tc('effect.n_uses', weapon.max_uses)"></span></template>
+				<template #uses><span v-html="$t('effect.n_uses', weapon.max_uses)"></span></template>
 			</i18n-t>
 
 			<area-view v-if="weapon.area != Area.SINGLE_CELL" :area="weapon.area" />
@@ -30,22 +30,20 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import AreaView from '@/component/market/area-view.vue'
-	import EffectView from '@/component/market/effect.vue'
-	import RangeView from '@/component/market/range-view.vue'
-	import { Area } from '@/model/area'
-	import { Leek } from '@/model/leek'
-	import { WeaponTemplate } from '@/model/weapon'
-	import { Options, Prop, Vue } from 'vue-property-decorator'
-	@Options({
-		components: { 'range-view': RangeView, 'effect-view': EffectView, 'area-view': AreaView }
-	})
-	export default class WeaponPreview extends Vue {
-		@Prop() weapon!: WeaponTemplate
-		@Prop() leek!: Leek
-		Area = Area
-	}
+<script setup lang="ts">
+import AreaView from '@/component/market/area-view.vue'
+import EffectView from '@/component/market/effect.vue'
+import RangeView from '@/component/market/range-view.vue'
+import { Area } from '@/model/area'
+import type { Leek } from '@/model/leek'
+import type { WeaponTemplate } from '@/model/weapon'
+
+defineOptions({ components: { 'range-view': RangeView, 'effect-view': EffectView, 'area-view': AreaView } })
+
+defineProps<{
+	weapon: WeaponTemplate
+	leek?: Leek
+}>()
 </script>
 
 <style src='./item-preview.scss' lang='scss'></style>

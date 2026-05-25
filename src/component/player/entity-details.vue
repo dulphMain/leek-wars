@@ -5,7 +5,7 @@
 				<template #activator="{ props }">
 					<div :value="effectText(effect)" :turns="effect.turns === -1 ? '∞' : effect.turns" class="effect" :class="{irreductible: effect.modifiers & EffectModifier.IRREDUCTIBLE}" v-bind="props">
 						<img class="image" :src="effect.texture.src">
-						<img class="state" v-if="effect.type === EffectType.ADD_STATE" :src="LeekWars.STATIC + 'image/state/' + effect.value + '.svg'" :style="{ background: FightEntity.stateColors[effect.value] }">
+						<img v-if="effect.type === EffectType.ADD_STATE" class="state" :src="LeekWars.STATIC + 'image/state/' + effect.value + '.svg'" :style="{ background: FightEntity.stateColors[effect.value] }">
 					</div>
 				</template>
 				<div v-if="effect.item"><b>{{ $t(LeekWars.items[effect.item].name.replace('_', '.')) }}</b></div>
@@ -49,16 +49,19 @@
 							{{ $t('fight.n_tp', [effect.value]) }}
 						</b>
 						<b v-else-if="effect.type === EffectType.SHACKLE_TP" class="color-tp">
-							{{ $t('fight.n_tp', [effect.value]) }}
+							{{ $t('fight.n_tp', [-effect.value]) }}
 						</b>
 						<b v-else-if="effect.type === EffectType.SHACKLE_MP" class="color-mp">
-							{{ $t('fight.n_mp', [effect.value]) }}
+							{{ $t('fight.n_mp', [-effect.value]) }}
 						</b>
 						<b v-else-if="effect.type === EffectType.SHACKLE_STRENGTH" class="color-strength">
-							{{ $t('fight.n_strength', [effect.value]) }}
+							{{ $t('fight.n_strength', [-effect.value]) }}
 						</b>
 						<b v-else-if="effect.type === EffectType.SHACKLE_MAGIC" class="color-magic">
-							{{ $t('fight.n_magic', [effect.value]) }}
+							{{ $t('fight.n_magic', [-effect.value]) }}
+						</b>
+						<b v-else-if="effect.type === EffectType.SHACKLE_WISDOM" class="color-wisdom">
+							{{ $t('fight.n_wisdom', [-effect.value]) }}
 						</b>
 						<b v-else-if="effect.type === EffectType.DAMAGE_RETURN">
 							{{ $t('fight.n_damage_return', [effect.value + '%']) }}
@@ -74,7 +77,13 @@
 						</b>
 					</b>
 					<span v-if="effect.turns === -1">{{ $t('effect.infinite') }}</span>
-					<span v-else v-html="$t('effect.on_n_turns', {turns: $tc('effect.n_turns', [effect.turns])})"></span>
+					<i18n-t v-else keypath="effect.on_n_turns" tag="span">
+						<template #turns>
+							<i18n-t keypath="effect.n_turns" :plural="effect.turns">
+								<template #n><b>{{ effect.turns }}</b></template>
+							</i18n-t>
+						</template>
+					</i18n-t>
 				</div>
 			</v-tooltip>
 		</div>
@@ -92,15 +101,15 @@
 					<div class="spacer"></div>
 					<span class="level">{{ $t('main.level_n', [entity.level]) }}</span>
 					<div class="bar-wrapper">
-						<div :style="{width: (100 * entity.life / entity.maxLife) + '%', background: entity.lifeColor}" class="details-bar"></div>
+						<div :style="{width: (100 * entity.displayLife / entity.maxLife) + '%', background: entity.lifeColor}" class="details-bar"></div>
 					</div>
-					<div>{{ entity.farmer_name }}</div>
+					<div>{{ entity.farmer?.name }}</div>
 					<avatar :farmer="entity.farmer" class="farmer-avatar" />
 				</div>
 				<div class="stats">
 					<div :class="{zero: entity.life === 0}" class="stat life">
 						<img src="/image/charac/small/life.png">
-						<div :class="{small: entity.maxLife > 9999}" class="color-life">{{ entity.life + ' / ' + entity.maxLife }}</div>
+						<div :class="{small: entity.maxLife > 9999}" class="color-life">{{ Math.round(entity.displayLife) + ' / ' + entity.maxLife }}</div>
 					</div>
 					<div :class="{zero: entity.tp === 0}" class="stat">
 						<img src="/image/charac/small/tp.png">
@@ -158,9 +167,8 @@
 	</div>
 </template>
 
-<script lang="ts">
-	import { Effect, EffectModifier, EffectType } from '@/model/effect'
-	import { Options, Prop, Vue, Watch } from 'vue-property-decorator'
+<script setup lang="ts">
+	import { EffectModifier, EffectType, EntityEffect } from '@/model/effect'
 	import { Chest } from './game/chest'
 	import { FightEntity } from './game/entity'
 	import { Game } from './game/game'
@@ -168,29 +176,24 @@
 	import TurretImage from '@/component/turret-image.vue'
 	import { Mob } from './game/mob'
 
-	@Options({ name: 'entity-details', components: { TurretImage } })
-	export default class EntityDetails extends Vue {
-		@Prop({required: true}) entity!: FightEntity
-		@Prop({required: true}) game!: Game
-		@Prop({required: true}) dark!: boolean
-		Turret = Turret
-		EffectType = EffectType
-		Chest = Chest
-		Mob = Mob
-		FightEntity = FightEntity
-		EffectModifier = EffectModifier
+	defineOptions({ name: 'EntityDetails' })
 
-		effectText(effect: any) {
-			if (effect.type === EffectType.ADD_STATE) return ''
-			let r = '' + effect.value
-			if (effect.type === EffectType.SHACKLE_MAGIC || effect.type === EffectType.SHACKLE_MP || effect.type === EffectType.SHACKLE_TP || effect.type === EffectType.SHACKLE_STRENGTH || effect.type === EffectType.VULNERABILITY || effect.type === EffectType.ABSOLUTE_VULNERABILITY) {
-				r = '-' + r
-			}
-			if (effect.type === EffectType.RAW_RELATIVE_SHIELD || effect.type === EffectType.RELATIVE_SHIELD || effect.type === EffectType.DAMAGE_RETURN || effect.type === EffectType.VULNERABILITY) {
-				r += '%'
-			}
-			return r
+	defineProps<{
+		entity: FightEntity
+		game: Game
+		dark: boolean
+	}>()
+
+	function effectText(effect: EntityEffect) {
+		if (effect.type === EffectType.ADD_STATE) return ''
+		let r = '' + effect.value
+		if (effect.type === EffectType.SHACKLE_MAGIC || effect.type === EffectType.SHACKLE_MP || effect.type === EffectType.SHACKLE_TP || effect.type === EffectType.SHACKLE_STRENGTH || effect.type === EffectType.VULNERABILITY || effect.type === EffectType.ABSOLUTE_VULNERABILITY) {
+			r = '-' + r
 		}
+		if (effect.type === EffectType.RAW_RELATIVE_SHIELD || effect.type === EffectType.RELATIVE_SHIELD || effect.type === EffectType.DAMAGE_RETURN || effect.type === EffectType.VULNERABILITY) {
+			r += '%'
+		}
+		return r
 	}
 </script>
 
