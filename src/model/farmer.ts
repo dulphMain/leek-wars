@@ -13,6 +13,7 @@ interface InventoryItem {
 	template: number
 	quantity: number
 	time?: number
+	type?: number
 }
 
 interface FarmerTournament {
@@ -131,10 +132,10 @@ class Farmer {
 	public potion!: unknown
 	public resource!: unknown
 	public trophy!: unknown
-	public leek_error!: { error: string, params?: unknown } | null
-	public mail_error!: { error: string, params?: unknown } | null
-	public name_error!: { error: string, params?: unknown } | null
-	public password_error!: { error: string, params?: unknown } | null
+	public leek_error?: { error: string, params?: unknown } | null
+	public mail_error?: { error: string, params?: unknown } | null
+	public name_error?: { error: string, params?: unknown } | null
+	public password_error?: { error: string, params?: unknown } | null
 	public candidacies!: TeamInvitation[]
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	[key: string]: any
