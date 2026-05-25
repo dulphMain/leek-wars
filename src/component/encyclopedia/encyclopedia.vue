@@ -99,7 +99,7 @@
 
 							<div class="contributors" @click="toggleStats">
 								<v-icon>mdi-account-multiple</v-icon>
-								<div v-html="$t('n_contributors', page.contributors.length)"></div>
+								<div v-html="$t('n_contributors', page.contributors?.length ?? 0)"></div>
 								<div class="avatars">
 									<rich-tooltip-farmer v-for="contributor in page.contributors" :id="contributor.id" :key="contributor.id">
 										<router-link :to="'/farmer/' + contributor.id">
@@ -109,7 +109,7 @@
 								</div>
 								<i18n-t tag="div" keypath="n_views" class="views">
 									<template #v>
-										<b>{{ $filters.number(page.views) }}</b>
+										<b>{{ $filters.number(page.views ?? 0) }}</b>
 									</template>
 								</i18n-t>
 								<div v-if="totalReferences > 0" class="references-count">
@@ -127,22 +127,22 @@
 												<router-link :to="'/farmer/' + page.creator"><span v-bind="props">{{ page.creator_name }}</span></router-link>
 											</rich-tooltip-farmer>
 										</template>
-										<template #date>{{ $filters.datetime(page.creation_time) }}</template>
+										<template #date>{{ $filters.datetime(page.creation_time ?? 0) }}</template>
 									</i18n-t>
 
-									<i18n-t keypath="edited_by_x_the_y" tag="div" v-if="page.last_editor">
+									<i18n-t v-if="page.last_editor" keypath="edited_by_x_the_y" tag="div">
 										<template #farmer>
 											<rich-tooltip-farmer :id="page.last_editor" v-slot="{ props }">
 												<router-link :to="'/farmer/' + page.last_editor"><span v-bind="props">{{ page.last_editor_name }}</span></router-link>
 											</rich-tooltip-farmer>
 										</template>
-										<template #date>{{ $filters.datetime(page.last_edition_time) }}</template>
+										<template #date>{{ $filters.datetime(page.last_edition_time ?? 0) }}</template>
 									</i18n-t>
 								</div>
 								<div>
 									<i18n-t tag="div" keypath="n_contributions">
 										<template #n>
-											<b>{{ $filters.number(page.contributions) }}</b>
+											<b>{{ $filters.number(page.contributions ?? 0) }}</b>
 										</template>
 									</i18n-t>
 									{{ $t('main.n_lines', page.content.split('\n').length) }}
@@ -230,7 +230,7 @@
 	import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 	import { emitter } from '@/model/vue'
 
-	defineOptions({ name: 'encyclopedia', i18n: {}, mixins: [...mixins], components: { Markdown, Breadcrumb, RichTooltipFarmer } })
+	defineOptions({ name: 'Encyclopedia', i18n: {}, mixins: [...mixins], components: { Markdown, Breadcrumb, RichTooltipFarmer } })
 
 	const { locale: i18nLocale } = useI18n()
 	const t = useNamespacedT('encyclopedia')
@@ -240,23 +240,55 @@
 	const markdownRef = useTemplateRef<HTMLElement>('markdown')
 	const diffContainer = useTemplateRef<HTMLElement>('diffContainer')
 
-	const english = ref('')
-	const page = ref<any>(null)
+	interface EncyclopediaPage {
+		id: number
+		title: string
+		language: string
+		content: string
+		parent?: number
+		reference?: number
+		official?: boolean
+		locker?: number | null
+		locker_name?: string
+		new?: boolean
+		translations: Record<string, string>
+		creator?: number
+		creator_name?: string
+		last_editor?: number
+		last_editor_name?: string
+		creation_time?: number
+		last_edition_time?: number
+		views?: number
+		contributions?: number
+		contributors?: { id: number; avatar_changed: number }[]
+	}
+	interface HistoryEntry {
+		content: string
+		author: number
+		author_name: string
+		color?: string
+		time: number
+		avatar_changed?: number
+		additions?: number
+		deletions?: number
+	}
+	interface ReferencedPage { id: number; title: string; language: string }
+	interface ReferencedBy { children: ReferencedPage[]; translations: ReferencedPage[]; linked_from: ReferencedPage[] }
+	interface PageAction { icon: string; click: () => void }
+
+	const page = ref<EncyclopediaPage | null>(null)
 	const edition = ref(false)
 	const editor = ref<Monaco.editor.IStandaloneCodeEditor | null>(null)
 	let scrolling = false
-	const pages = ref<any>({})
 	const modified = ref(false)
-	let initialVersionId = 0
 	const statsExpanded = ref(false)
-	const searchQuery = ref('')
 	const redirectedFrom = ref<string | null>(null)
 	let boundBeforeUnload: () => void
-	const actions = ref<any[]>([])
-	const history = ref<any[] | null>(null)
+	const actions = ref<PageAction[]>([])
+	const history = ref<HistoryEntry[] | null>(null)
 	const selectedHistoryIndex = ref<number | null>(null)
 	const diffEditor = ref<Monaco.editor.IStandaloneDiffEditor | null>(null)
-	const referencedBy = ref<{ children: any[], translations: any[], linked_from: any[] } | null>(null)
+	const referencedBy = ref<ReferencedBy | null>(null)
 	let destroyed = false
 
 	const language = computed(() => {
@@ -284,17 +316,19 @@
 	})
 	const contributor = computed(() => store.state.farmer ? store.state.farmer.contributor || store.state.farmer.moderator : false)
 	const parents = computed(() => {
-		const list = []
+		const list: { id: number, title: string, [key: string]: unknown }[] = []
 		const visited = new Set<number>()
-		for (let current = page.value; current; current = LeekWars.encyclopediaById[language.value] ? LeekWars.encyclopediaById[language.value][current.parent] : null) {
+		let current: { id: number, title: string, parent?: number, [key: string]: unknown } | null = page.value
+		while (current) {
 			if (visited.has(current.id)) { break }
 			visited.add(current.id)
 			list.push(current)
+			current = (current.parent !== undefined && LeekWars.encyclopediaById[language.value]) ? LeekWars.encyclopediaById[language.value][current.parent] : null
 		}
 		return list.reverse()
 	})
 	const function_args = computed(() => {
-		for (const fun of FUNCTIONS as any[]) {
+		for (const fun of FUNCTIONS) {
 			if (fun.name === code.value) {
 				let name = "("
 				let i = 0
@@ -314,6 +348,7 @@
 				return name
 			}
 		}
+		return undefined
 	})
 	const totalReferences = computed(() => {
 		if (!referencedBy.value) return 0
@@ -333,9 +368,6 @@
 		destroyed = true
 		emitter.off('ctrlS', onCtrlS)
 		window.removeEventListener('beforeunload', boundBeforeUnload)
-		LeekWars.large = false
-		LeekWars.box = false
-		LeekWars.footer = true
 
 		destroyDiffEditor()
 		if (editor.value) {
@@ -346,6 +378,14 @@
 		if (edition.value) {
 			editEnd()
 		}
+		// Reset des flags layout après le swap router-view pour éviter un re-render
+		// de app.vue pendant le patch (parentNode null sur les nodes en cours de
+		// démontage). Voir feedback_nextTick_layout_reset.md.
+		nextTick(() => {
+			LeekWars.large = false
+			LeekWars.box = false
+			LeekWars.footer = true
+		})
 	})
 
 	onMounted(async () => {
@@ -369,7 +409,7 @@
 
 		if (code.value === 'Page au hasard') {
 			const ps = Object.values(LeekWars.encyclopedia[i18nLocale.value])
-			router.replace('/encyclopedia/' + i18nLocale.value + '/' + (ps[Math.random() * ps.length | 0] as any).title)
+			router.replace('/encyclopedia/' + i18nLocale.value + '/' + ps[Math.random() * ps.length | 0].title)
 			return
 		}
 
@@ -387,7 +427,7 @@
 		referencedBy.value = null
 		destroyDiffEditor()
 
-		LeekWars.get<any>('encyclopedia/get/' + language.value + '/' + code.value).then(p => {
+		LeekWars.get<EncyclopediaPage & { redirect?: string }>('encyclopedia/get/' + language.value + '/' + code.value).then(p => {
 			if (p.redirect) {
 				router.replace('/encyclopedia/' + language.value + '/' + p.redirect.replace(/ /g, '_') + '?from=' + encodeURIComponent(code.value))
 				return
@@ -403,12 +443,13 @@
 			LeekWars.setTitle(title.value)
 			emitter.emit('loaded')
 		})
-		.error((result: any) => {
-			let fun = null as any
+		.error((err) => {
+			const result = err as { translations?: Record<string, string> }
+			let fun: typeof FUNCTIONS[number] | null = null
 			let args = ''
 			let ret = ''
 			let description = ''
-			for (const funct of FUNCTIONS as any[]) {
+			for (const funct of FUNCTIONS) {
 				if (funct.name === code.value) {
 					fun = funct
 					description = t('doc.func_' + fun.name) as string
@@ -494,7 +535,7 @@ ${ret}
 
 				editor.value.onDidChangeModelContent(() => {
 					modified.value = true
-					page.value.content = editor.value!.getValue()
+					if (page.value) page.value.content = editor.value!.getValue()
 				})
 
 				editor.value.onDidScrollChange((e) => {
@@ -510,7 +551,6 @@ ${ret}
 					if (md) md.scrollTop = (md.scrollHeight - md.clientHeight) * percent
 				})
 
-				initialVersionId = editor.value.getModel()!.getAlternativeVersionId()
 				modified.value = false
 			})
 		})
@@ -519,7 +559,6 @@ ${ret}
 	function setEditorContent() {
 		if (!page.value || !editor.value) { return }
 		editor.value.setValue(page.value.content)
-		initialVersionId = editor.value.getModel()!.getAlternativeVersionId()
 		modified.value = false
 	}
 
@@ -533,16 +572,18 @@ ${ret}
 			editor.value.dispose()
 			editor.value = null
 		}
-		page.value.locker = null
+		if (page.value) page.value.locker = null
 		releasePage()
 	}
 
 	function setPageLanguage(lang: string) {
+		if (!page.value) return
 		page.value.language = lang
 		LeekWars.post('encyclopedia/set-language', {page_id: page.value.id, language: lang })
 	}
 
 	function releasePage() {
+		if (!page.value) return
 		LeekWars.post('encyclopedia/end-edition', {page_id: page.value.id})
 	}
 
@@ -583,9 +624,10 @@ ${ret}
 	})
 
 	function save() {
+		if (!page.value) return
 		LeekWars.put('encyclopedia/update', {page_id: page.value.id, language: page.value.language, title: page.value.title, content: page.value.content, parent: page.value.parent || 1, reference: page.value.reference || 0}).then((result) => {
 			LeekWars.toast("Sauvegardé !")
-			if (page.value.id === 0) {
+			if (page.value && page.value.id === 0) {
 				page.value.new = false
 				page.value.id = result.id
 			}
@@ -597,7 +639,6 @@ ${ret}
 			}
 		})
 
-		initialVersionId = editor.value!.getModel()!.getAlternativeVersionId()
 		modified.value = false
 		page.value.last_edition_time = Date.now() / 1000
 		page.value.last_editor = store.state.farmer!.id
@@ -614,7 +655,7 @@ ${ret}
 
 	function loadHistory() {
 		if (!page.value || page.value.id === 0) return
-		LeekWars.get('encyclopedia/get-history/' + page.value.id).then((h: { content: string, author: number, author_name: string, time: number, additions?: number, deletions?: number }[]) => {
+		LeekWars.get<HistoryEntry[]>('encyclopedia/get-history/' + page.value.id).then((h) => {
 			for (let i = 0; i < h.length; i++) {
 				if (i < h.length - 1) {
 					const newLines = h[i].content.split('\n')
@@ -695,22 +736,10 @@ ${ret}
 		}
 	}
 
-	function comment(c: any) {
-		page.value.comments.push(c)
-	}
-
-	function search() {
-		const query = searchQuery.value.replace(/ /g, '+')
-		if (query) {
-			router.push('/encyclopedia-search?query=' + query)
-		} else {
-			router.push('/encyclopedia-search')
-		}
-	}
 
 	function loadReferencedBy() {
 		if (!page.value || !page.value.id) return
-		LeekWars.get('encyclopedia/get-referenced-by/' + page.value.id).then((result: any) => {
+		LeekWars.get<ReferencedBy>('encyclopedia/get-referenced-by/' + page.value.id).then((result) => {
 			referencedBy.value = result
 		})
 	}
@@ -736,7 +765,7 @@ ${ret}
 		LeekWars.delete('encyclopedia/delete', { page_id: page.value.id }).then(() => {
 			LeekWars.toast('Page supprimée !')
 			router.push('/encyclopedia')
-		}).error((error: any) => {
+		}).error((error: { error: string; count?: number }) => {
 			if (error.error === 'has_children') {
 				LeekWars.toast('Impossible : ' + error.count + ' page(s) enfant(s)')
 			} else if (error.error === 'has_links') {
@@ -748,6 +777,7 @@ ${ret}
 	}
 
 	function updateOfficial() {
+		if (!page.value) return
 		LeekWars.put('encyclopedia/official', {page_id: page.value.id, official: page.value.official}).then(() => {
 		}).error(error => LeekWars.toast("Sauvegarde échouée : " + error.error))
 	}

@@ -18,8 +18,9 @@
 </template>
 
 <script setup lang="ts">
-defineOptions({ name: 'lw-type' })
+defineOptions({ name: 'LwType' })
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 defineProps<{
 	type: any
 }>()

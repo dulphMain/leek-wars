@@ -69,7 +69,7 @@
 	import { computed, ref, watch } from 'vue'
 	import { useI18n } from 'vue-i18n'
 
-	defineOptions({ name: 'git-remote-dialog', i18n: {}, mixins: [...mixins], components: { Popup } })
+	defineOptions({ name: 'GitRemoteDialog', i18n: {}, mixins: [...mixins], components: { Popup } })
 
 	const props = defineProps<{
 		modelValue: boolean
@@ -160,9 +160,9 @@
 		if (!props.folder) return
 		remotesLoading.value = true
 		try {
-			const data = await gitCall('git/remotes', { folder: props.folder })
+			const data = await gitCall<{ remotes: { name: string, url: string }[] }>('git/remotes', { folder: props.folder })
 			remotes.value = data.remotes || []
-		} catch (e) {
+		} catch {
 			remotes.value = []
 		} finally {
 			remotesLoading.value = false
@@ -171,14 +171,14 @@
 
 	async function loadCredentials() {
 		try {
-			const data = await gitCall('git-credential/get')
+			const data = await gitCall<{ credentials: { provider: string, auth_type: string, username: string, instance_url: string | null }[] }>('git-credential/get')
 			credentials.value = data.credentials || []
 			if (credentials.value.some(c => c.provider === 'github' && c.auth_type === 'app')) {
 				loadAvailableRepos()
 			} else {
 				availableRepos.value = []
 			}
-		} catch (e) {
+		} catch {
 			credentials.value = []
 			availableRepos.value = []
 		}
@@ -186,9 +186,9 @@
 
 	async function loadAvailableRepos() {
 		try {
-			const data = await gitCall('git-credential/repos')
+			const data = await gitCall<{ repos: { name: string, full_name: string, clone_url: string, private: boolean }[] }>('git-credential/repos')
 			availableRepos.value = data.repos || []
-		} catch (e) {
+		} catch {
 			availableRepos.value = []
 		}
 	}
@@ -201,8 +201,9 @@
 			newRemoteName.value = 'origin'
 			newRemoteUrl.value = ''
 			loadRemotes()
-		} catch (e: any) {
-			error.value = e.details || e.error || 'Error'
+		} catch (e: unknown) {
+			const err = e as { details?: string, error?: string }
+			error.value = err.details || err.error || 'Error'
 		}
 	}
 
@@ -211,8 +212,9 @@
 		try {
 			await gitCall('git/remote-remove', { folder: props.folder, name })
 			loadRemotes()
-		} catch (e: any) {
-			error.value = e.details || e.error || 'Error'
+		} catch (e: unknown) {
+			const err = e as { details?: string, error?: string }
+			error.value = err.details || err.error || 'Error'
 		}
 	}
 
@@ -230,11 +232,12 @@
 			patInstanceUrl.value = ''
 			selfHosted.value = false
 			loadCredentials()
-		} catch (e: any) {
-			const key = e?.error === 'invalid_instance_url' ? 'invalid_instance_url' : 'invalid_token'
+		} catch (e: unknown) {
+			const err = e as { error?: string, details?: { http_code?: number, curl_error?: string } }
+			const key = err?.error === 'invalid_instance_url' ? 'invalid_instance_url' : 'invalid_token'
 			let msg = t(key) as string
-			if (e?.details?.http_code) msg += ` (HTTP ${e.details.http_code})`
-			if (e?.details?.curl_error) msg += `: ${e.details.curl_error}`
+			if (err?.details?.http_code) msg += ` (HTTP ${err.details.http_code})`
+			if (err?.details?.curl_error) msg += `: ${err.details.curl_error}`
 			error.value = msg
 		}
 	}
@@ -244,8 +247,9 @@
 		try {
 			await gitCall('git-credential/delete', { provider: cred.provider, instance_url: cred.instance_url || '' })
 			loadCredentials()
-		} catch (e: any) {
-			error.value = e.details || e.error || 'Error'
+		} catch (e: unknown) {
+			const err = e as { details?: string, error?: string }
+			error.value = err.details || err.error || 'Error'
 		}
 	}
 </script>

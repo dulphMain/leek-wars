@@ -13,7 +13,7 @@
 						</div>
 					</template>
 					<v-list>
-						<v-list-item v-for="(language, i) in languages" :key="i" class="language" @click="setForumLanguage(language)" :disabled="forumLanguages[language.code] && activeLanguages.length === 1">
+						<v-list-item v-for="(language, i) in languages" :key="i" class="language" :disabled="forumLanguages[language.code] && activeLanguages.length === 1" @click="setForumLanguage(language)">
 							<template #prepend>
 								<v-list-item-action start>
 									<v-checkbox v-model="forumLanguages[language.code]" :disabled="forumLanguages[language.code] && activeLanguages.length === 1" hide-details @click.stop @update:model-value="updateCategories" />
@@ -284,9 +284,9 @@
 			</template>
 			<div class="create-popup">
 				<h3>{{ $t('new_topic_title') }}</h3>
-				<input v-model="createTitle" @keyup="updateDraftTitle" class="topic-name card" type="text">
+				<input v-model="createTitle" class="topic-name card" type="text" @keyup="updateDraftTitle">
 				<h3>{{ $t('new_topic_message') }}</h3>
-				<textarea v-model="createMessage" @keyup="updateDraft" class="topic-message card"></textarea>
+				<textarea v-model="createMessage" class="topic-message card" @keyup="updateDraft"></textarea>
 
 				<div class="grid">
 					<v-radio-group v-if="Object.values(forumLanguages).length > 1" v-model="createMessageLang" hide-details>
@@ -340,7 +340,7 @@
 	import Pagination from '@/component/pagination.vue'
 	import { emitter } from '@/model/vue'
 
-	defineOptions({ name: 'forum_category', i18n: {}, mixins: [...mixins] })
+	defineOptions({ name: 'ForumCategory', i18n: {}, mixins: [...mixins] })
 
 	const { locale: i18nLocale } = useI18n()
 	const t = useNamespacedT('forum_category')
@@ -350,7 +350,35 @@
 	const categories = ref<ForumCategory[] | null>(null)
 	const rawCategoryName = ref('')
 	const loading = ref(false)
-	const topics = ref<any[] | null>(null)
+	interface ForumTopic {
+		id: number
+		title: string
+		category: number
+		seen?: boolean
+		pinned?: boolean
+		closed?: boolean
+		hidden?: boolean
+		acknowledged?: boolean
+		private_issue?: number
+		issue?: number
+		status?: number
+		priority?: number
+		release?: number
+		lang?: string
+		author: { id: number, name: string, [key: string]: unknown }
+		date: number
+		votes_up: number
+		votes_down: number
+		views: number
+		messages: number
+		last_message_date: number
+		last_message_page: number
+		last_message_id: number
+		last_message_writer: string
+		last_message_writer_id: number
+		[key: string]: unknown
+	}
+	const topics = ref<ForumTopic[] | null>(null)
 	const page = ref(0)
 	const pages = ref(0)
 	const createDialog = ref(false)
@@ -362,7 +390,7 @@
 	const createRelease = ref<number | null>(null)
 	const createHidden = ref(false)
 	const forumLanguages = reactive<{[key: string]: boolean}>({})
-	const translations = ref<any[]>([])
+	const translations = ref<{ id: number, lang: string, [key: string]: unknown }[]>([])
 	const order = ref(localStorage.getItem('forum/topic-order') || 'date')
 	const filterStatus = ref<number[]>([])
 	const filterAcknowledged = ref('all')
@@ -525,7 +553,7 @@
 		if (!categories.value) { return }
 		if (!createTitle.value || !createTitle.value.trim()) { return }
 		if (!createMessage.value || !createMessage.value.trim()) { return }
-		const params: any = {category_id: categories.value[0].id, title: createTitle.value, message: createMessage.value, issue: 0, lang: createMessageLang.value}
+		const params: Record<string, unknown> = {category_id: categories.value[0].id, title: createTitle.value, message: createMessage.value, issue: 0, lang: createMessageLang.value}
 		params.release = createRelease.value || 0
 		params.hidden = createHidden.value
 		LeekWars.post('forum/create-topic', params).then(data => {
@@ -537,8 +565,9 @@
 			if (categories.value) {
 				router.push("/forum/category-" + category_ids.value + "/topic-" + data.topic_id)
 			}
-		}).catch(error => {
-			LeekWars.toast(t('error_' + error.error, error.params) as string)
+		}).catch((error: unknown) => {
+			const e = error as { error: string, params?: unknown[] }
+			LeekWars.toast(t('error_' + e.error, e.params) as string)
 		})
 	}
 
@@ -554,8 +583,9 @@
 		LeekWars.post('forum/mark-as-read').then(() => {
 			markAsReadDialog.value = false
 			update()
-		}).catch(error => {
-			LeekWars.toast(t('error_' + error.error, error.params) as string)
+		}).catch((error: unknown) => {
+			const e = error as { error: string, params?: unknown[] }
+			LeekWars.toast(t('error_' + e.error, e.params) as string)
 		})
 	}
 

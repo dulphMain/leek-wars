@@ -111,6 +111,9 @@
 							<div v-else-if="finalReason === Warning.INCORRECT_WEBSITE">
 								Site web : <b>{{ selectedFault.data }}</b>
 							</div>
+							<div v-else-if="finalReason === Warning.INCORRECT_GITHUB">
+								GitHub : <b>{{ selectedFault.data }}</b>
+							</div>
 							<div v-else-if="finalReason === Warning.FLOOD_CHAT || finalReason === Warning.RUDE_CHAT || finalReason === Warning.PROMO_CHAT">
 								Messages chat :
 								<ul class="forum-message">
@@ -175,7 +178,9 @@
 	import { i18n, mixins, useNamespacedT } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
 	import { Warning } from '@/model/moderation'
-	type Fault = any
+	interface FaultReporting { id: number; farmer_id: number; farmer_name: string; date: number; message: string }
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	interface Fault { id: number; target: Farmer; faults: unknown[]; reason: Warning; reason_text: string; reportings: FaultReporting[]; parameter: number; data: any; fight?: number; severity?: number; reason_data?: string; [key: string]: unknown }
 	import router from '@/router'
 	import { computed, reactive, ref, watch } from 'vue'
 	import { useRoute, useRouter } from 'vue-router'
@@ -183,9 +188,9 @@
 	import RichTooltipLeek from '@/component/rich-tooltip/rich-tooltip-leek.vue'
 	import { emitter } from '@/model/vue'
 
-	defineOptions({ name: "moderation", i18n: {}, mixins: [...mixins] })
+	defineOptions({ name: "Moderation", i18n: {}, mixins: [...mixins] })
 
-	type ModerationRequest = { faults: any[], thugs: Farmer[] }
+	type ModerationRequest = { faults: Fault[], thugs: Farmer[] }
 
 	const t = useNamespacedT('moderation')
 	const route = useRoute()
@@ -193,7 +198,7 @@
 
 	const faults = ref<Fault[] | null>(null)
 	const faultsById = reactive<{[key: number]: Fault}>({})
-	const thugs = ref<any>(null)
+	const thugs = ref<Farmer[] | null>(null)
 	const selectedFault = ref<Fault | null>(null)
 	const warningConfirmDialog = ref(false)
 	const message = ref('')
@@ -205,6 +210,7 @@
 		const reasons = [
 			Warning.INCORRECT_FARMER_NAME,
 			Warning.INCORRECT_WEBSITE,
+			Warning.INCORRECT_GITHUB,
 			Warning.RUDE_SAY,
 			Warning.RUDE_FORUM,
 			Warning.RUDE_CHAT,
@@ -266,8 +272,8 @@
 			faults.value!.splice(faults.value!.indexOf(fault), 1)
 			delete faultsById[fault.id]
 			localRouter.push('/moderation')
-		}).catch(error => {
-			LeekWars.toast(error)
+		}).catch((error: unknown) => {
+			LeekWars.toast(error as string)
 		})
 	}
 	function sendWarning() {
@@ -279,8 +285,8 @@
 			delete faultsById[fault.id]
 			warningConfirmDialog.value = false
 			localRouter.push('/moderation')
-		}).catch(error => {
-			LeekWars.toast(error)
+		}).catch((error: unknown) => {
+			LeekWars.toast(error as string)
 		})
 	}
 </script>
