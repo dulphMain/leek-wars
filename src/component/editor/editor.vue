@@ -1084,6 +1084,20 @@
 		LeekWars.large = enlargeWindow.value
 		localStorage.setItem('editor/large', '' + enlargeWindow.value)
 	})
+
+	// Le composant éditeur est réutilisé sur ses 4 records (/editor, /editor/:id,
+	// /editor/:id/diff, .../h/:hash) : onMounted ne se redéclenche pas entre eux, or
+	// router.beforeEach (resetLayout) remet les flags de layout par défaut sur un
+	// changement de record (et l'éditeur s'auto-replace /editor -> /editor/:id au
+	// montage). On ré-applique donc le layout à chaque navigation interne, sinon box
+	// (hauteur) et large (largeur) sont perdus -> éditeur écrasé après une nav SPA.
+	watch(() => route.path, () => {
+		if (route.path.startsWith('/editor')) {
+			LeekWars.large = enlargeWindow.value
+			LeekWars.footer = false
+			LeekWars.box = true
+		}
+	})
 	watch(() => history.value.map(ai => ai.path).join('|'), () => {
 		localStorage.setItem(historyKey(), JSON.stringify(history.value.map(ai => ai.path)))
 	})
@@ -1482,15 +1496,10 @@
 		if (LeekWars.didactitial_step === 4) {
 			LeekWars.didactitial_next()
 		}
-		// Réinitialiser le layout dans un nextTick pour que la mise à jour
-		// de app.vue se produise APRÈS le swap de <router-view>, évitant le
-		// conflit qui causait parentNode = null avec onBeforeUnmount synchrone.
-		nextTick(() => {
-			LeekWars.large = false
-			LeekWars.header = true
-			LeekWars.footer = true
-			LeekWars.box = false
-		})
+		// Pas de reset de layout ici : LeekWars.resetLayout() (router.beforeEach)
+		// le fait AVANT le swap de <router-view>. Un reset différé en nextTick
+		// s'exécutait APRÈS le onMounted de la page de destination et l'écrasait
+		// (ex : éditeur rapetissé en venant de l'encyclopédie).
 	})
 </script>
 

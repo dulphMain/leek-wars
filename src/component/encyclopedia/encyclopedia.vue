@@ -378,14 +378,10 @@
 		if (edition.value) {
 			editEnd()
 		}
-		// Reset des flags layout après le swap router-view pour éviter un re-render
-		// de app.vue pendant le patch (parentNode null sur les nodes en cours de
-		// démontage). Voir feedback_nextTick_layout_reset.md.
-		nextTick(() => {
-			LeekWars.large = false
-			LeekWars.box = false
-			LeekWars.footer = true
-		})
+		// Pas de reset de layout ici : LeekWars.resetLayout() (router.beforeEach)
+		// le fait AVANT le swap de <router-view>. Un reset différé en nextTick
+		// s'exécutait APRÈS le onMounted de la page de destination et l'écrasait.
+		// Voir feedback_nextTick_layout_reset.md.
 	})
 
 	onMounted(async () => {
@@ -536,6 +532,18 @@ ${ret}
 				editor.value.onDidChangeModelContent(() => {
 					modified.value = true
 					if (page.value) page.value.content = editor.value!.getValue()
+					// La page parent est déclarée par le premier blockquote (« > Titre ») du
+					// contenu. On la résout depuis le rendu markdown après mise à jour du DOM.
+					nextTick(() => {
+						const md = markdownRef.value
+						if (!md || !page.value) return
+						const blockquote = md.querySelector('blockquote')
+						if (blockquote) {
+							const key = blockquote.textContent!.trim().replace(/_/g, ' ').toLowerCase()
+							const pages = LeekWars.encyclopedia[language.value]
+							page.value.parent = (pages && pages[key]) ? pages[key].id : 1
+						}
+					})
 				})
 
 				editor.value.onDidScrollChange((e) => {

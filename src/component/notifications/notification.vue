@@ -4,7 +4,10 @@
 			<v-icon v-if="notification.icon" class="image">{{ notification.image }}</v-icon>
 			<img v-else :src="'/image/' + notification.image" class="image">
 			<div class="content">
-				<div class="title" v-html="$t('notification.title_' + notification.type, notification.title)"></div>
+				<i18n-t :keypath="'notification.title_' + notification.type" tag="div" class="title" scope="global">
+					<template #p0><b>{{ notification.title[0] }}</b></template>
+					<template #p1><b>{{ notification.title[1] }}</b></template>
+				</i18n-t>
 				<div class="message">{{ $t('notification.message_' + notification.type, notification.message) }}</div>
 			</div>
 			<div class="spacer"></div>
@@ -21,11 +24,18 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { LeekWars } from '@/model/leekwars'
 import type { Notification } from '@/model/notification'
 import { store } from '@/model/store'
 
 defineOptions({ name: 'Notification' })
+
+// Titre rendu via <i18n-t> + slots NOMMÉS (#p0/#p1, cf. placeholders {p0}/{p1} dans
+// notification.json) : le <b> vit dans le slot (VNode, non échappé) et {{ }} échappe la
+// valeur (sûr, pas de v-html). notification.ts passe les valeurs brutes dans .title.
+// useI18n() (side-effect) initialise le scope requis par <i18n-t> (cf. feedback_useNamespacedT).
+useI18n()
 
 const props = defineProps<{
 	notification: Notification

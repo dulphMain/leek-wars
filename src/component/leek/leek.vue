@@ -455,10 +455,11 @@
 				{{ $t("select_skin") }}
 			</template>
 			<div class="farmer-potions">
+				<div class="preview-leek"><leek-image v-if="skinPreviewLeek" :leek="skinPreviewLeek" :scale="1.2" /></div>
 				<div class="potions-grid">
 					<v-tooltip v-for="(potion, id) in skinPotions" :key="id">
 						<template #activator="{ props }">
-							<div :quantity="potion.quantity" class="potion" v-bind="props" @click="usePotion(potion)">
+							<div :quantity="potion.quantity" class="potion" v-bind="props" @click="usePotion(potion)" @mouseenter="hoverSkin = skinOf(potion.template)" @mouseleave="hoverSkin = undefined">
 								<img :src="'/image/potion/' + LeekWars.potions[potion.template].name + '.png'">
 							</div>
 						</template>
@@ -470,6 +471,21 @@
 						</div>
 					</v-tooltip>
 				</div>
+				<template v-if="suggestedSkinPotions.length">
+					<div class="shop-suggestion-title"><v-icon size="18">mdi-cart-outline</v-icon> {{ $t('main.shop') }} <v-icon class="refresh-btn" size="20" @click="refreshSuggestions">mdi-refresh</v-icon></div>
+					<div class="potions-grid">
+						<v-tooltip v-for="s in suggestedSkinPotions" :key="'sug-' + s.id">
+							<template #activator="{ props }">
+								<router-link v-ripple class="potion suggestion" v-bind="props" :to="'/market/' + s.name" @click="skinPotionDialog = false" @mouseenter="hoverSkin = s.preview" @mouseleave="hoverSkin = undefined">
+									<img :src="'/image/potion/' + s.name + '.png'">
+									<span class="price"><img src="/image/crystal.png">{{ s.crystals }}</span>
+								</router-link>
+							</template>
+							<b>{{ $t('potion.' + s.name) }}</b>
+							<template v-if="s.level"><br>{{ $t('main.level_n', [s.level]) }}</template>
+						</v-tooltip>
+					</div>
+				</template>
 			</div>
 		</popup>
 
@@ -479,10 +495,11 @@
 			<template #icon><v-icon>mdi-hat-fedora</v-icon></template>
 			<template #title><span>{{ $t('select_a_hat') }}</span></template>
 			<div class="hat-dialog">
+				<div class="preview-leek"><leek-image v-if="hatPreviewLeek" :leek="hatPreviewLeek" :scale="1.2" /></div>
 				<div class="hats">
 					<v-tooltip>
 						<template #activator="{ props }">
-							<div v-ripple :quantity="1" class="hat" v-bind="props" @click="selectHat(null)">
+							<div v-ripple :quantity="1" class="hat" v-bind="props" @click="selectHat(null)" @mouseenter="hoverHat = null" @mouseleave="hoverHat = undefined">
 								<img src="/image/hat/no_hat.png">
 							</div>
 						</template>
@@ -490,7 +507,7 @@
 					</v-tooltip>
 					<v-tooltip v-for="hat in farmer_hats" :key="hat.id">
 						<template #activator="{ props }">
-							<div v-ripple :quantity="hat.quantity" class="hat" v-bind="props" @click="selectHat(hat)">
+							<div v-ripple :quantity="hat.quantity" class="hat" v-bind="props" @click="selectHat(hat)" @mouseenter="hoverHat = hat.hat_template" @mouseleave="hoverHat = undefined">
 								<img :src="'/image/hat/' + hat.name + '.png'">
 							</div>
 						</template>
@@ -501,6 +518,21 @@
 				</div>
 				<br>
 				<div class="center">({{ $t('click_to_put_hat') }})</div>
+				<template v-if="suggestedHats.length">
+					<div class="shop-suggestion-title"><v-icon size="18">mdi-cart-outline</v-icon> {{ $t('main.shop') }} <v-icon class="refresh-btn" size="20" @click="refreshSuggestions">mdi-refresh</v-icon></div>
+					<div class="hats">
+						<v-tooltip v-for="s in suggestedHats" :key="'sug-' + s.id">
+							<template #activator="{ props }">
+								<router-link v-ripple class="hat suggestion" v-bind="props" :to="'/market/' + s.name" @click="hatDialog = false" @mouseenter="hoverHat = s.preview" @mouseleave="hoverHat = undefined">
+									<img :src="'/image/hat/' + s.name + '.png'">
+									<span class="price"><img src="/image/crystal.png">{{ s.crystals }}</span>
+								</router-link>
+							</template>
+							<b>{{ $t('hat.' + s.name) }}</b>
+							<template v-if="s.level"><br>{{ $t('main.level_n', [s.level]) }}</template>
+						</v-tooltip>
+					</div>
+				</template>
 			</div>
 		</popup>
 
@@ -547,7 +579,7 @@
 						<img v-else class="image" src="/image/hat/no_hat.png">
 						<div v-if="leek.hat" class="name">{{ $t('hat.' + LeekWars.hats[LeekWars.items[leek.hat.template].params].name) }}</div>
 					</div>
-					<div v-ripple class="item card" :class="{disabled: !holdWeaponEnabled}" @click="skinWeaponDialog = true">
+					<div v-ripple class="item card" :class="{disabled: !holdWeaponEnabled}" @click="holdWeaponEnabled ? (skinWeaponDialog = true) : goToMarket('hold_weapon')">
 						<div class="title">
 							<v-tooltip v-if="holdWeaponEnabled">
 								<template #activator="{ props }">
@@ -567,7 +599,7 @@
 							<div class="name"><v-icon>mdi-lock</v-icon> {{ $t('pomp.hold_weapon') }}</div>
 						</template>
 					</div>
-					<div v-ripple class="item card" :class="{disabled: !leekTitleEnabled}" @click="titleDialog = true">
+					<div v-ripple class="item card" :class="{disabled: !leekTitleEnabled}" @click="leekTitleEnabled ? (titleDialog = true) : goToMarket('leek_title')">
 						<div class="title">
 							<v-tooltip v-if="leekTitleEnabled">
 								<template #activator="{ props }">
@@ -596,7 +628,7 @@
 									<span>{{ $t('pomp.ai_lines') }}</span>
 									<v-tooltip :disabled="showAiLinesEnabled">
 										<template #activator="{ props }">
-											<img v-bind="props" src="/image/pomp/ai_lines.png">
+											<img v-bind="props" src="/image/pomp/ai_lines.png" :class="{'buy-pomp': !showAiLinesEnabled}" @click="!showAiLinesEnabled && goToMarket('ai_lines')">
 										</template>
 										<v-icon>mdi-lock</v-icon> {{ $t('pomp.ai_lines') }}
 									</v-tooltip>
@@ -609,7 +641,7 @@
 									<span>{{ $t('pomp.metal') }}</span>
 									<v-tooltip :disabled="metalEnabled">
 										<template #activator="{ props }">
-											<img v-bind="props" src="/image/pomp/metal.png">
+											<img v-bind="props" src="/image/pomp/metal.png" :class="{'buy-pomp': !metalEnabled}" @click="!metalEnabled && goToMarket('metal')">
 										</template>
 										<v-icon>mdi-lock</v-icon> {{ $t('pomp.metal') }}
 									</v-tooltip>
@@ -629,7 +661,7 @@
           							{{ $t('happy') }}
 									<v-tooltip :disabled="happyEnabled">
 										<template #activator="{ props }">
-											<img v-bind="props" src="/image/pomp/happy.png">
+											<img v-bind="props" src="/image/pomp/happy.png" :class="{'buy-pomp': !happyEnabled}" @click="!happyEnabled && goToMarket('happy')">
 										</template>
 										<v-icon>mdi-lock</v-icon> {{ $t('pomp.happy') }}
 									</v-tooltip>
@@ -640,7 +672,7 @@
 									{{ $t('angry') }}
 									<v-tooltip :disabled="angryEnabled">
 										<template #activator="{ props }">
-											<img v-bind="props" src="/image/pomp/angry.png">
+											<img v-bind="props" src="/image/pomp/angry.png" :class="{'buy-pomp': !angryEnabled}" @click="!angryEnabled && goToMarket('angry')">
 										</template>
 										<v-icon>mdi-lock</v-icon> {{ $t('pomp.angry') }}
 									</v-tooltip>
@@ -766,7 +798,7 @@
 	import { Chip } from '@/model/chip'
 	import { Hat } from '@/model/hat'
 	import { mixins , useNamespacedT } from '@/model/i18n'
-	import { ItemType } from '@/model/item'
+	import { ItemTemplate, ItemType } from '@/model/item'
 	import { Leek, Register } from '@/model/leek'
 	import { Component } from '@/model/component'
 	import { LeekWars } from '@/model/leekwars'
@@ -906,6 +938,82 @@
 
 	const farmer_hats = computed(() => store.state.farmer ? store.state.farmer.hats : [])
 	const farmer_components = computed(() => store.state.farmer ? store.state.farmer.components : [])
+
+	// Suggestions d'achat : items achetables en cristaux non possédés, depuis le catalogue du marché
+	const marketItems = ref<ItemTemplate[]>([])
+	const hoverHat = ref<number | null | undefined>(undefined)
+	const hoverSkin = ref<number | undefined>(undefined)
+	let marketRequested = false
+	function shuffled(arr: ItemTemplate[]): ItemTemplate[] {
+		const a = arr.slice()
+		for (let i = a.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1))
+			const t = a[i]; a[i] = a[j]; a[j] = t
+		}
+		return a
+	}
+	function loadMarketItems() {
+		if (marketRequested) return
+		marketRequested = true
+		LeekWars.get<{ items: ItemTemplate[] }>('market/get-item-templates').then(res => {
+			// Le serveur renvoie items via (object), donc Object.values pour obtenir un vrai tableau
+			marketItems.value = res && res.items ? shuffled(Object.values(res.items)) : []
+		}).error(() => { marketRequested = false })
+	}
+	function refreshSuggestions() {
+		if (marketItems.value.length) { marketItems.value = shuffled(marketItems.value) }
+	}
+	// Apparat verrouillé : clic vers le marché pour l'acheter
+	function goToMarket(name: string) {
+		customizeDialog.value = false
+		router.push('/market/' + name)
+	}
+	// Re-mélange à chaque ouverture pour varier les items, et réinitialise l'aperçu au survol
+	watch([hatDialog, skinPotionDialog, customizeDialog], ([h, s, c]) => {
+		if (h) { hoverHat.value = undefined }
+		if (s) { hoverSkin.value = undefined }
+		if (h || s || c) {
+			loadMarketItems()
+			if (marketItems.value.length) { marketItems.value = shuffled(marketItems.value) }
+		}
+	})
+	function hatTemplateByName(name: string): number {
+		return LeekWars.selectWhere(Object.values(LeekWars.hats), 'name', name)?.id ?? 0
+	}
+	function skinOf(potionItemId: number): number | undefined {
+		const p = LeekWars.potions[potionItemId]
+		const e = p && p.effects ? p.effects.find(ef => ef.type === PotionEffect.CHANGE_SKIN) : undefined
+		return e ? e.params[0] as number : undefined
+	}
+	function buildSuggestions(isType: (item: ItemTemplate) => boolean, owned: Set<number>, prefix: RegExp, count: number, previewOf: (item: ItemTemplate) => number) {
+		const result: { id: number, name: string, level: number, crystals: number, preview: number }[] = []
+		for (const item of marketItems.value) {
+			if (isType(item) && item.buyable_crystals && !item.trophy && !owned.has(item.id)) {
+				result.push({ id: item.id, name: item.name.replace(prefix, ''), level: typeof item.level === 'number' ? item.level : 0, crystals: item.crystals || 0, preview: previewOf(item) })
+				if (result.length >= count) break
+			}
+		}
+		return result
+	}
+	const suggestedHats = computed(() => {
+		const f = store.state.farmer
+		if (!f) return []
+		return buildSuggestions(item => item.type === ItemType.HAT, new Set(f.hats.map(h => h.template)), /^hat_/, 6, item => hatTemplateByName(item.name.replace(/^hat_/, '')))
+	})
+	const suggestedSkinPotions = computed(() => {
+		const f = store.state.farmer
+		if (!f) return []
+		const isSkin = (item: ItemTemplate) => item.type === ItemType.POTION && !!LeekWars.potions[item.id] && LeekWars.potions[item.id].effects.some((e) => e.type === PotionEffect.CHANGE_SKIN)
+		return buildSuggestions(isSkin, new Set(f.potions.map(p => p.template)), /^potion_/, 8, item => skinOf(item.id) || 0)
+	})
+	const hatPreviewLeek = computed(() => {
+		if (!leek.value) { return null }
+		return { ...leek.value, hat: hoverHat.value === undefined ? leek.value.hat : hoverHat.value } as unknown as Leek
+	})
+	const skinPreviewLeek = computed(() => {
+		if (!leek.value) { return null }
+		return { ...leek.value, skin: hoverSkin.value === undefined ? leek.value.skin : hoverSkin.value } as unknown as Leek
+	})
 
 	const hasForgottenWeapon = computed(() => {
 		if (!leek.value) return false
@@ -1902,6 +2010,69 @@
 			max-width: 96px;
 		}
 	}
+	.preview-leek {
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+		height: 220px;
+		overflow: hidden;
+		margin-bottom: 8px;
+	}
+	.preview-leek :deep(svg) {
+		max-height: 100%;
+		max-width: 100%;
+		width: auto;
+	}
+	.shop-suggestion-title {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin: 16px 0 8px;
+		padding-top: 12px;
+		border-top: 1px solid var(--border);
+		font-weight: bold;
+		color: var(--text-color-secondary);
+	}
+	.shop-suggestion-title .refresh-btn {
+		margin-left: auto;
+		cursor: pointer;
+		color: var(--text-color-secondary);
+	}
+	.shop-suggestion-title .refresh-btn:hover {
+		color: var(--text-color);
+	}
+	.hat.suggestion, .potion.suggestion {
+		position: relative;
+		text-decoration: none;
+		img {
+			opacity: 0.85;
+		}
+		&:hover img {
+			opacity: 1;
+		}
+		.price {
+			position: absolute;
+			bottom: 0;
+			right: 0;
+			display: flex;
+			align-items: center;
+			gap: 3px;
+			padding: 2px 7px;
+			background: rgba(0, 0, 0, 0.6);
+			color: #fff;
+			font-size: 14px;
+			font-weight: bold;
+			border-radius: 8px 0 0 0;
+			img {
+				height: 20px;
+				width: auto;
+				opacity: 1;
+			}
+		}
+	}
+	.hat.suggestion::before, .potion.suggestion::after {
+		display: none !important;
+	}
 	#app.app .hat-button {
 		display: none;
 	}
@@ -2014,7 +2185,6 @@
 				}
 				&.disabled {
 					background: transparent;
-					pointer-events: none;
 					.image {
 						opacity: 0.5;
 					}
@@ -2033,6 +2203,10 @@
 				width: 20px;
 				margin-left: 4px;
 			}
+		}
+		.buy-pomp {
+			cursor: pointer;
+			pointer-events: auto;
 		}
 		.v-radio.v-radio--is-disabled {
 			opacity: 0.7;

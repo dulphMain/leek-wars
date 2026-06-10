@@ -85,6 +85,7 @@ const Tutorial = () => import(/* webpackChunkName: "[request]" */ `@/component/t
 
 import { LeekWars } from '@/model/leekwars'
 import { store } from '@/model/store'
+import { nextTick } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteLocationNormalized, NavigationGuardNext, RouteLocationRaw, RouteLocationResolved, RouteRecordRaw } from 'vue-router'
 import { scroll_to_hash } from './router-functions'
@@ -343,10 +344,32 @@ router.onError((error, to) => {
 	}
 })
 
-router.beforeEach((to: RouteLocationNormalized, _from: RouteLocationNormalized, next: NavigationGuardNext) => {
+router.beforeEach(async (to: RouteLocationNormalized, from: RouteLocationNormalized, next: NavigationGuardNext) => {
 
 	LeekWars.splitShowList()
 	LeekWars.actions = []
+
+	// Reset des flags de layout par page à leurs valeurs par défaut AVANT le swap de
+	// <router-view> : chaque page ré-applique son layout dans onMounted (après le swap).
+	// On ne reset que si le COMPOSANT de destination diffère de celui d'origine : sinon
+	// le composant est réutilisé (pas de re-mount, donc pas de onMounted) et il conserve
+	// son layout. Comparer le composant et non le route record est crucial pour l'éditeur,
+	// qui a 4 records distincts (/editor, /editor/:id, /editor/:id/diff, .../h/:hash)
+	// pointant tous sur le MÊME composant : naviguer entre eux (ex: ouvrir un fichier)
+	// ne doit pas reset le layout, sinon l'éditeur perd son flag `large` et rapetisse.
+	const toComponent = to.matched[to.matched.length - 1]?.components?.default
+	const fromComponent = from.matched[from.matched.length - 1]?.components?.default
+	if (toComponent !== fromComponent) {
+		LeekWars.resetLayout()
+		// resetLayout() mute des flags réactifs bindés sur la classe de app.vue (ancêtre
+		// du <router-view>). Sans ce tick, le re-render de app.vue et le swap de route
+		// flushent ensemble : app.vue re-patche son sous-arbre PENDANT que <RouterView>
+		// monte la page de destination, dont le vnode racine a alors `el` null → crash
+		// "parentNode of null" dans le scheduler (cluster #4050-#4059, Firefox). En
+		// attendant un tick, app.vue se stabilise AVANT le swap. Ne touche aucune valeur
+		// de layout (le gating par composant est conservé) → pas de régression éditeur.
+		await nextTick()
+	}
 
 	if (window.__FARMER__) {
 		store.commit('connected', '$')
