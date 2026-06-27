@@ -56,6 +56,15 @@
 									<template v-else-if="col.type === 'percent'">
 										{{ item[col.key] }}%
 									</template>
+									<!-- score 0..1 → barre colorée + % ("—" si absent). Échelle via col.max,
+									     tooltip des facteurs au hover via col.tooltip_key. -->
+									<template v-else-if="col.type === 'score'">
+										<div v-if="item[col.key] != null" class="score-cell" :title="scoreTitle(col, item)">
+											<div class="score-bar" :class="col.scheme || 'green'" :style="{ width: scoreBarWidth(col, item[col.key]) }"></div>
+											<span>{{ scoreLabel(col, item[col.key]) }}</span>
+										</div>
+										<span v-else class="score-empty">—</span>
+									</template>
 									<!-- barre de proportion -->
 									<template v-else-if="col.type === 'size_bar'">
 										<div class="size-cell">
@@ -88,7 +97,7 @@
 <script setup lang="ts">
 	import { LeekWars } from '@/model/leekwars'
 	import { store } from '@/model/store'
-	import { reactive, ref, watch } from 'vue'
+	import { onMounted, reactive, ref, watch } from 'vue'
 	import { useRoute, useRouter } from 'vue-router'
 	import Breadcrumb from '@/component/forum/breadcrumb.vue'
 	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
@@ -101,6 +110,9 @@
 		sort_key?: string
 		type?: string
 		id_key?: string
+		scheme?: string
+		max?: number
+		tooltip_key?: string
 	}
 	interface Dashboard {
 		id: string
@@ -117,7 +129,11 @@
 	const data = reactive<{ [key: string]: Dashboard }>({})
 
 	LeekWars.setTitle("Admin Dashboards")
-	LeekWars.large = true
+	// Le layout `large` doit être posé dans onMounted (après le swap de <router-view>),
+	// sinon le resetLayout() du beforeEach le clobber par intermittence (cf. router.ts).
+	onMounted(() => {
+		LeekWars.large = true
+	})
 	checkAdmin()
 	LeekWars.get('dashboard/get-all').then((res: Dashboard[]) => {
 		dashboards.value = res
@@ -174,6 +190,21 @@
 		return 'item.' + key
 	}
 
+	// Largeur de barre : valeur rapportée à col.max (1 par défaut), plafonnée à 100%.
+	function scoreBarWidth(col: DashboardColumn, v: number): string {
+		const max = col.max || 1
+		return Math.min(Math.round((v / max) * 100), 100) + '%'
+	}
+	// Libellé : vrai pourcentage, 1 décimale quand l'échelle est petite (max <= 10%).
+	function scoreLabel(col: DashboardColumn, v: number): string {
+		return (v * 100).toFixed(col.max && col.max <= 0.1 ? 1 : 0) + '%'
+	}
+	// Tooltip : facteurs lisibles (un par ligne) fournis par l'API via col.tooltip_key.
+	function scoreTitle(col: DashboardColumn, item: Record<string, unknown>): string {
+		const r = col.tooltip_key ? item[col.tooltip_key] : null
+		return Array.isArray(r) && r.length ? r.join('\n') : ''
+	}
+
 	function daysSince(timestamp: number) {
 		return Math.floor((LeekWars.time - timestamp) / 86400)
 	}
@@ -227,5 +258,29 @@
 		bottom: 2px;
 		background: rgba(95, 173, 27, 0.15);
 		border-radius: 3px;
+	}
+	.score-cell {
+		position: relative;
+		display: flex;
+		align-items: center;
+		min-width: 64px;
+		span {
+			position: relative;
+			z-index: 1;
+			font-size: 12px;
+			font-weight: 600;
+		}
+	}
+	.score-bar {
+		position: absolute;
+		left: 0;
+		top: 2px;
+		bottom: 2px;
+		border-radius: 3px;
+		&.red { background: rgba(229, 57, 53, 0.28); }
+		&.green { background: rgba(67, 160, 71, 0.28); }
+	}
+	.score-empty {
+		color: var(--text-color-secondary);
 	}
 </style>

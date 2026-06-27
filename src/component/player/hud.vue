@@ -46,7 +46,7 @@
 			<template v-for="line of renderedLines">
 				<component :is="ActionComponents[line.action.type]" v-if="line.action" :key="line.id" :action="line.action" :leeks="game.leeks" />
 				<div v-else-if="line.trophy" :key="line.id" class="notif-trophy">
-					<img :src="'/image/trophy/' + line.trophy.name + '.svg'">
+					<trophy-icon :code="line.trophy.name" />
 					<i18n-t keypath="trophy.x_unlocks_t">
 						<template #farmer>{{ line.trophy.farmer.name }}</template>
 						<template #trophy>
@@ -54,7 +54,8 @@
 						</template>
 					</i18n-t>
 				</div>
-				<action-log v-else-if="game.displayDebugs && line.log" :key="'_' + line.id" :log="line.log" :leeks="game.leeks" :action="0" :index="0" :lines="game.displayAILines" />
+				<!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -->
+				<action-log v-else-if="game.displayDebugs && line.log" :key="'_' + line.id" :log="(line.log as any)" :leeks="(game.leeks as any)" :action="0" :index="0" :lines="game.displayAILines" />
 			</template>
 			<div v-if="!followBottom && renderEnd < game.consoleLines.length" class="load-marker bottom">…</div>
 		</div>

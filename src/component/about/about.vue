@@ -37,12 +37,28 @@
 				<h2 class="title">Leek Wars</h2>
 				<h4>{{ $t('version_n', [LeekWars.version]) }}</h4>
 				<br>
-				<a href="https://www.facebook.com/LeekWars">
-					<img height="28" src="/image/about/facebook_like.png">
-				</a>
-				<span ref="github"></span>
-				<span class="github-button"><a class="github-button" href="https://github.com/leek-wars/leek-wars" data-icon="octicon-star" data-size="large" data-show-count="true" aria-label="Star Leek Wars on GitHub">Star</a></span>
-				<iframe class="twitter-button" allowtransparency="true" frameborder="0" scrolling="no" src="//platform.twitter.com/widgets/follow_button.html?screen_name=LeekWars&size=l" width="250" height="28"></iframe>
+				<div class="social-buttons">
+					<a class="social-btn" href="https://github.com/leek-wars/leek-wars" target="_blank" rel="noopener">
+						<v-icon>mdi-github</v-icon>
+						<span>GitHub</span>
+						<span v-if="githubStars !== null" class="count"><v-icon>mdi-star</v-icon>{{ LeekWars.formatNumber(githubStars) }}</span>
+					</a>
+					<a class="social-btn facebook" href="https://www.facebook.com/LeekWars" target="_blank" rel="noopener">
+						<v-icon>mdi-facebook</v-icon>
+						<span>Facebook</span>
+					</a>
+					<a class="social-btn x" href="https://x.com/LeekWars" target="_blank" rel="noopener">
+						<svg class="x-logo" viewBox="0 0 24 24" aria-label="X" role="img"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+					</a>
+					<a class="social-btn instagram" href="https://www.instagram.com/leekwars" target="_blank" rel="noopener">
+						<v-icon>mdi-instagram</v-icon>
+						<span>Instagram</span>
+					</a>
+					<a class="social-btn linkedin" href="https://www.linkedin.com/company/leek-wars" target="_blank" rel="noopener">
+						<v-icon>mdi-linkedin</v-icon>
+						<span>LinkedIn</span>
+					</a>
+				</div>
 			</div>
 		</panel>
 
@@ -173,7 +189,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeMount, onMounted, useTemplateRef } from 'vue'
+import { ref, computed, onBeforeMount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Farmer } from '@/model/farmer'
 import { mixins, useNamespacedT } from '@/model/i18n'
@@ -247,7 +263,7 @@ const team = computed(() => [[
 ]])
 
 const contributors = ref<Farmer[]>([])
-const github = useTemplateRef<HTMLElement>('github')
+const githubStars = ref<number | null>(null)
 
 onBeforeMount(() => {
 	LeekWars.setTitle(t('title'))
@@ -255,10 +271,7 @@ onBeforeMount(() => {
 })
 
 onMounted(() => {
-	const script = document.createElement('script')
-	script.src = 'https://buttons.github.io/buttons.js'
-	script.async = true
-	if (github.value) github.value.appendChild(script)
+	LeekWars.get<{stars: number}>('github/stars').then(r => { githubStars.value = r.stars }).catch(() => {})
 
 	LeekWars.get<Farmer[]>('farmer/contributors').then(list => {
 		contributors.value = list.filter(c => c.id !== 43276 && c.id !== 8773 && c.id !== 38357)
@@ -382,10 +395,74 @@ onMounted(() => {
 		width: 80px;
 		max-width: 90px;
 	}
-	.fb-like {
-		vertical-align: top;
+	// Boutons sociaux maison, thémés via les variables CSS (clair + sombre).
+	// Remplacent les widgets tiers (GitHub/Facebook/Twitter) qui ne savaient
+	// pas faire de dark mode (fond blanc) (#4128).
+	.social-buttons {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 8px;
+		margin-top: 8px;
 	}
-	.github-button {
-		padding: 0 10px;
+	.social-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		min-width: 150px;
+		box-sizing: border-box;
+		padding: 6px 14px;
+		border-radius: 6px;
+		background: var(--background-secondary);
+		border: 1px solid var(--border);
+		color: var(--text-color);
+		font-weight: 500;
+		text-decoration: none;
+		&:hover {
+			background: var(--background-disabled);
+		}
+		.v-icon {
+			font-size: 20px;
+		}
+		.x-logo {
+			width: 18px;
+			height: 18px;
+			flex-shrink: 0;
+		}
+		.count {
+			display: inline-flex;
+			align-items: center;
+			gap: 2px;
+			color: var(--text-color-secondary);
+			.v-icon {
+				font-size: 16px;
+			}
+		}
+	}
+	// Couleurs de marque (texte/icône blancs, OK clair + sombre).
+	.social-btn.facebook {
+		background: #1877f2;
+		border-color: #1877f2;
+		color: #fff;
+		&:hover { background: #1465d8; }
+	}
+	.social-btn.x {
+		background: #000;
+		border-color: #000;
+		color: #fff;
+		&:hover { background: #222; }
+	}
+	.social-btn.instagram {
+		background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+		border-color: #cc2366;
+		color: #fff;
+		&:hover { filter: brightness(1.08); }
+	}
+	.social-btn.linkedin {
+		background: #0a66c2;
+		border-color: #0a66c2;
+		color: #fff;
+		&:hover { background: #08529c; }
 	}
 </style>

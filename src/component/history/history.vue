@@ -56,6 +56,7 @@
 				<br>
 				<div class="header-row">
 					<div class="n-fights">{{ $t('n_fights', [filteredFights.length]) }}</div>
+					<input v-model="opponentSearch" type="text" class="opponent-search card" :placeholder="$t('main.search')">
 					<v-btn-toggle v-model="viewMode" mandatory density="compact" class="view-toggle">
 						<v-btn value="grid" size="small" :title="$t('view_grid')">
 							<v-icon>mdi-view-grid</v-icon>
@@ -93,23 +94,30 @@
 						<v-checkbox v-model="displayLoot.chests" hide-details class="option-checkbox" :label="$t('chests')" />
 						<v-checkbox v-model="displayLoot.rareloot" hide-details class="option-checkbox" :label="$t('rare_loot')" />
 					</div>
+					<div class="fight-result">
+						<span class="category">{{ $t('result') }}</span>
+						<v-checkbox v-model="displayResults.win" hide-details class="option-checkbox" :label="$t('victories')" />
+						<v-checkbox v-model="displayResults.draw" hide-details class="option-checkbox" :label="$t('draws')" />
+						<v-checkbox v-model="displayResults.defeat" hide-details class="option-checkbox" :label="$t('defeats')" />
+					</div>
 				</div>
 
-				<fights-history-table v-if="viewMode === 'table'" :fights="filteredFights" />
-				<fights-history v-else :fights="filteredFights" />
+				<fights-history-table v-if="viewMode === 'table'" :fights="filteredFights" :progress="progress" />
+				<fights-history v-else :fights="filteredFights" :progress="progress" />
 			</div>
 		</panel>
 	</div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import type { Farmer } from '@/model/farmer'
 import { type Fight, FightContext, FightType } from '@/model/fight'
 import { mixins , useNamespacedT } from '@/model/i18n'
 import type { Leek } from '@/model/leek'
 import { LeekWars } from '@/model/leekwars'
+import { useLiveHistory } from '@/model/use-live-history'
 import Breadcrumb from '../forum/breadcrumb.vue'
 import FightsHistory from '@/component/history/fights-history.vue'
 import FightsHistoryTable from '@/component/history/fights-history-table.vue'
@@ -130,7 +138,24 @@ const start_date = ref(0)
 const displayContexts = ref({ challenge: true, garden: true, tournament: true })
 const displayTypes = ref({ solo: true, farmer: true, team: true, battleRoyale: true, war: true, chestHunt: true, colossus: true, boss: true })
 const displayLoot = ref({ chests: false, rareloot: false })
+const displayResults = ref({ win: true, draw: true, defeat: true })
+const opponentSearch = ref('')
 const viewMode = ref<'grid' | 'table'>((localStorage.getItem('options/history-view') as 'grid' | 'table') || 'grid')
+
+// Texte recherchable d'un combat : noms de tous les participants (poireaux, équipes,
+// éleveurs, boss), pour filtrer par adversaire (#4314).
+function fightSearchText(fight: Fight): string {
+	const names: string[] = []
+	for (const l of fight.leeks1 || []) { if (l?.name) { names.push(l.name) } }
+	for (const l of fight.leeks2 || []) { if (l?.name) { names.push(l.name) } }
+	if (fight.team1_name) { names.push(fight.team1_name) }
+	if (fight.team2_name) { names.push(fight.team2_name) }
+	if (fight.farmer1_name) { names.push(fight.farmer1_name) }
+	if (fight.farmer2_name) { names.push(fight.farmer2_name) }
+	if (fight.boss_name) { names.push(fight.boss_name) }
+	return names.join(' ').toLowerCase()
+}
+let destroyed = false
 
 const breadcrumb_items = computed(() => [
 	{ name: entity.value ? entity.value.name : '...', link: '/' + props.type + '/' + (entity.value ? entity.value.id : '') },
@@ -161,7 +186,14 @@ const filteredFights = computed(() => fights.value.filter((fight) => {
 		|| (displayLoot.value.chests && fight.chests > 0)
 		|| (displayLoot.value.rareloot && fight.rareloot > 0)
 
-	return contextFilter && typeFilter && lootFilter
+	const resultFilter = (displayResults.value.win && fight.result === 'win')
+		|| (displayResults.value.draw && fight.result === 'draw')
+		|| (displayResults.value.defeat && fight.result === 'defeat')
+
+	const query = opponentSearch.value.trim().toLowerCase()
+	const opponentFilter = !query || fightSearchText(fight).includes(query)
+
+	return contextFilter && typeFilter && lootFilter && resultFilter && opponentFilter
 }))
 
 const victories = computed(() => filteredFights.value.filter(f => f.result === 'win').length)
@@ -189,14 +221,30 @@ const initialPeriod = localStorage.getItem('options/history-period') || '1week'
 displayContexts.value = JSON.parse(localStorage.getItem('options/history-contexts') || '{"challenge": true, "garden": true, "tournament": true }')
 displayTypes.value = JSON.parse(localStorage.getItem('options/history-types') || '{"solo": true, "farmer": true, "team": true, "battleRoyale": true, "boss": true }')
 displayLoot.value = JSON.parse(localStorage.getItem('options/history-loot') || '{"chests":false,"rareloot":false}')
+displayResults.value = JSON.parse(localStorage.getItem('options/history-results') || '{"win":true,"draw":true,"defeat":true}')
 select_period(initialPeriod)
 
-LeekWars.get('history/get-' + props.type + '-history/' + id).then(data => {
-	fights.value = data.fights
-	entity.value = data.entity
-	LeekWars.setTitle(t('title', [data.entity.name]))
-	select_period(initialPeriod)
+function loadHistory() {
+	LeekWars.get('history/get-' + props.type + '-history/' + id).then(data => {
+		if (destroyed) return
+		fights.value = data.fights
+		entity.value = data.entity
+		LeekWars.setTitle(t('title', [data.entity.name]))
+		select_period(period.value)
+	})
+}
+
+// Abonnement par entité + progression en direct + reload débouncé (cf. composable).
+const { progress } = useLiveHistory({
+	type: props.type,
+	id: () => Number(id),
+	fights: () => fights.value,
+	reload: loadHistory,
 })
+
+loadHistory()
+
+onUnmounted(() => { destroyed = true })
 
 watch(displayContexts, () => {
 	localStorage.setItem('options/history-contexts', JSON.stringify(displayContexts.value))
@@ -206,6 +254,9 @@ watch(displayTypes, () => {
 }, { deep: true })
 watch(displayLoot, () => {
 	localStorage.setItem('options/history-loot', JSON.stringify(displayLoot.value))
+}, { deep: true })
+watch(displayResults, () => {
+	localStorage.setItem('options/history-results', JSON.stringify(displayResults.value))
 }, { deep: true })
 watch(viewMode, () => {
 	localStorage.setItem('options/history-view', viewMode.value)
@@ -254,6 +305,13 @@ watch(viewMode, () => {
 	}
 	.view-toggle {
 		flex: none;
+	}
+	.opponent-search {
+		height: 32px;
+		padding: 0 10px;
+		flex: 0 1 200px;
+		margin: 0 10px;
+		min-width: 0;
 	}
 	.stats {
 		display: inline-block;

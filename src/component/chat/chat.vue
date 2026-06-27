@@ -132,10 +132,10 @@
 			</template>
 		</popup>
 
-		<v-menu v-if="menuMessage && $store.state.farmer?.verified" v-model="menuEmoji" offset-y top :nudge-top="10" :activator="menuEmojiActivator" content-class="emojis-dialog">
-			<v-card class="emojis">
+		<v-menu v-if="menuMessage && $store.state.farmer?.verified" v-model="menuEmoji" offset-y top :nudge-top="10" :activator="menuEmojiActivator" :open-on-click="false" persistent no-click-animation content-class="emojis-dialog">
+			<v-card class="emojis" tabindex="-1" @keydown.esc="menuEmoji = false">
 				<span v-for="(emoji, e) in emojis" :key="e" class="emoji" :class="{selected: emoji === menuMessage.my_reaction}" @click="toggleReaction(emoji)">{{ emoji }}</span>
-				<span v-if="menuMessage.my_reaction && !emojis.includes(menuMessage.my_reaction)" class="emoji selected" @click="toggleReaction(menuMessage.my_reaction)">{{ menuMessage.my_reaction }}</span>
+				<span v-if="menuMessage.my_reaction && !emojis.includes(menuMessage.my_reaction)" class="emoji selected" @click="toggleReaction(menuMessage.my_reaction)" v-html="formatEmojisText(menuMessage.my_reaction)"></span>
 				<emoji-picker :close-on-selected="true" @pick="toggleReaction"><v-icon class="more">mdi-dots-horizontal</v-icon></emoji-picker>
 			</v-card>
 		</v-menu>
@@ -146,6 +146,7 @@
 	import type { Chat as ChatModel, ChatMessage, ChatWindow } from '@/model/chat'
 	import { ChatType } from '@/model/chat'
 	import { formatChatMessage } from '@/model/chat-format'
+	import { formatEmojisText } from '@/model/emojis'
 	import type { Farmer } from '@/model/farmer'
 	import { LeekWars } from '@/model/leekwars'
 	import { Warning } from '@/model/moderation'
@@ -183,8 +184,8 @@
 
 	const menuMessage = ref<ChatMessage | null>(null)
 	let scrollMessage = 0
-	const menuActivator = ref<Element | null>(null)
-	const menuEmojiActivator = ref<Element | null>(null)
+	const menuActivator = ref<Element | undefined>(undefined)
+	const menuEmojiActivator = ref<Element | undefined>(undefined)
 	const menu = ref(false)
 	const menuEmoji = ref(false)
 
@@ -348,8 +349,9 @@
 				router.replace('/messages/conversation/' + data.conversation_id)
 			})
 		} else {
-			LeekWars.post('message/send-message', {conversation_id: chat.value.id, message}).then(() => { /**/ }).catch(data => {
-				LeekWars.toast(t('main.error_' + data.error, data.params) as string)
+			LeekWars.post('message/send-message', {conversation_id: chat.value.id, message}).then(() => { /**/ }).catch((data: unknown) => {
+				const d = data as { error: string, params?: (string | number)[] }
+				LeekWars.toast(t('main.error_' + d.error, d.params ?? []) as string)
 			})
 		}
 	}
@@ -420,8 +422,8 @@
 		issueDialog.value = false
 		LeekWars.post('message/create-issue', { message_id: id, title: issueTitle.value, description: issueDescription.value }).then(data => {
 			LeekWars.toast('Issue #' + data.issue + ' créée')
-		}).catch(data => {
-			LeekWars.toast(t('main.error_' + data.error) as string)
+		}).catch((data: unknown) => {
+			LeekWars.toast(t('main.error_' + (data as { error: string }).error) as string)
 		})
 	}
 
@@ -450,7 +452,7 @@
 
 	function openMenu(activator: MouseEvent, message: ChatMessage) {
 		menuMessage.value = message
-		menuActivator.value = activator.target as Element | null
+		menuActivator.value = (activator.target as Element | null) ?? undefined
 		menuEmoji.value = false
 		nextTick(() => {
 			menu.value = true
@@ -459,12 +461,39 @@
 
 	function openEmojis(activator: MouseEvent, message: ChatMessage) {
 		menuMessage.value = message
-		menuEmojiActivator.value = activator.target as Element | null
+		// currentTarget = le conteneur .add (ancrage stable) plutôt que l'élément
+		// le plus profond cliqué (souvent le <path> SVG de l'icône).
+		menuEmojiActivator.value = (activator.currentTarget as Element | null) ?? (activator.target as Element | null) ?? undefined
 		menu.value = false
+		// Le menu est `persistent` : s'il est déjà ouvert sur un autre message, il
+		// ne se ferme pas, on ne fait que changer son activateur ci-dessus, donc il
+		// glisse vers le nouveau bouton sans fermeture/réouverture (pas de flicker).
 		nextTick(() => {
 			menuEmoji.value = true
 		})
 	}
+
+	// Menu `persistent` : Vuetify ne ferme plus tout seul, on gère la fermeture au
+	// clic extérieur nous-mêmes (listener actif seulement quand le menu est ouvert,
+	// cf. watch ci-dessous). On NE ferme PAS si le clic vise un bouton de réaction
+	// (openEmojis repositionne le menu déjà ouvert : il glisse vers l'autre message
+	// sans fermeture/réouverture, donc sans flicker), ni s'il est dans le menu
+	// lui-même (géré par close-on-content-click / toggleReaction), ni dans l'overlay
+	// du sélecteur d'emoji complet (emoji-picker, rendu dans son propre overlay hors
+	// de .emojis-dialog : sans ça, changer d'onglet de catégorie fermait tout. #2716)
+	function onEmojiOutsidePointer(e: MouseEvent) {
+		const target = e.target as Element | null
+		if (!target || target.closest('.add') || target.closest('.emojis-dialog') || target.closest('.emoji-picker-menu')) return
+		menuEmoji.value = false
+	}
+	watch(menuEmoji, (open) => {
+		if (open) {
+			document.addEventListener('mousedown', onEmojiOutsidePointer)
+		} else {
+			document.removeEventListener('mousedown', onEmojiOutsidePointer)
+		}
+	})
+	onBeforeUnmount(() => document.removeEventListener('mousedown', onEmojiOutsidePointer))
 
 	function toggleReaction(emoji: string) {
 		menuEmoji.value = false
@@ -494,7 +523,7 @@
 		element.innerHTML = message.content
 		const innerText = element.innerText.trim()
 		message.only_emojis = !element.querySelector('.br-invite') && (innerText.length === 0 || /^[\s\p{Emoji_Presentation}]+$/gmu.test(innerText))
-		if (!('censored' in message)) {
+		if (message.censored === undefined) {
 			message.censored = 0
 		}
 		message.reactionDialog = false
@@ -521,7 +550,14 @@
 		z-index: 2;
 	}
 	.messages {
-		height: calc(100% - 40px);
+		// Hauteur via flexbox (flex:1 + min-height:0) plutôt que `height: calc(100% - 40px)`.
+		// Le calc en pourcentage imbriqué dans une colonne flex est recalculé de façon
+		// erratique par Firefox (scrollHeight/clientHeight périmés) → conteneur trop grand,
+		// impossible à scroller (#4150). Le flex dimensionne la zone de façon fiable et
+		// supprime au passage le nombre magique 40px (faux si l'input passe sur plusieurs
+		// lignes ou si la bannière de vérification remplace l'input).
+		flex: 1;
+		min-height: 0;
 		overflow-y: scroll;
 	}
 	.no-messages {
@@ -657,7 +693,7 @@
 		}
 		.more {
 			font-size: 23px;
-			color: #777;
+			color: var(--text-color-secondary);
 		}
 	}
 	.emojis-dialog {

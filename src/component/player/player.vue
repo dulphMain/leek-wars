@@ -246,10 +246,9 @@
 </template>
 
 <script setup lang="ts">
-	import { locale } from '@/locale'
 	import { Farmer } from '@/model/farmer'
 	import { Fight, FightMap, FightType, Report } from '@/model/fight'
-	import { i18n, mixins } from '@/model/i18n'
+	import { loadLocalizedMessages, mixins } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
 	import { SocketMessage } from '@/model/socket'
 	import { Game } from './game/game'
@@ -272,6 +271,7 @@
 		startAction?: number
 		creator?: boolean
 		map?: FightMap
+		fight?: Fight
 	}>()
 
 	const emit = defineEmits<{
@@ -333,10 +333,9 @@
 	let request: ReturnType<typeof LeekWars.get> | null = null
 	const progress = ref(0)
 
-	;(async () => {
-		const fightMessages = await import(/* webpackChunkName: "[request]" */ /* webpackMode: "eager" */ `@/lang/fight.${locale}.lang`)
-		i18n.global.mergeLocaleMessage(locale, { fight: fightMessages.default })
-	})()
+	// fight.<locale>.lang (dico du rapport de combat) doit suivre la locale active, pas seulement
+	// celle du boot, sinon un changement de langue laisse les clés fight.* en brut (#11926).
+	loadLocalizedMessages('fight', (loc) => import(/* webpackChunkName: "[request]" */ /* webpackMode: "eager" */ `@/lang/fight.${loc}.lang`))
 
 	if (localStorage.getItem('fight/shadows') === null) localStorage.setItem('fight/shadows', 'true')
 	if (localStorage.getItem('fight/volume') === null) localStorage.setItem('fight/volume', '0.5')
@@ -368,6 +367,8 @@
 
 	if (props.fightId) {
 		getFight(true)
+	} else if (props.fight) {
+		initFight(props.fight)
 	} else if (props.map) {
 		initMap(props.map)
 	}
@@ -448,7 +449,8 @@
 	function mousemove(e: MouseEvent) {
 		game.value.mousemove(e)
 		if (hudRef.value) {
-			hudRef.value.hover_entity = game.value.mouseEntity
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			(hudRef.value as any).hover_entity = game.value.mouseEntity
 		}
 	}
 	function mousedown(e: MouseEvent) { game.value.mousedown(e) }
@@ -456,8 +458,10 @@
 
 	onMounted(() => {
 		canvas = document.querySelector('.game-canvas')
-		game.value.canvas = canvas
-		game.value.ctx = canvas.getContext('2d')
+		if (canvas) {
+			game.value.canvas = canvas
+			game.value.ctx = canvas.getContext('2d')!
+		}
 	})
 
 	function keydown(e: KeyboardEvent) {
@@ -492,7 +496,7 @@
 		else if (k === 76) { game.value.showLifes = !game.value.showLifes; e.preventDefault() }
 		else if (k === 79) { game.value.shadows = !game.value.shadows; e.preventDefault() }
 		else if (k === 71) { game.value.largeActions = !game.value.largeActions; e.preventDefault() }
-		else if (k === 78) { game.value.dark = !game.value.dark; e.preventDefault() }
+		else if (k === 78) { game.value.autoDark = false; game.value.dark = !game.value.dark; e.preventDefault() }
 		else if (k === 84) { game.value.tactic = !game.value.tactic; e.preventDefault() }
 		else if (k === 68) { game.value.displayDebugs = !game.value.displayDebugs; e.preventDefault() }
 		else if (k === 85) { game.value.plainBackground = !game.value.plainBackground; e.preventDefault() }
@@ -534,6 +538,18 @@
 			LeekWars.didactitial_next()
 		}
 	})
+
+	// Initialise le player à partir d'un combat déjà construit (pas de fetch
+	// serveur). Utilisé par la page admin de test des animations de puces.
+	function initFight(f: Fight) {
+		fight.value = f
+		emit('fight', f)
+		nextTick(() => {
+			game.value.startTurn = props.startTurn ?? 1
+			game.value.startAction = props.startAction ?? 0
+			game.value.init(f)
+		})
+	}
 
 	function initMap(map: FightMap) {
 		const local_fight = {
@@ -583,7 +599,7 @@
 				if (first) {
 					LeekWars.socket.send([SocketMessage.FIGHT_PROGRESS_REGISTER, fight.value!.id])
 				}
-				queue.value = f.queue
+				queue.value = f.queue as unknown as { position: number, total: number }
 				if (loaded.value) return
 				timeout = setTimeout(() => { getFight(false) }, getDelay)
 				getDelay += 500
@@ -618,7 +634,7 @@
 				request.then((f) => {
 					if (destroyed) return
 					request = null
-					fightLoaded(f)
+					fightLoaded(f as unknown as Fight)
 				}).error((err) => {
 					if (destroyed) return
 					request = null
@@ -710,7 +726,9 @@
 	})
 	watch(() => game.value.actionsWidth, () => { localStorage.setItem('fight/actions-width', '' + game.value.actionsWidth); resize() })
 	watch(() => game.value.dark, () => { localStorage.setItem('fight/dark', '' + game.value.dark); game.value.toggleDark() })
-	watch(() => game.value.autoDark, () => { localStorage.setItem('fight/auto-dark', '' + game.value.autoDark) })
+	watch(() => game.value.autoDark, () => { localStorage.setItem('fight/auto-dark', '' + game.value.autoDark); game.value.toggleDark() })
+	// En mode auto, la Nexus suit le thème du site (clair / sombre) en direct.
+	watch(() => LeekWars.darkMode, () => { if (game.value.autoDark) game.value.toggleDark() })
 	watch(() => game.value.plainBackground, () => { localStorage.setItem('fight/plain-background', '' + game.value.plainBackground); resize() })
 	watch(() => game.value.displayDebugs, () => { localStorage.setItem('fight/debugs', '' + game.value.displayDebugs) })
 	watch(() => game.value.displayAILines, () => { localStorage.setItem('fight/debug-lines', '' + game.value.displayAILines) })
@@ -720,7 +738,7 @@
 	function canvasRightClick(e: Event) { game.value.rightClick(); e.preventDefault() }
 
 	watch(() => game.value.going_to_report, () => {
-		if (game.value.going_to_report && props.fightId !== 'local') {
+		if (game.value.going_to_report && props.fightId && props.fightId !== 'local') {
 			router.push("/report/" + props.fightId)
 		}
 	})
@@ -729,7 +747,7 @@
 		if (before !== -1) game.value.updateMap()
 	})
 
-	defineExpose({ get loaded() { return loaded.value }, set loaded(v: boolean) { loaded.value = v }, gameLaunched })
+	defineExpose({ get loaded() { return loaded.value }, set loaded(v: boolean) { loaded.value = v }, gameLaunched, get game() { return game.value as Game } })
 </script>
 
 
@@ -882,7 +900,10 @@
 		}
 	}
 	.game.horizontal .controls .control {
-		padding: 12px 5px;
+		padding: 12px 6px;
+		min-width: 0;
+		width: 36px;
+		height: 48px;
 	}
 	.controls .control:hover {
 		background: rgba(255,255,255, 0.2);

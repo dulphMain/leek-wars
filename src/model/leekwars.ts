@@ -31,10 +31,10 @@ const LOCAL = window.location.port === '8500' || window.location.port === '5100'
 
 // Helper functions to avoid TypeScript "excessively deep" errors with vue-i18n
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const $t = (key: string, args?: any): string => {
+const $t = (key: string, args?: any, options?: any): string => {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const t = (i18n.global as any).t
-	return t(key, args)
+	return options !== undefined ? t(key, args, options) : t(key, args)
 }
 const $tc = (key: string, choice: number): string => {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,8 +62,8 @@ interface Trophy {
 	in_fight: boolean
 	fight: number
 	index: number
-	noun_translation: string
-	adj_translation: string
+	noun_translation: number
+	adj_translation: number
 	[key: string]: unknown
 }
 
@@ -370,11 +370,15 @@ const LeekWars = reactive({
 	delete: del,
 	cgu_version: 1,
 	mobile: false,
+	// Firefox gère mal le loading="lazy" sur les pages à forte densité d'images
+	// (trophées, marché) : les images ne se chargent pas de façon fiable. On
+	// force donc le chargement eager sur Firefox uniquement (cf. plaintes joueurs).
+	firefox: typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent),
 	socialCollapsed: false,
 	menuCollapsed: false,
 	menuExpanded: false,
 	splitBack: false,
-	actions: [] as unknown[],
+	actions: [] as { icon?: string, image?: string, click: (e?: MouseEvent) => void }[],
 	lightBar: false,
 	dark: 0,
 	title: '',
@@ -384,8 +388,8 @@ const LeekWars = reactive({
 	requests: 0,
 	notifsResults: localStorage.getItem('options/notifs-results') === 'true',
 	notifsPopups: localStorage.getItem('options/notifs-popups') !== 'false',
+	notifsOpenReport: localStorage.getItem('options/notifs-open-report') === 'true',
 	rankingInactive: localStorage.getItem('options/ranking-inactive') === 'true',
-	service_worker: null as ServiceWorkerRegistration | null,
 	arena: new Arena(),
 	bossSquads: new BossSquads(),
 	squares: new Squares(),
@@ -395,6 +399,7 @@ const LeekWars = reactive({
 	timeDelta: 0, // (Date.now() / 1000 | 0) - __SERVER_TIME,
 	time: (Date.now() / 1000) | 0,
 	timeSeconds: (Date.now() / 1000) | 0,
+	routerViewKey: 0,
 	large: false,
 	flex: false,
 	header: true,
@@ -597,20 +602,33 @@ const LeekWars = reactive({
 		return width < 900
 		*/
 	},
-	contenteditable_paste_protect(element: HTMLElement) {
+	contenteditable_paste_protect(element: HTMLElement): (() => void) | void {
+		// Garde : évite d'empiler les listeners si la fonction est rappelée sur
+		// le même élément (re-montage, appel multiple). Pas de cleanup à rendre
+		// dans ce cas : les consommateurs appellent le retour via `?.()`.
+		if (element.dataset.pasteProtected) return
+		element.dataset.pasteProtected = 'true'
 		// Paste : keep the pure text of the element
-		element.addEventListener('paste', (e: ClipboardEvent) => {
+		const onPaste = (e: ClipboardEvent) => {
 			e.preventDefault()
 			const text = e.clipboardData?.getData('text/plain') ?? ''
 			document.execCommand('insertText', false, text)
-		})
+		}
 		// Drop : take the string data in the event and append it to the element
-		element.addEventListener('drop', (e: DragEvent) => {
+		const onDrop = (e: DragEvent) => {
 			e.preventDefault()
 			e.dataTransfer?.items[0]?.getAsString((str: string) => {
 				element.textContent = element.innerText + str
 			})
-		})
+		}
+		element.addEventListener('paste', onPaste)
+		element.addEventListener('drop', onDrop)
+		// Cleanup à appeler en onBeforeUnmount pour retirer les listeners.
+		return () => {
+			element.removeEventListener('paste', onPaste)
+			element.removeEventListener('drop', onDrop)
+			delete element.dataset.pasteProtected
+		}
 	},
 	toggleMenu() {
 		if (LeekWars.menuExpanded) {
@@ -653,7 +671,7 @@ const LeekWars = reactive({
 		LeekWars.header = true
 		LeekWars.lightBar = false
 	},
-	setActions(actions: unknown[]) {
+	setActions(actions: { icon?: string, image?: string, click: (e?: MouseEvent) => void }[]) {
 		LeekWars.actions = actions
 	},
 	getAvatar(farmerID: number, avatarChanged: number) {
@@ -812,9 +830,9 @@ const LeekWars = reactive({
 	removeChat(i: number) {
 		LeekWars.chatWindows.splice(i, 1)
 	},
-	get_cursor_position, set_cursor_position,
+	set_cursor_position,
 	formatDate, formatDateTime, formatDuration, formatTime, formatTimeSeconds, formatDayMonthShort, formatLongDuration,
-	setTitle, setSubTitle, setTitleCounter, setTitleTag,
+	setTitle, setSubTitle, setTitleCounter, setTitleTag, setMeta,
 	shadeColor,
 	createCodeArea, createCodeAreaSimple,
 	clover: false, cloverTop: 0, cloverLeft: 0, cloverDX: 0, cloverDY: 0, cloverDDX: 0, cloverDDY: 0, cloverFake: false, cloverTimeout: null as ReturnType<typeof setTimeout> | null, lucky,
@@ -864,7 +882,7 @@ const LeekWars = reactive({
 	trophies: [] as Trophy[],
 	constants: [] as Constant[],
 	functions: [] as LSFunction[],
-	chips: {} as Record<string, unknown>,
+	chips: {} as Record<string, { id: number, name: string, [key: string]: unknown }>,
 	trophyCategories: Object.freeze(TROPHY_CATEGORIES),
 	trophyCategoriesById: Object.freeze([...TROPHY_CATEGORIES].sort((a, b) => a.id - b.id)),
 	trophyCategoriesIcons: Object.freeze([
@@ -974,7 +992,7 @@ const LeekWars = reactive({
 				const helpPage = LeekWars.logHelpPage(log)
 				return helpPage
 			}
-			return $t('leekscript.error_' + log[3], log[4] as string[]) + "\n" + log[2]
+			return $t('leekscript.error_' + log[3], log[4] as string[], { escapeParameter: false }) + "\n" + log[2]
 		}
 		return log[2]
 	},
@@ -1035,6 +1053,73 @@ function updateTitle() {
 		title = '[' + LeekWars.titleTag + '] ' + title
 	}
 	document.title = title
+	// Garder og:title synchronisé avec le titre visible (setMeta() dans router.afterEach
+	// s'exécute avant que la page n'appelle setTitle, donc og:title y serait en retard d'une nav).
+	setMetaContent('meta[property="og:title"]', 'property', 'og:title', title)
+}
+
+const SITE_URL = 'https://leekwars.com'
+const DEFAULT_META_DESCRIPTION = 'In Leek Wars, create the most powerful leek in the world and destroy your enemies!'
+const DEFAULT_OG_IMAGE = SITE_URL + '/press-kit/banner_factory.png'
+
+interface MetaOptions {
+	title?: string | null
+	description?: string | null
+	image?: string | null
+	canonical?: string | null
+	alternates?: { lang: string, url: string }[] | null
+}
+
+function setMetaContent(selector: string, attr: 'name' | 'property', key: string, value: string) {
+	let el = document.head.querySelector<HTMLMetaElement>(selector)
+	if (!el) {
+		el = document.createElement('meta')
+		el.setAttribute(attr, key)
+		document.head.appendChild(el)
+	}
+	el.setAttribute('content', value)
+}
+
+function setLinkHref(rel: string, href: string, hreflang?: string) {
+	const selector = hreflang
+		? `link[rel="${rel}"][hreflang="${hreflang}"]`
+		: `link[rel="${rel}"]:not([hreflang])`
+	let el = document.head.querySelector<HTMLLinkElement>(selector)
+	if (!el) {
+		el = document.createElement('link')
+		el.setAttribute('rel', rel)
+		if (hreflang) el.setAttribute('hreflang', hreflang)
+		document.head.appendChild(el)
+	}
+	el.setAttribute('href', href)
+}
+
+// Met à jour les balises meta SEO/partage pour la page courante. Appelé sans argument
+// par le router (router.afterEach) pour réinitialiser aux valeurs par défaut + poser le
+// canonical de l'URL courante, puis surchargé par les pages publiques (onMounted) avec
+// leur contenu propre (titre, description, image, alternates de langue).
+function setMeta(options: MetaOptions = {}) {
+	const url = SITE_URL + window.location.pathname
+	const description = (options.description || DEFAULT_META_DESCRIPTION) as string
+	const image = options.image || DEFAULT_OG_IMAGE
+	const ogTitle = (options.title || document.title) as string
+	const canonical = options.canonical || url
+
+	setMetaContent('meta[name="description"]', 'name', 'description', description)
+	setMetaContent('meta[property="og:title"]', 'property', 'og:title', ogTitle)
+	setMetaContent('meta[property="og:description"]', 'property', 'og:description', description)
+	setMetaContent('meta[property="og:url"]', 'property', 'og:url', url)
+	setMetaContent('meta[property="og:image"]', 'property', 'og:image', image)
+	setLinkHref('canonical', canonical)
+
+	// Toujours repartir d'une base propre : sinon les hreflang d'une page d'encyclopédie
+	// fuiteraient sur la page suivante.
+	document.head.querySelectorAll('link[rel="alternate"][hreflang]').forEach(el => el.remove())
+	if (options.alternates) {
+		for (const alt of options.alternates) {
+			setLinkHref('alternate', alt.url, alt.lang)
+		}
+	}
 }
 
 function setFavicon(reset: boolean = false) {
@@ -1201,8 +1286,31 @@ function formatTime(time: number) {
 	return date.getHours() + ":" + minuts
 }
 
-function createCodeArea(code: string, element: HTMLElement) {
+// Module codemirror-wrapper mis en cache : une fois chargé, le formatage est
+// synchrone (avant le paint), sinon le bloc brut est peint un instant puis
+// remplacé par la version formatée (flicker à chaque re-rendu, ex. édition encyclopédie).
+let codeMirrorWrapper: typeof import("@/codemirror-wrapper") | null = null
+function withCodeMirror(callback: (wrapper: typeof import("@/codemirror-wrapper")) => void) {
+	if (codeMirrorWrapper) {
+		callback(codeMirrorWrapper)
+		return
+	}
 	import(/* webpackChunkName: "codemirror" */ "@/codemirror-wrapper").then(wrapper => {
+		codeMirrorWrapper = wrapper
+		callback(wrapper)
+	})
+}
+// Marqueur posé de façon synchrone : si l'élément a déjà été formaté (un update
+// dont le HTML rendu est identique ne recrée pas le DOM du v-html), re-formater
+// injecterait les numéros de ligne dans le code (textContent les contient).
+function markFormatted(element: HTMLElement): boolean {
+	if (element.dataset.lwFormatted) { return false }
+	element.dataset.lwFormatted = '1'
+	return true
+}
+function createCodeArea(code: string, element: HTMLElement) {
+	if (!markFormatted(element)) { return }
+	withCodeMirror(wrapper => {
 		wrapper.CodeMirror.runMode(code, "leekscript", element)
 		element.innerHTML = '<span class="line-number"></span><pre>' + element.innerHTML + '</pre>'
 
@@ -1215,26 +1323,14 @@ function createCodeArea(code: string, element: HTMLElement) {
 	})
 }
 function createCodeAreaSimple(code: string, element: HTMLElement) {
-	import(/* webpackChunkName: "codemirror" */ "@/codemirror-wrapper").then(wrapper => {
+	if (!markFormatted(element)) { return }
+	withCodeMirror(wrapper => {
 		wrapper.CodeMirror.runMode(code, "leekscript", element)
 		element.innerHTML = '<pre>' + element.innerHTML + '</pre>'
 		element.classList.add('single')
 	})
 }
 
-
-function get_cursor_position(editableDiv: HTMLElement) {
-	if (window.getSelection) {
-		const sel = window.getSelection()
-		if (sel && sel.rangeCount) {
-			const range = sel.getRangeAt(0)
-			if (range.commonAncestorContainer.parentNode === editableDiv) {
-				return range.endOffset
-			}
-		}
-	}
-	return 0
-}
 
 function set_cursor_position(el: HTMLElement, pos: number) {
 	if (!el.firstChild) return

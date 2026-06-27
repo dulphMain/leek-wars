@@ -58,7 +58,7 @@ abstract class Particle {
 			return true
 		}
 		// Sortie de terrain
-		if (!(this instanceof Laser) && !(this instanceof Meteorite)) {
+		if (!(this instanceof Laser) && !(this instanceof Meteorite) && !(this instanceof Boulder)) {
 			if (this.x < -150 || this.y < -150 || this.x > this.game.ground.width + 150 || this.y > this.game.ground.height + 150) {
 				this.onDie()
 				return true
@@ -398,11 +398,15 @@ class RealisticExplosion extends Particle {
 	public sources: ExplosionSource[] = []
 	public delay = 0
 	public radius: number
+	// Couleur en fonction de l'âge de la particule (t : 1 = neuve → 0 = éteinte).
+	// Si absent, dégradé de feu par défaut (jaune → orange → rouge → noir).
+	public colorFn: ((t: number) => string) | undefined
 
-	constructor(game: Game, x: number, y: number, radius: number) {
+	constructor(game: Game, x: number, y: number, radius: number, colorFn?: (t: number) => string) {
 		super(game, x, y, 0, RealisticExplosion.LIFE)
 
 		this.radius = radius
+		this.colorFn = colorFn
 		const SOURCE_SPEED = radius / 2.5
 		const rad = radius * this.game.ground.realTileSizeY / 5
 		const RADIUS_RAND = radius * this.game.ground.realTileSizeY / 8
@@ -471,11 +475,15 @@ class RealisticExplosion extends Particle {
 		for (const source of this.sources) {
 			for (const point of source.points) {
 				ctx.globalAlpha = Math.max(0, point.life / (RealisticExplosion.POINT_LIFE / 3))
-				const dir = (RealisticExplosion.POINT_LIFE / 4)
-				const blue = (point.life - 3 * RealisticExplosion.POINT_LIFE / 4) / dir
-				const green = (point.life - 2 * RealisticExplosion.POINT_LIFE / 4) / dir
-				const red = (point.life - RealisticExplosion.POINT_LIFE / 4) / dir
-				ctx.fillStyle = 'rgb(' + red * 255 + ', ' + green * 255 + ', ' + blue * 255 + ')'
+				if (this.colorFn) {
+					ctx.fillStyle = this.colorFn(point.life / RealisticExplosion.POINT_LIFE)
+				} else {
+					const dir = (RealisticExplosion.POINT_LIFE / 4)
+					const blue = (point.life - 3 * RealisticExplosion.POINT_LIFE / 4) / dir
+					const green = (point.life - 2 * RealisticExplosion.POINT_LIFE / 4) / dir
+					const red = (point.life - RealisticExplosion.POINT_LIFE / 4) / dir
+					ctx.fillStyle = 'rgb(' + red * 255 + ', ' + green * 255 + ', ' + blue * 255 + ')'
+				}
 
 				ctx.beginPath()
 				ctx.arc(point.x, point.y - point.z, point.s, 0, 2 * Math.PI)
@@ -823,6 +831,86 @@ class SpinningParticle extends Particle {
 	}
 }
 
+// Projectile qui vole d'A à B en tournant sur lui-même (shuriken, fireball, etc.).
+class FlyingSpinningProjectile extends Particle {
+	endX: number
+	endY: number
+	startX: number
+	startY: number
+	rotation: number
+	angle2: number = 0
+	texture: Texture
+	size: number
+	totalDuration: number
+
+	public constructor(game: Game, startX: number, startY: number, z: number, endX: number, endY: number, duration: number, texture: Texture, size: number = 30, rotation: number = 0.4) {
+		super(game, startX, startY, z, duration)
+		this.startX = startX
+		this.startY = startY
+		this.endX = endX
+		this.endY = endY
+		this.texture = texture
+		this.size = size
+		this.rotation = rotation
+		this.totalDuration = duration
+	}
+	public update(dt: number): boolean {
+		this.angle2 += this.rotation * dt
+		// progress 0 → 1
+		const p = 1 - this.life / this.totalDuration
+		this.x = this.startX + (this.endX - this.startX) * p
+		this.y = this.startY + (this.endY - this.startY) * p
+		return super.update(dt)
+	}
+	public draw(ctx: CanvasRenderingContext2D): void {
+		ctx.save()
+		ctx.rotate(this.angle2)
+		ctx.drawImage(this.texture.texture, -this.size / 2, -this.size / 2, this.size, this.size)
+		ctx.restore()
+	}
+}
+
+// Projectile en trajectoire parabolique de trébuchet : entre par le côté de
+// l'écran, monte puis retombe sur la cible. Purement visuel (l'explosion est
+// déclenchée par l'animation de puce). Exempté du kill hors-terrain (il démarre
+// volontairement hors écran), cf. Particle.update.
+class Boulder extends Particle {
+	startX: number
+	startY: number
+	startZ: number
+	targetX: number
+	targetY: number
+	arcHeight: number
+	totalDuration: number
+	texture: Texture
+	size: number
+
+	public constructor(game: Game, startX: number, startY: number, startZ: number, targetX: number, targetY: number, arcHeight: number, duration: number, texture: Texture, size: number = 64) {
+		super(game, startX, startY, startZ, duration)
+		this.startX = startX
+		this.startY = startY
+		this.startZ = startZ
+		this.targetX = targetX
+		this.targetY = targetY
+		this.arcHeight = arcHeight
+		this.totalDuration = duration
+		this.texture = texture
+		this.size = size
+		this.rotation = 0.15
+	}
+	public update(dt: number): boolean {
+		const p = Math.min(1, 1 - this.life / this.totalDuration)
+		this.x = this.startX + (this.targetX - this.startX) * p
+		this.y = this.startY + (this.targetY - this.startY) * p
+		// Parabole : part de startZ, monte, retombe à 0 sur la cible (p = 1).
+		this.z = this.startZ * (1 - p) + this.arcHeight * 4 * p * (1 - p)
+		return super.update(dt)
+	}
+	public draw(ctx: CanvasRenderingContext2D): void {
+		ctx.drawImage(this.texture.texture, -this.size / 2, -this.size / 2, this.size, this.size)
+	}
+}
+
 class Rocket extends Particle {
 	static SPEED = 8
 	static SCALE = 0.5
@@ -831,8 +919,11 @@ class Rocket extends Particle {
 	initial_angle: number
 	targetCell: Cell
 	radius: number
+	texture: Texture
+	explosionColorFn: ((t: number) => string) | undefined
+	explosionDebris: boolean
 
-	public constructor(game: Game, x: number, y: number, z: number, angle: number, duration: number, targetCell: Cell, radius: number) {
+	public constructor(game: Game, x: number, y: number, z: number, angle: number, duration: number, targetCell: Cell, radius: number, texture: Texture = T.rocket, explosionColorFn?: (t: number) => string, explosionDebris: boolean = true) {
 		super(game, x, y, z, duration)
 		this.dx = Math.cos(angle) * Rocket.SPEED
 		this.dy = Math.sin(angle) * Rocket.SPEED
@@ -841,6 +932,9 @@ class Rocket extends Particle {
 		this.fire_y = -Math.sin(angle) * 45
 		this.targetCell = targetCell
 		this.radius = radius
+		this.texture = texture
+		this.explosionColorFn = explosionColorFn
+		this.explosionDebris = explosionDebris
 	}
 
 	public update(dt: number): boolean {
@@ -856,14 +950,14 @@ class Rocket extends Particle {
 		if (super.update(dt)) {
 			let xy = this.game.ground.field.cellToXY(this.targetCell)
 			xy = this.game.ground.xyToXYPixels(xy.x, xy.y)
-			this.game.particles.addRealisticExplosion(xy.x, xy.y, this.radius)
+			this.game.particles.addRealisticExplosion(xy.x, xy.y, this.radius, this.explosionColorFn, this.explosionDebris)
 			return true
 		}
 		return false
 	}
 
 	public draw(ctx: CanvasRenderingContext2D): void {
-		ctx.drawImage(T.rocket.texture, -T.rocket.texture.width / 2 * Rocket.SCALE, -T.rocket.texture.height / 2 * Rocket.SCALE, T.rocket.texture.width * Rocket.SCALE, T.rocket.texture.height * Rocket.SCALE)
+		ctx.drawImage(this.texture.texture, -this.texture.texture.width / 2 * Rocket.SCALE, -this.texture.texture.height / 2 * Rocket.SCALE, this.texture.texture.width * Rocket.SCALE, this.texture.texture.height * Rocket.SCALE)
 	}
 }
 
@@ -1025,4 +1119,4 @@ class PrismParticle extends Particle {
 	}
 }
 
-export { Particle, Bubble, Bullet, BuryParticle, CriticalParticle, Laser, Lightning, Fire, SimpleFire, Gaz, Meteorite, Grenade, Shot, Explosion, Cartridge, Garbage, ImageParticle, LighningBall, LineParticle, Plasma, Rectangle, Blood, PrismParticle, RealisticExplosion, Rocket, SmallExplosion, SpikeParticle, SpinningParticle, NUM_BLOOD_SPRITES, Orbital }
+export { Particle, Bubble, Bullet, BuryParticle, CriticalParticle, Laser, Lightning, Fire, FlyingSpinningProjectile, Boulder, SimpleFire, Gaz, Meteorite, Grenade, Shot, Explosion, Cartridge, Garbage, ImageParticle, LighningBall, LineParticle, Plasma, Rectangle, Blood, PrismParticle, RealisticExplosion, Rocket, SmallExplosion, SpikeParticle, SpinningParticle, NUM_BLOOD_SPRITES, Orbital }

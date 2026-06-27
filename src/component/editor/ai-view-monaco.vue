@@ -24,6 +24,7 @@
 <script setup lang="ts">
 import * as monaco from 'monaco-editor'
 import { fileSystem } from '@/model/filesystem'
+import { setLocalStorageSafe } from '@/model/storage'
 import { LeekWars } from '@/model/leekwars'
 import { farmerId } from '@/model/store'
 import './monaco'
@@ -31,6 +32,7 @@ import { AI } from '@/model/ai'
 import { analyzer } from './analyzer'
 import { getLanguageForPath } from './file-types'
 import { code, dochash, createSubApp, emitter } from '@/model/vue'
+import { useNamespacedT } from '@/model/i18n'
 import DocumentationConstant from '../documentation/documentation-constant.vue'
 import DocumentationFunction from '../documentation/documentation-function.vue'
 import Javadoc from './javadoc.vue'
@@ -38,8 +40,12 @@ import { FUNCTIONS } from '@/model/functions'
 import { markRaw, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import Code from '@/component/app/code.vue'
 import { parseConflicts, hasConflictMarkers, buildConflictDecorations, registerConflictCodeLens, type MergeConflict } from './merge-conflicts'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'AiViewMonaco' })
+
+const { t } = useI18n()
+const editorT = useNamespacedT('editor')
 
 const scrollKey = (path: string) => 'editor/scroll/' + farmerId() + '/' + path
 const viewStateKey = (path: string) => 'editor/viewstate/' + farmerId() + '/' + path
@@ -123,7 +129,7 @@ onMounted(() => {
 	} as any))
 	scrollListener = editor.onDidScrollChange((e) => {
 		if (!props.ai) return
-		localStorage.setItem(scrollKey(props.ai.path), '' + e.scrollTop)
+		setLocalStorageSafe(scrollKey(props.ai.path), '' + e.scrollTop)
 		debouncedSaveViewState()
 	})
 	editor.onMouseUp((e) => {
@@ -268,14 +274,33 @@ onMounted(() => {
 		}
 	})
 
+	registerPaletteActions()
+
 	update()
 	emitter.on('file-reloaded', onFileReloaded)
 })
 
+// Palette de commandes (Ctrl+Shift+P / F1) : expose les actions Leek Wars comme commandes
+// nommées et traduites, listées par le widget natif Monaco editor.action.quickCommand (#4317).
+function registerPaletteActions() {
+	const add = (id: string, key: string, run: () => void) => {
+		editor.addAction({
+			id,
+			label: 'Leek Wars: ' + editorT(key),
+			run: () => run(),
+		})
+	}
+	add('leekwars.testFight', 'palette_test', () => emitter.emit('palette-test'))
+	add('leekwars.save', 'palette_save', () => emitter.emit('ctrlS'))
+	add('leekwars.format', 'palette_format', () => { editor.getAction('editor.action.formatDocument')?.run() })
+	add('leekwars.documentation', 'palette_documentation', () => { editor.getAction('editor.action.showHover')?.run() })
+	add('leekwars.toggleTheme', 'palette_toggle_theme', () => emitter.emit('palette-toggle-theme'))
+}
+
 onBeforeUnmount(() => {
 	emitter.off('file-reloaded', onFileReloaded)
-	clearTimeout(analyzerTimeout)
-	clearTimeout(viewStateSaveTimeout)
+	if (analyzerTimeout) clearTimeout(analyzerTimeout)
+	if (viewStateSaveTimeout) clearTimeout(viewStateSaveTimeout)
 	saveViewState()
 	scrollListener?.dispose()
 	conflictLenses?.dispose()
@@ -320,7 +345,17 @@ function onFileReloaded(path: string) {
 
 function syncModel() {
 	const uri = monaco.Uri.file(props.ai.path)
-	const model = monaco.editor.getModel(uri) || markRaw(monaco.editor.createModel(props.ai.code, getLanguageForPath(props.ai.path), uri))
+	const existing = monaco.editor.getModel(uri)
+	const model = existing || markRaw(monaco.editor.createModel(props.ai.code, getLanguageForPath(props.ai.path), uri))
+	// Garde-fou #4318 : un modèle déjà présent pour ce path peut être un orphelin laissé par
+	// un fichier précédent (rename/déplacement/suppression réutilisant le path). Si l'IA n'a pas
+	// d'édition locale en cours et que son contenu diffère du vrai code, on réaligne le modèle
+	// plutôt que d'afficher (et risquer de sauvegarder) le contenu de l'ancien fichier.
+	// On ne touche QUE les modèles détachés : un modèle attaché est la vue live d'un autre
+	// éditeur (split), un setValue y déclencherait un faux "modifié" et écraserait son contenu.
+	if (existing && !existing.isAttachedToEditor() && !props.ai.modified && props.ai.code !== undefined && existing.getValue() !== props.ai.code) {
+		existing.setValue(props.ai.code)
+	}
 	// eslint-disable-next-line vue/no-mutating-props
 	props.ai.model = model
 
@@ -358,7 +393,7 @@ function scrollToLine(ai: AI, line: number, column: number = 0) {
 }
 
 function setAnalyzerTimeout() {
-	clearTimeout(analyzerTimeout)
+	if (analyzerTimeout) clearTimeout(analyzerTimeout)
 	analyzerTimeout = setTimeout(() => {
 		const ai = props.ai
 		analyzing.value = true
@@ -370,7 +405,7 @@ function setAnalyzerTimeout() {
 		analyzer.analyze(ai, ai.code).then((result) => {
 			analyzing.value = false
 			if (!result) return
-			analyzer.applyAnalyzeResult(result)
+			analyzer.applyAnalyzeResult(result as Parameters<typeof analyzer.applyAnalyzeResult>[0])
 			analyzer.updateTodos(ai)
 			analyzer.updateCount()
 		}).catch(() => {
@@ -430,7 +465,7 @@ function saveViewState(aiPath?: string) {
 	if (!path) return
 	const viewState = editor.saveViewState()
 	if (viewState) {
-		localStorage.setItem(viewStateKey(path), JSON.stringify(viewState))
+		setLocalStorageSafe(viewStateKey(path), JSON.stringify(viewState))
 	}
 }
 
@@ -448,7 +483,7 @@ function restoreViewState() {
 }
 
 function debouncedSaveViewState() {
-	clearTimeout(viewStateSaveTimeout)
+	if (viewStateSaveTimeout) clearTimeout(viewStateSaveTimeout)
 	viewStateSaveTimeout = setTimeout(() => {
 		saveViewState()
 	}, 1000)

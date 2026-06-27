@@ -237,12 +237,13 @@
 	const windowsForbiddenChars = ['\\', ':', '*', '?', '"', '<', '>', '|']
 	const windowsReservedNames = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9']
 
+	const onEditorMenu = (e: unknown) => openMenu(e as { item: AI | Folder, ai: boolean, e: MouseEvent })
 	onMounted(() => {
-		emitter.on('editor-menu', openMenu)
+		emitter.on('editor-menu', onEditorMenu)
 		emitter.on('keyup', keyup)
 	})
 	onUnmounted(() => {
-		emitter.off('editor-menu', openMenu)
+		emitter.off('editor-menu', onEditorMenu)
 		emitter.off('keyup', keyup)
 	})
 
@@ -346,7 +347,8 @@
 				const folderPath = fileSystem.getFolderPath(folder.value).replace(/\/$/, '')
 				LeekWars.post('ai-folder/rename', {path: folderPath, new_name: newName.value}).then(() => {
 					LeekWars.toast(gt('leekscript.folder_renamed', [newName.value]))
-					folder.value!.name = newName.value
+					// renameFolder recalcule les paths + invalide le cache des IA descendantes (#4318)
+					fileSystem.renameFolder(folder.value!, newName.value)
 				}).error((error) => {
 					LeekWars.toast(translateFileSystemError(error))
 				})
@@ -602,7 +604,7 @@
 .title {
 	padding: 5px 10px;
 	padding-top: 10px;
-	color: #777;
+	color: var(--text-color-secondary);
 	font-size: 13px;
 }
 .v-icon {

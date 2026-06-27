@@ -120,6 +120,12 @@
 							<h2>Services</h2>
 						</div>
 					</router-link>
+					<router-link to="/admin/game-animations">
+						<div v-ripple class="section card">
+							<v-icon>mdi-flask-outline</v-icon>
+							<h2>Game animations</h2>
+						</div>
+					</router-link>
 				</div>
 			</template>
 		</panel>
@@ -176,6 +182,10 @@
 						<v-icon :class="{ 'mdi-spin': encycloLinksLoading }">{{ encycloLinksLoading ? 'mdi-loading' : 'mdi-book-sync' }}</v-icon>
 						<h2>Refresh encyclo links</h2>
 					</div>
+					<div v-ripple class="section card" @click="deployMobs">
+						<v-icon :class="{ 'mdi-spin': mobsLoading }">{{ mobsLoading ? 'mdi-loading' : 'mdi-robot' }}</v-icon>
+						<h2>Deploy mobs ({{ env.BETA ? 'develop' : 'master' }})</h2>
+					</div>
 					<a target="_blank" rel="noopener" href="https://www.paypal.com/webapps/business/">
 						<div v-ripple class="section card">
 							<v-icon>mdi-currency-eur</v-icon>
@@ -208,6 +218,7 @@
 					<v-btn prepend-icon="mdi-account-plus" @click="testVerifyPopup = true">Verify popup</v-btn>
 					<v-btn prepend-icon="mdi-email-fast" @click="testCheckEmailReminder = true">Check email reminder</v-btn>
 					<v-btn prepend-icon="mdi-party-popper" @click="testActivationWelcome = true">Activation welcome</v-btn>
+					<v-btn prepend-icon="mdi-code-tags" @click="testTutorialNudge = true">Tutorial nudge</v-btn>
 				</div>
 			</template>
 		</panel>
@@ -216,10 +227,12 @@
 		<verify-popup v-if="testVerifyPopup" v-model="testVerifyPopup" />
 		<check-email-reminder v-if="testCheckEmailReminder" v-model="testCheckEmailReminder" :test="true" />
 		<activation-welcome v-if="testActivationWelcome" v-model="testActivationWelcome" />
+		<tutorial-nudge-dialog v-if="testTutorialNudge" v-model="testTutorialNudge" />
 	</div>
 </template>
 
 <script setup lang="ts">
+	import { env } from '@/env'
 	import { locale } from '@/locale'
 	import { ChatMessage } from '@/model/chat'
 	import { Farmer } from '@/model/farmer'
@@ -234,6 +247,7 @@
 	const VerifyPopup = defineAsyncComponent(() => import('@/component/verify-popup/verify-popup.vue'))
 	const CheckEmailReminder = defineAsyncComponent(() => import('@/component/check-email-reminder/check-email-reminder.vue'))
 	const ActivationWelcome = defineAsyncComponent(() => import('@/component/activation-welcome/activation-welcome.vue'))
+	const TutorialNudgeDialog = defineAsyncComponent(() => import('@/component/tutorial-nudge-dialog/tutorial-nudge-dialog.vue'))
 
 	const router = useRouter()
 
@@ -243,9 +257,11 @@
 	const levelPopup = ref(false)
 	const levelPopupData = ref<unknown>(null)
 	const encycloLinksLoading = ref(false)
+	const mobsLoading = ref(false)
 	const testVerifyPopup = ref(false)
 	const testCheckEmailReminder = ref(false)
 	const testActivationWelcome = ref(false)
+	const testTutorialNudge = ref(false)
 
 	if (!store.getters.admin) router.replace('/')
 	LeekWars.setTitle('Admin')
@@ -314,6 +330,7 @@
 	function showLevelDialog(level: number) {
 		LeekWars.get('leek/random-by-level/' + level).then(l => {
 			leek.value = l
+			if (!leek.value) return
 			LeekWars.get('leek/get-level-popup/' + leek.value.id).then(data => {
 				levelPopup.value = true
 				levelPopupData.value = data.popup
@@ -356,6 +373,21 @@
 		}).error((error) => {
 			encycloLinksLoading.value = false
 			LeekWars.toast("Erreur : " + error.error)
+		})
+	}
+
+	function deployMobs() {
+		if (mobsLoading.value) return
+		const branch = env.BETA ? 'develop' : 'master'
+		if (!confirm('Pull leek-wars-mobs (' + branch + ') et déployer les IA des mobs/boss ?')) return
+		mobsLoading.value = true
+		LeekWars.post('admin/deploy-mobs', { branch }).then((data) => {
+			mobsLoading.value = false
+			const n = data.changed_files ? data.changed_files.length : 0
+			LeekWars.toast('Mobs déployés (' + data.branch + ') : ' + n + ' fichier(s) mis à jour')
+		}).error((error) => {
+			mobsLoading.value = false
+			LeekWars.toast('Erreur : ' + (error.error || JSON.stringify(error)))
 		})
 	}
 

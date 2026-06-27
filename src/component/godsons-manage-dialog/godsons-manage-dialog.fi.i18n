@@ -1,0 +1,10 @@
+{
+	"title": "Hallinnoi kummilapsia",
+	"stats": "Taso {0} · Lahjakkuus {1} · Kummilapset taso {2} · Liittyi {3}",
+	"disown": "Poista",
+	"empty": "Ei vielä kummilapsia.",
+	"disown_confirm_title": "Poistetaanko tämä kummilapsi?",
+	"disown_confirm_message": "Poistat {name} ja menetät {level} rekursiivista kummilapsitasoa.",
+	"cancel": "Peruuta",
+	"error_disown_failed": "Tämän kummilapsen poistaminen epäonnistui."
+}

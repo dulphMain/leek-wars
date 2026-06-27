@@ -30,20 +30,31 @@ const commandsRef = useTemplateRef<InstanceType<typeof ChatCommands>>('commands'
 const pseudosRef = useTemplateRef<InstanceType<typeof ChatPseudos>>('pseudos')
 
 const message = ref('')
-const cursor = ref(0)
+// Caret mémorisé dans l'input. On garde le Range (références nœud + offset) plutôt
+// qu'un simple offset entier : en multi-lignes, un offset est local à la ligne et ne
+// permet pas de retrouver la bonne position (forum #11627).
+let savedRange: Range | null = null
 const commandsEnabled = ref(false)
 const commandFilter = ref('')
 const pseudosEnabled = ref(false)
 const pseudosFilter = ref('')
 let rootEl: HTMLElement
+let cleanupPasteProtect: (() => void) | null = null
+// Anti-flood client : sans ça, vider l'input avant que le serveur ne rejette
+// (HTTP 429 chat_flood) ferait perdre la saisie. On bloque l'envoi en amont
+// et on garde le texte tant que le délai n'est pas écoulé. Le check serveur
+// reste en place (sécurité, le client peut être bypassé).
+const FLOOD_DELAY_MS = 350
+let lastSendTime = 0
 
 onMounted(() => {
-	LeekWars.contenteditable_paste_protect(inputRef.value!)
+	cleanupPasteProtect = LeekWars.contenteditable_paste_protect(inputRef.value!)
 	rootEl = inputRef.value!.parentElement as HTMLElement
 	document.addEventListener('mousedown', onClickOutside)
 })
 
 onBeforeUnmount(() => {
+	cleanupPasteProtect?.()
 	document.removeEventListener('mousedown', onClickOutside)
 })
 
@@ -56,15 +67,22 @@ function onClickOutside(e: MouseEvent) {
 
 function updateCursor() {
 	const input = inputRef.value!
-	cursor.value = LeekWars.get_cursor_position(input)
+	const sel = window.getSelection()
+	if (sel && sel.rangeCount) {
+		const range = sel.getRangeAt(0)
+		// On ne mémorise le caret que s'il est bien dans l'input.
+		if (input.contains(range.commonAncestorContainer)) {
+			savedRange = range.cloneRange()
+		}
+	}
 }
 
 function keyDown(e: KeyboardEvent) {
 	if (e.which === 9) { // tab
 		if (commandsEnabled.value) {
 			const selectedCommand = commandsRef.value!.getSelected()
-			const selectedOption = commandsRef.value!.getSelectedOption()
-			const filterOptions = commandsRef.value!.filterOptions || ''
+			const selectedOption = commandsRef.value!.getSelectedOption() as { name: string } | null
+			const filterOptions = (commandsRef.value as unknown as { filterOptions?: string }).filterOptions || ''
 			const isSimple = !selectedCommand.options
 			selectCommand(selectedCommand.name + (isSimple ? '' : ':') + (selectedOption ? selectedOption.name : filterOptions), isSimple || !!selectedOption)
 			e.preventDefault()
@@ -108,12 +126,18 @@ function keyUp(e: KeyboardEvent) {
 			LeekWars.toast(i18n.t('main.chat_too_long') as string)
 			return
 		}
+		const now = Date.now()
+		if (now - lastSendTime < FLOOD_DELAY_MS) {
+			LeekWars.toast(i18n.t('main.error_chat_flood') as string)
+			return
+		}
+		lastSendTime = now
 		if (message.value === '/ping') {
 			// LW.chat.last_ping = Date.now()
 		}
 		emit('message', message.value.trim())
 		input.textContent = ''
-		cursor.value = 0
+		savedRange = null
 		commandsEnabled.value = false
 	}
 	if (e.code === 'ArrowDown') {
@@ -148,13 +172,34 @@ function keyUp(e: KeyboardEvent) {
 
 function addEmoji(emoji: string) {
 	const input = inputRef.value!
-	let cursor_position = cursor.value
-	const text = input.innerText
-	input.textContent = text.substring(0, cursor_position) + emoji + text.substring(cursor_position)
 	input.focus()
-	cursor_position += emoji.length
-	LeekWars.set_cursor_position(input, cursor_position)
-	cursor.value = cursor_position
+	const sel = window.getSelection()
+	if (!sel) return
+	// Insertion au caret mémorisé via le DOM : préserve la structure multi-lignes
+	// (les retours à la ligne ne sont plus aplatis comme avec textContent) et place
+	// l'emoji à la bonne ligne (forum #11627). Le sélecteur d'emoji ayant fait perdre
+	// le focus à l'input, on restaure la position mémorisée plutôt que la sélection
+	// courante.
+	let range: Range
+	if (savedRange && input.contains(savedRange.commonAncestorContainer)) {
+		range = savedRange.cloneRange()
+	} else {
+		// Pas de position mémorisée : on insère en fin de message.
+		range = document.createRange()
+		range.selectNodeContents(input)
+		range.collapse(false)
+	}
+	range.deleteContents()
+	const node = document.createTextNode(emoji)
+	range.insertNode(node)
+	// Caret juste après l'emoji inséré.
+	range.setStartAfter(node)
+	range.collapse(true)
+	sel.removeAllRanges()
+	sel.addRange(range)
+	savedRange = range.cloneRange()
+	message.value = input.innerText
+	updateCommands()
 }
 
 function updateCommands() {
@@ -175,16 +220,52 @@ function updateCommands() {
 	}
 }
 
+// Remplace les tokenLength caracteres avant le caret memorise (savedRange) via le DOM
+// (Range) au lieu de reconstruire input.textContent : reconstruire aplatissait la
+// structure multi-lignes du contenteditable (les \n ne redevenaient pas des sauts de
+// ligne) et faisait sauter le curseur (forum #11627, meme cause que celle corrigee pour
+// addEmoji). Retourne false si le caret memorise n'est pas exploitable, pour laisser
+// l'appelant retomber sur l'ancien comportement.
+function replaceToken(input: HTMLElement, token: string, replacement: string): boolean {
+	const sel = window.getSelection()
+	const saved = savedRange
+	if (!sel || !saved || !input.contains(saved.commonAncestorContainer)) { return false }
+	if (saved.startContainer.nodeType !== Node.TEXT_NODE || saved.startOffset < token.length) { return false }
+	// On ne remplace via le DOM que si les caractères juste avant le caret sont bien le
+	// token attendu (caret au bout du /commande ou @pseudo). Sinon (caret déplacé), on
+	// rend false pour laisser l'appelant retomber sur l'ancien remplacement textContent :
+	// le chemin DOM reste alors strictement équivalent, sans risque de régression.
+	const before = (saved.startContainer.textContent || '').slice(saved.startOffset - token.length, saved.startOffset)
+	if (before !== token) { return false }
+	input.focus()
+	const range = saved.cloneRange()
+	range.setStart(saved.startContainer, saved.startOffset - token.length)
+	range.deleteContents()
+	const node = document.createTextNode(replacement)
+	range.insertNode(node)
+	range.setStartAfter(node)
+	range.collapse(true)
+	sel.removeAllRanges()
+	sel.addRange(range)
+	savedRange = range.cloneRange()
+	message.value = input.innerText
+	return true
+}
+
 function selectCommand(command: string, finished: boolean = true) {
 	const input = inputRef.value!
-	let text = input.innerText
+	const text = input.innerText
 	const regex = /\/(\w*(!|(:\w*))?)$/gi
 	const match = regex.exec(text)
-	text = text.replace(regex, "/" + command + (finished ? " " : ""))
-	input.textContent = text
-	input.focus()
 	if (match) {
-		LeekWars.set_cursor_position(input, match.index + command.length + (finished ? 2 : 1))
+		const replacement = "/" + command + (finished ? " " : "")
+		// DOM d'abord (preserve le multi-lignes) ; repli sur la reconstruction textContent
+		// si le caret memorise n'est pas exploitable.
+		if (!replaceToken(input, match[0], replacement)) {
+			input.textContent = text.replace(regex, replacement)
+			input.focus()
+			LeekWars.set_cursor_position(input, match.index + command.length + (finished ? 2 : 1))
+		}
 	}
 	if (finished) {
 		commandsEnabled.value = false
@@ -195,14 +276,16 @@ function selectCommand(command: string, finished: boolean = true) {
 function selectPseudo(pseudo: string | null) {
 	if (pseudo) {
 		const input = inputRef.value!
-		let text = input.innerText
+		const text = input.innerText
 		const regex = /@\w*$/gi
 		const match = regex.exec(text)
-		text = text.replace(regex, "@" + pseudo + " ")
-		input.textContent = text
-		input.focus()
 		if (match) {
-			LeekWars.set_cursor_position(input, match.index + pseudo.length + 2)
+			const replacement = "@" + pseudo + " "
+			if (!replaceToken(input, match[0], replacement)) {
+				input.textContent = text.replace(regex, replacement)
+				input.focus()
+				LeekWars.set_cursor_position(input, match.index + pseudo.length + 2)
+			}
 		}
 	}
 	pseudosEnabled.value = false

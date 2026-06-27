@@ -1,0 +1,10 @@
+{
+	"title": "Administrer fadderbarn",
+	"stats": "Nivå {0} · Talent {1} · Fadderbarn niv. {2} · Registrert {3}",
+	"disown": "Fjern",
+	"empty": "Ingen fadderbarn ennå.",
+	"disown_confirm_title": "Fjerne dette fadderbarnet?",
+	"disown_confirm_message": "Du fjerner {name} og mister {level} rekursive fadderbarn-nivåer.",
+	"cancel": "Avbryt",
+	"error_disown_failed": "Kunne ikke fjerne dette fadderbarnet."
+}

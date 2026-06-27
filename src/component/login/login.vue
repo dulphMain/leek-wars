@@ -6,15 +6,15 @@
 				<div class="column">
 					<form @submit.prevent="login">
 						<br>
-						<div class="title">{{ $t('login') }}</div>
-						<input v-model="form.login" type="text" name="login" autocapitalize="none" autocorrect="off" autocomplete="username" spellcheck="false">
+						<label class="title" for="login-field">{{ $t('login') }}</label>
+						<input id="login-field" v-model="form.login" type="text" name="login" autocapitalize="none" autocorrect="off" autocomplete="username" spellcheck="false">
 						<br><br>
-						<div class="title">{{ $t('password') }}</div>
-						<input v-model="form.password" type="password" name="password" autocapitalize="none" autocorrect="off" autocomplete="current-password" spellcheck="false">
+						<label class="title" for="password-field">{{ $t('password') }}</label>
+						<input id="password-field" v-model="form.password" type="password" name="password" autocapitalize="none" autocorrect="off" autocomplete="current-password" spellcheck="false">
 						<br><br>
 <template v-if="twoFactor">
-							<div class="title">{{ $t('two_factor_code') }}</div>
-							<input v-model="form.code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false">
+							<label class="title" for="code-field">{{ $t('two_factor_code') }}</label>
+							<input id="code-field" v-model="form.code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false">
 							<br><br>
 						</template>
 						<v-checkbox v-model="form.keep_connected" :label="$t('keep_connected')" hide-details />
@@ -54,7 +54,7 @@ const t = useNamespacedT('login')
 const route = useRoute()
 const router = useRouter()
 
-const error = ref<unknown>(null)
+const error = ref<{ error?: string } | null>(null)
 const loading = ref(false)
 const twoFactor = ref(false) // #4003 challenge 2FA déclenché par la réponse two_factor_required
 const form = ref({
@@ -72,8 +72,8 @@ if (tokenParam) {
 		const token = LeekWars.DEV ? data.token : '$'
 		store.commit('connect', { ...data, token })
 		router.push(getRedirectAfterLogin())
-	}).catch((err) => {
-		LeekWars.toast(err.error)
+	}).catch((err: unknown) => {
+		LeekWars.toast((err as { error?: string }).error ?? '')
 		router.push('/')
 	})
 }
@@ -86,13 +86,14 @@ function login() {
 		const token = LeekWars.DEV ? data.token : '$'
 		store.commit('connect', { ...data, token })
 		router.push(getRedirectAfterLogin())
-	}).catch((err) => {
+	}).catch((err: unknown) => {
 		loading.value = false
-		if (err && err.error === 'two_factor_required') {
+		const e = err as { error?: string }
+		if (e && e.error === 'two_factor_required') {
 			twoFactor.value = true // 2FA activée : on affiche le champ code et on re-soumet avec
 			error.value = null
 		} else {
-			error.value = err
+			error.value = e
 		}
 	})
 }
@@ -178,6 +179,7 @@ function oauthStart(provider: 'github' | 'google') {
 		filter: invert(1);
 	}
 	.title {
+		display: block;
 		font-size: 16px;
 	}
 </style>

@@ -1,5 +1,5 @@
 <template lang="html">
-	<div class="version">
+	<div v-if="version" class="version">
 		<img :src="'/image/mail/mail_' + version.version + '.webp'" class="image" loading="lazy" @error="($event.target as HTMLImageElement).style.display = 'none'">
 		<div class="wrapper">
 			<div v-for="(changes, s) in sections" :key="s" class="section">
@@ -27,7 +27,9 @@ import { useI18n } from 'vue-i18n'
 import { mixins } from '@/model/i18n'
 
 interface ChangelogVersion {
-	version: string
+	version: string | number
+	forum_topic?: number | null
+	forum_category?: number | null
 	[key: string]: unknown
 }
 
@@ -40,8 +42,11 @@ const props = defineProps<{
 const { t, locale } = useI18n()
 const changelog = ref<Record<string, unknown> | null>(null)
 
+// Seules ces langues ont un changelog traduit ; les autres retombent sur l'anglais.
+const CHANGELOG_LOCALES = ['fr', 'en', 'es', 'it']
 function update() {
-	import(/* webpackChunkName: "changelog-[request]" */ `@/component/changelog/changelog.${locale.value}.yaml`).then((module) => {
+	const lang = CHANGELOG_LOCALES.includes(locale.value) ? locale.value : 'en'
+	import(/* webpackChunkName: "changelog-[request]" */ `@/component/changelog/changelog.${lang}.yaml`).then((module) => {
 		changelog.value = module.default
 	})
 }
@@ -49,7 +54,7 @@ function update() {
 watch(locale, update)
 update()
 
-const changes = computed(() => {
+const changes = computed<unknown>(() => {
 	if (!props.version || !changelog.value) return []
 	return changelog.value[props.version.version]
 })
@@ -60,15 +65,16 @@ const sections = computed(() => {
 	const collected = []
 	if (Array.isArray(changes.value)) {
 		collected.push(changes.value)
-	} else {
-		for (const key in changes.value) {
+	} else if (changes.value && typeof changes.value === 'object') {
+		const ch = changes.value as Record<string, unknown>
+		for (const key in ch) {
 			if (key === 'title') continue
-			collected.push(changes.value[key])
+			collected.push(ch[key])
 		}
 	}
 	const regex = /#img_(\w+)/g
 	const codeRegex = /`([^`]+)`/g
-	return collected.map((cat: string[]) => cat
+	return collected.map((cat: unknown) => (cat as string[])
 		.map((c: string) => ({
 			text: c.replace('# ', '').replace('#ai', '<span class="ai" title="' + t('changelog.need_ai_change') + '">AI</span>').replace(regex, '').replace(codeRegex, '<code>$1</code>'),
 			images: Array.from(c.matchAll(regex), (m: RegExpMatchArray) => m[1])
@@ -105,7 +111,7 @@ const sections = computed(() => {
 		.screenshot {
 			color: #5fad1b;
 			cursor: pointer;
-			padding: 0 4px;
+			margin: 0 4px;
 			border-radius: 4px;
 			font-size: 20px;
 			vertical-align: top;

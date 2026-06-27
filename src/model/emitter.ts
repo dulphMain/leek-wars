@@ -16,6 +16,9 @@ type Events = {
 	previous: KeyboardEvent
 	next: KeyboardEvent
 	ctrlP: KeyboardEvent
+	ctrlShiftP: KeyboardEvent
+	'palette-test': void
+	'palette-toggle-theme': void
 	keyup: KeyboardEvent
 	resize: void
 	focus: void
@@ -42,6 +45,7 @@ type Events = {
 	'doc-navigate': string,
 	'garden-queue': number,
 	'fight-progress': [number, number],
+	'history-update': [number],
 	'update-leek-xp': unknown,
 	'update-leek-talent': unknown,
 	'update-team-talent': { composition: number; talent: number },
@@ -55,6 +59,7 @@ type Events = {
 	'git-repos-changed': void,
 	'git-history-refresh': void,
 	'file-reloaded': string,
+	'ai-path-changed': { oldPath: string, newPath: string | null },
 	'close-diff': { folder: string, file: string },
 	'close-file-tab': string,
 	'close-merge-tabs': { folder: string },

@@ -34,8 +34,8 @@
 		</div>
 		<div class="spacer"></div>
 		<div v-if="showPrice">
-			<div>{{ $filters.number(scheme.quantity * LeekWars.items[scheme.result].price) }} <span class="hab"></span></div>
-			<div :class="{wrong: Math.abs((scheme.quantity * LeekWars.items[scheme.result].price) / scheme.items.reduce((s, i) => s + (i ? i[1] * LeekWars.items[i[0]].price : 0), 0) - 1.1) > 0.03 }">{{ $filters.number(scheme.items.reduce((s, i) => s + (i ? i[1] * LeekWars.items[i[0]].price : 0), 0)) }} ({{ ((scheme.quantity * LeekWars.items[scheme.result].price) / scheme.items.reduce((s, i) => s + (i ? i[1] * LeekWars.items[i[0]].price : 0), 0)).toFixed(2) }}) <span class="hab"></span></div>
+			<div>{{ $filters.number(scheme.quantity * (LeekWars.items[scheme.result].price ?? 0)) }} <span class="hab"></span></div>
+			<div :class="{wrong: Math.abs((scheme.quantity * (LeekWars.items[scheme.result].price ?? 0)) / scheme.items.reduce((s, i) => s + (i ? i[1] * (LeekWars.items[i[0]].price ?? 0) : 0), 0) - 1.1) > 0.03 }">{{ $filters.number(scheme.items.reduce((s, i) => s + (i ? i[1] * (LeekWars.items[i[0]].price ?? 0) : 0), 0)) }} ({{ ((scheme.quantity * (LeekWars.items[scheme.result].price ?? 0)) / scheme.items.reduce((s, i) => s + (i ? i[1] * (LeekWars.items[i[0]].price ?? 0) : 0), 0)).toFixed(2) }}) <span class="hab"></span></div>
 		</div>
 	</div>
 </template>
@@ -64,7 +64,7 @@ const props = withDefaults(defineProps<{
 })
 
 defineEmits<{
-	'show-tooltip': [event: MouseEvent]
+	'show-tooltip': [event: { item: ItemTemplate, quantity: number, craftCost?: number, event: MouseEvent }]
 	'hide-tooltip': []
 	'update:modelValue': [value: unknown]
 }>()
@@ -119,6 +119,16 @@ const item_present = computed(() => items.value.map(item => {
 				}
 			}
 			for (const resource of store.state.farmer!.chips) {
+				if (item.item && resource.template === item.item.id) {
+					return resource.quantity >= item.quantity ? 'present' : 'partial'
+				}
+			}
+			for (const resource of store.state.farmer!.hats) {
+				if (item.item && resource.template === item.item.id) {
+					return resource.quantity >= item.quantity ? 'present' : 'partial'
+				}
+			}
+			for (const resource of store.state.farmer!.pomps) {
 				if (item.item && resource.template === item.item.id) {
 					return resource.quantity >= item.quantity ? 'present' : 'partial'
 				}

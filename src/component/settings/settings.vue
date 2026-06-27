@@ -32,14 +32,14 @@
 						<tr>
 							<td class="align-right">{{ $t('your_farmer_name') }}</td>
 							<td class="align-left">
-								<input v-model="login" :status="status('login')" name="login" type="text" required>
+								<input v-model="login" :status="status('login')" :aria-label="$t('your_farmer_name')" name="login" type="text" autocomplete="username" required>
 								<div v-for="e in errors.login" :key="e" class="error-msg">{{ e }}</div>
 							</td>
 						</tr>
 						<tr>
 							<td class="align-right"><i>{{ $t('godfather') }}</i></td>
 							<td class="align-left">
-								<input v-model="godfather" :status="status('godfather')" type="text">
+								<input v-model="godfather" :status="status('godfather')" :aria-label="$t('godfather')" type="text">
 								<div v-for="e in errors.godfather" :key="e" class="error-msg">{{ e }}</div>
 							</td>
 						</tr>
@@ -58,14 +58,14 @@
 						<tr v-if="signupMethod === 1">
 							<td class="align-right">{{ $t('your_email') }}</td>
 							<td class="align-left">
-								<input v-model="email" :status="status('email')" name="email" type="text" required>
+								<input v-model="email" :status="status('email')" :aria-label="$t('your_email')" name="email" type="text" autocomplete="email" required>
 								<div v-for="e in errors.email" :key="e" class="error-msg">{{ e }}</div>
 							</td>
 						</tr>
 						<tr v-if="signupMethod === 1">
 							<td class="align-right">{{ $t('password') }}</td>
 							<td class="align-left">
-								<input v-model="password1" :status="status('password1')" name="password" type="password" required>
+								<input v-model="password1" :status="status('password1')" :aria-label="$t('password')" name="password" type="password" autocomplete="new-password" required>
 								<div v-for="e in errors.password1" :key="e" class="error-msg">{{ e }}</div>
 							</td>
 						</tr>
@@ -119,6 +119,10 @@
 						<div>{{ $t('notifs_results') }}</div>
 						<div><v-switch v-model="notifsResults" hide-details /></div>
 					</div>
+					<div id="notifs-open-report-button" class="setting">
+						<div>{{ $t('notifs_open_report') }}</div>
+						<div><v-switch v-model="notifsOpenReport" hide-details /></div>
+					</div>
 					<div v-if="LeekWars.mobile" class="setting">
 						<div>{{ $t('chat_first') }}</div>
 						<div><v-switch v-model="chatFirst" hide-details /></div>
@@ -142,12 +146,12 @@
 				</div>
 				<form v-if="viewChangePassword && $store.state.farmer" class="change-password" @submit="changePassword">
 					<h4 v-if="$store.state.farmer.pass">{{ $t('old_password') }}</h4>
-					<input v-if="$store.state.farmer.pass" v-model="password" name="password" type="password">
+					<input v-if="$store.state.farmer.pass" v-model="password" :aria-label="$t('old_password')" name="password" type="password" autocomplete="current-password">
 					<br v-if="$store.state.farmer.pass">
 					<h4>{{ $t('new_password') }}</h4>
-					<input v-model="newPassword1" name="new_password1" type="password" required> <br>
+					<input v-model="newPassword1" :aria-label="$t('new_password')" name="new_password1" type="password" autocomplete="new-password" required> <br>
 					<h4>{{ $t('confirm_password') }}</h4>
-					<input v-model="newPassword2" name="new_password2" type="password" required> <br>
+					<input v-model="newPassword2" :aria-label="$t('confirm_password')" name="new_password2" type="password" autocomplete="new-password" required> <br>
 					<div class="center"><v-btn type="submit">{{ $t('change') }}</v-btn></div>
 				</form>
 
@@ -181,10 +185,16 @@
 
 			<panel v-if="$store.state.farmer?.verified" :title="$t('main.notifications')" icon="mdi-bell-outline">
 				<template #actions>
-					<span class="push-notifs-button" @click="updatePushNotifications">
-						<span>{{ $t('push_notifications') }}</span>
-						<v-switch :model-value="pushNotifications" hide-details />
-					</span>
+					<v-tooltip :disabled="!pushHint" location="bottom">
+						<template #activator="{ props }">
+							<span class="push-notifs-button" v-bind="props" @click="updatePushNotifications">
+								<v-icon v-if="pushHint" class="push-warning">mdi-alert-circle-outline</v-icon>
+								<span>{{ $t('push_notifications') }}</span>
+								<v-switch :model-value="pushNotifications" hide-details />
+							</span>
+						</template>
+						{{ pushHint }}
+					</v-tooltip>
 				</template>
 				<template #content>
 					<div class="content notifications">
@@ -247,7 +257,7 @@
 			<template #icon><v-icon>mdi-delete</v-icon></template>
 			<template #title><span>{{ $t('delete_confirmation') }}</span></template>
 			{{ $t('delete_confirmation_password') }} : <br><br>
-			{{ $t('delete_password') }} : <input v-model="deleteConfirmPassword" type="password">
+			{{ $t('delete_password') }} : <input v-model="deleteConfirmPassword" :aria-label="$t('delete_password')" type="password" autocomplete="current-password">
 			<template #actions>
 				<div v-ripple class="action dismiss" @click="deleteConfirmDialog = false">{{ $t('delete_cancel') }}</div>
 				<div v-ripple class="action red" @click="deleteAccountFinal">{{ $t('delete_finalize') }}</div>
@@ -273,7 +283,7 @@
 	import { mixins, t as gt , useNamespacedT } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
 	import { store } from '@/model/store'
-	import { ref, watch } from 'vue'
+	import { computed, ref, watch } from 'vue'
 	import { useRouter } from 'vue-router'
 
 	defineOptions({ name: 'Settings', i18n: {}, mixins: [...mixins], components: { TwoFactor } })
@@ -298,9 +308,18 @@
 	const sfwMode = ref(localStorage.getItem('sfw') === 'true')
 	const notifsPopups = ref(localStorage.getItem('options/notifs-popups') !== 'false')
 	const notifsResults = ref(localStorage.getItem('options/notifs-results') === 'true')
+	const notifsOpenReport = ref(localStorage.getItem('options/notifs-open-report') === 'true')
 	const chatFirst = ref(localStorage.getItem('options/chat-first') === 'true')
 	const modernTheme = ref(localStorage.getItem('theme') === 'xp')
-	const pushNotifications = ref(localStorage.getItem('options/push-notifs') === 'true')
+	const pushNotifications = ref(false)
+	const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+	const pushPermission = ref<NotificationPermission | null>(pushSupported ? Notification.permission : null)
+	// Persistent explanation shown next to the toggle (warning icon + tooltip) when push can't be enabled.
+	const pushHint = computed(() => {
+		if (!pushSupported) { return t('push_unsupported') }
+		if (pushPermission.value === 'denied') { return t('push_blocked') }
+		return ''
+	})
 	const deleteDialog = ref(false)
 	const deleteConfirmDialog = ref(false)
 	const deleteConfirmPassword = ref('')
@@ -339,37 +358,53 @@
 		if (store.state.farmer) {
 			LeekWars.setTitle(t('title'), store.state.farmer.name)
 		}
-		if (LeekWars.service_worker) {
-			LeekWars.service_worker.pushManager.getSubscription().then((subscription: PushSubscription | null) => {
-				if (subscription) {
-					for (const endpoint of data.push_endpoints) {
-						if (subscription.endpoint === endpoint) {
-							pushNotifications.value = true
-							break
-						}
-					}
+		// Reconcile the toggle with the actual push subscription. Wait for navigator.serviceWorker.ready
+		// rather than reading LeekWars.service_worker, which is populated asynchronously and may still be
+		// null when get-settings resolves (race: the toggle showed OFF after a reload even while subscribed).
+		if (pushSupported) {
+			getPushSubscription().then(subscription => {
+				if (subscription && data.push_endpoints.includes(subscription.endpoint)) {
+					pushNotifications.value = true
 				}
-			})
+			}).catch(() => { /* push unavailable on this browser, leave toggle OFF */ })
 		}
 	})
 
-	function updatePushNotifications(_e: Event) {
-		if (!LeekWars.service_worker) { return }
-		if (pushNotifications.value) {
-			LeekWars.service_worker.pushManager.getSubscription().then((subscription: PushSubscription | null) => {
-				if (subscription) {
-					subscription.unsubscribe()
-				}
-			})
-		} else {
-			LeekWars.service_worker.pushManager.subscribe({
-				applicationServerKey: vapid_key,
-				userVisibleOnly: true
-			}).then((subscription: PushSubscription) => {
-				LeekWars.post('push-endpoint/register', {subscription: JSON.stringify(subscription)})
-			})
+	function getPushSubscription(): Promise<PushSubscription | null> {
+		return navigator.serviceWorker.ready.then(registration => registration.pushManager.getSubscription())
+	}
+
+	function updatePushNotifications() {
+		if (!pushSupported) {
+			LeekWars.toast(t('push_unsupported'))
+			return
 		}
-		pushNotifications.value = !pushNotifications.value
+		if (pushNotifications.value) {
+			pushNotifications.value = false
+			getPushSubscription().then(subscription => subscription?.unsubscribe())
+			return
+		}
+		// Request permission directly from the click so the prompt stays inside the user gesture (Safari requirement).
+		// If already denied, requestPermission() resolves to 'denied' without reprompting and we explain below.
+		Notification.requestPermission().then(permission => {
+			pushPermission.value = permission
+			if (permission !== 'granted') {
+				LeekWars.toast(t('push_blocked'))
+				return
+			}
+			navigator.serviceWorker.ready
+				.then(registration => registration.pushManager.subscribe({ applicationServerKey: vapid_key, userVisibleOnly: true }))
+				.then(subscription => {
+					// Only reflect the toggle as ON once the browser actually granted the subscription,
+					// so it stays OFF (instead of lying) when notifications are blocked.
+					pushNotifications.value = true
+					LeekWars.post('push-endpoint/register', {subscription: JSON.stringify(subscription)})
+				})
+				.catch(() => {
+					pushNotifications.value = false
+					LeekWars.toast(t('push_error'))
+				})
+		})
 	}
 
 	function logout() {
@@ -420,6 +455,11 @@
 	watch(notifsResults, () => {
 		localStorage.setItem('options/notifs-results', '' + notifsResults.value)
 		LeekWars.notifsResults = notifsResults.value
+	})
+
+	watch(notifsOpenReport, () => {
+		localStorage.setItem('options/notifs-open-report', '' + notifsOpenReport.value)
+		LeekWars.notifsOpenReport = notifsOpenReport.value
 	})
 
 	watch(chatFirst, () => {
@@ -652,7 +692,7 @@
 		.title {
 			font-size: 18px;
 			font-weight: bold;
-			color: #777;
+			color: var(--text-color-secondary);
 		}
 		input {
 			margin-top: 3px;
@@ -680,6 +720,10 @@
 		> span {
 			color: white;
 		}
+		.push-warning {
+			color: #ffca28;
+			font-size: 20px;
+		}
 	}
 	.notifications.content {
 		text-align: left;
@@ -694,7 +738,7 @@
 			}
 		}
 		.item {
-			color: #777;
+			color: var(--text-color-secondary);
 		}
 		.push label, .mail label {
 			cursor: pointer;
@@ -711,7 +755,7 @@
 		}
 	}
 	.notif-info {
-		color: #777;
+		color: var(--text-color-secondary);
 		font-size: 14px;
 		padding-top: 10px;
 		.v-icon {

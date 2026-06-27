@@ -21,6 +21,7 @@
 				</router-link>
 				<router-link :to="getURL('farmer', 'talent', country, LeekWars.rankingInactive)"><div class="tab" :class="{active: category === 'farmer'}">{{ $t('farmers') }}</div></router-link>
 				<router-link :to="getURL(teamMode, 'talent', country, LeekWars.rankingInactive)"><div class="tab" :class="{active: category === 'team' || category === 'composition'}">{{ $t('teams') }}</div></router-link>
+				<router-link :to="getURL('boss-' + bossId, bossMode, null, LeekWars.rankingInactive)"><div class="tab" :class="{active: category.startsWith('boss')}">{{ $t('boss') }}</div></router-link>
 
 				<v-menu v-model="countryList" offset-y>
 					<template #activator="{ props }">
@@ -95,6 +96,24 @@
 				</div>
 			</div>
 			<div v-else>
+				<div v-if="category.startsWith('boss')" class="boss-controls">
+					<div class="boss-tabs">
+						<router-link v-for="b in BOSSES" :key="b.id" :to="getURL('boss-' + b.id, bossMode, null, false)">
+							<div class="boss-tab" :class="{active: bossId === b.id}">
+								<leek-image :leek="b" :scale="b.scale * 0.4" />
+								<span>{{ $t('entity.' + b.name) }}</span>
+							</div>
+						</router-link>
+					</div>
+					<div class="mode-buttons">
+						<router-link v-for="m in BOSS_MODES" :key="m.id" :to="getURL(category, m.id, null, false)">
+							<v-btn class="mode-button" :class="{active: order === m.id}">
+								<v-icon>{{ m.icon }}</v-icon>
+								<span>{{ $t('boss_mode_' + m.id) }}</span>
+							</v-btn>
+						</router-link>
+					</div>
+				</div>
 				<div class="pagination-buttons-filters">
 					<pagination :current="page" :total="pages" :url="url" :url-query="urlQuery" />
 					<div v-if="$store.state.farmer" class="me-buttons">
@@ -104,7 +123,7 @@
 						<v-btn v-else-if="category === 'farmer'" @click="LeekWars.goToRanking('farmer', order, $store.state.farmer.id)">{{ $t('my_farmer') }}</v-btn>
 						<v-btn v-else-if="category === 'team' && $store.state.farmer.team" @click="LeekWars.goToRanking('team', order, $store.state.farmer.team.id)">{{ $t('my_team') }}</v-btn>
 					</div>
-					<v-switch v-model="activeSwitch" :label="$t('hide_inactives')" hide-details class="inactives" @change="toggleInactives" />
+					<v-switch v-if="!category.startsWith('boss')" v-model="activeSwitch" :label="$t('hide_inactives')" hide-details class="inactives" @change="toggleInactives" />
 					<v-switch v-if="category === 'team' || category === 'composition'" v-model="compositionMode" :label="$t('compositions')" hide-details class="inactives" @change="toggleCompositionMode" />
 				</div>
 				<div class="scroll-x">
@@ -253,6 +272,62 @@
 						</tr>
 						<ranking-composition-row v-for="row in ranking" :key="row.id" :row="row" :class="{highlight: searchResult == row.rank}" />
 					</table>
+					<table v-else-if="displayCategory.startsWith('boss')" class="ranking large boss-ranking">
+						<tr class="header">
+							<th class="ranking-column">{{ $t('place') }}</th>
+							<th class="column-farmer">{{ $t('main.farmer') }}</th>
+							<th class="column-country">{{ $t('main.country') }}</th>
+							<th>
+								<router-link :to="getURL(category, 'turns', null, inactive)">
+									<v-icon>mdi-timer-sand</v-icon>
+									<span>{{ $t('turns') }}</span>
+									<v-icon v-if="order === 'turns'">mdi-chevron-up</v-icon>
+								</router-link>
+							</th>
+							<th>
+								<router-link :to="getURL(category, 'leeks', null, inactive)">
+									<v-icon>mdi-leek</v-icon>
+									<span>{{ $t('leeks') }}</span>
+									<v-icon v-if="order === 'leeks'">mdi-chevron-up</v-icon>
+								</router-link>
+							</th>
+							<th>
+								<router-link :to="getURL(category, 'power', null, inactive)">
+									<v-icon>mdi-arm-flex</v-icon>
+									<span>{{ $t('power') }}</span>
+									<v-icon v-if="order === 'power'">mdi-chevron-up</v-icon>
+								</router-link>
+							</th>
+							<th>
+								<router-link :to="getURL(category, 'first', null, inactive)">
+									<v-icon>mdi-flag-checkered</v-icon>
+									<span>{{ $t('date') }}</span>
+									<v-icon v-if="order === 'first'">mdi-chevron-up</v-icon>
+								</router-link>
+							</th>
+							<th>{{ $t('main.fight') }}</th>
+						</tr>
+						<tr v-for="row in (ranking as unknown as BossRow[])" :key="row.id" :class="{me: row.me, highlight: searchResult == row.rank}">
+							<td>{{ row.rank }}</td>
+							<td :class="row.style">
+								<router-link :to="'/farmer/' + row.id">
+									<rich-tooltip-farmer :id="row.id" v-slot="{ props }" :bottom="true">
+										<span v-bind="props">{{ row.name }}</span>
+									</rich-tooltip-farmer>
+								</router-link>
+							</td>
+							<td><div class="country-wrapper"><flag v-if="row.country" :code="row.country" /></div></td>
+							<td>{{ row.turns }}</td>
+							<td>{{ row.leeks }}</td>
+							<td>{{ Math.round(row.leeks * Math.pow(row.power / row.leeks, 1 / LeekWars.POWER_FACTOR)) }}</td>
+							<td>{{ new Date(row.date * 1000).toLocaleDateString() }}</td>
+							<td class="fight-link-cell">
+								<router-link v-if="row.fight" :to="'/fight/' + row.fight" :title="$t('main.fight')" style="vertical-align: bottom;">
+									<v-icon style="font-size: 19px; height: 19px;">mdi-sword-cross</v-icon>
+								</router-link>
+							</td>
+						</tr>
+					</table>
 					<loader v-if="!ranking" />
 				</div>
 				<div class="pagination-buttons-filters">
@@ -263,7 +338,7 @@
 		</panel>
 
 		<popup v-model="searchDialog" :width="500" icon="mdi-magnify" :title="$t('search_in_ranking')">
-			<input ref="search" v-model="searchQuery" :placeholder="$t('search_name')" class="query" type="text">
+			<input ref="search" v-model="searchQuery" :placeholder="$t('search_name')" :aria-label="$t('search_name')" class="query" type="text">
 			<div class="flex">
 				<v-checkbox v-model="searchLeeks" :label="$t('leeks')" hide-details />
 				<v-checkbox v-model="searchFarmers" :label="$t('farmers')" hide-details />
@@ -286,6 +361,7 @@
 	import RankingCompositionRowElement from '@/component/ranking/ranking-composition-row.vue'
 	import { mixins , useNamespacedT } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
+	import { BOSSES } from '@/model/boss'
 	import { Ranking, RankingRow } from '@/model/ranking'
 	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 	import Pagination from '@/component/pagination.vue'
@@ -334,13 +410,25 @@
 	const searchFarmers = ref(true)
 	const searchTeams = ref(true)
 	const searchQuery = ref('')
-	const searchResults = ref<{ id: number, [key: string]: unknown }[] | null>(null)
+	const searchResults = ref<{ id: number, type: string, [key: string]: unknown }[] | null>(null)
 	const activeSwitch = ref(false)
 	const compositionMode = ref(localStorage.getItem('ranking/team-mode') === 'composition')
 	const countryList = ref(false)
 	const displayCategory = ref('')
 
 	const teamMode = computed(() => compositionMode.value ? 'composition' : 'team')
+
+	// Classements de boss (#3627) : category = 'boss-<id>', order = mode (turns|leeks|first|power)
+	const BOSS_MODES = [
+		{ id: 'turns', icon: 'mdi-timer-sand' },
+		{ id: 'leeks', icon: 'mdi-leek' },
+		{ id: 'power', icon: 'mdi-arm-flex' },
+		{ id: 'first', icon: 'mdi-flag-checkered' },
+	]
+	interface BossRow { id: number, name: string, country: string | null, rank: number, me?: string, style?: string, turns: number, leeks: number, power: number, date: number, fight: number }
+	// Dernier boss / mode visités, restaurés au clic sur l'onglet Boss (#3627)
+	const bossId = computed(() => category.value.startsWith('boss-') ? (parseInt(category.value.substring(5), 10) || 1) : (parseInt(localStorage.getItem('ranking/boss-id') || '1', 10) || 1))
+	const bossMode = computed(() => category.value.startsWith('boss-') && order.value ? order.value : (localStorage.getItem('ranking/boss-mode') || 'turns'))
 
 	const url = computed(() => getURLBase(category.value, order.value))
 	const urlQuery = computed(() => getURLQuery(country.value, LeekWars.rankingInactive))
@@ -371,6 +459,10 @@
 			order.value = 'order' in route.params ? route.params.order as string : 'talent'
 			page.value = 'page' in route.params ? parseInt(route.params.page as string, 10) : 1
 		}
+		if (category.value.startsWith('boss-')) {
+			localStorage.setItem('ranking/boss-id', '' + bossId.value)
+			localStorage.setItem('ranking/boss-mode', bossMode.value)
+		}
 	}, { immediate: true })
 
 	const key = computed(() => {
@@ -400,6 +492,29 @@
 				rankings.value = data.rankings
 				ranking.value = []
 				LeekWars.setTitle(t('title'), t('fun'))
+				emitter.emit('loaded')
+			})
+		} else if (category.value.startsWith('boss-')) {
+			ranking.value = null
+			const modeMap: {[k: string]: number} = { turns: 1, leeks: 2, first: 3, power: 4 }
+			const mode = modeMap[order.value] || 1
+			LeekWars.get('ranking/boss/' + bossId.value + '/' + mode + '/' + page.value).then(data => {
+				const r = data.ranking as Ranking
+				if (page.value === 1) {
+					if (r.length > 0) r[0].style = 'first'
+					if (r.length > 1) r[1].style = 'second'
+					if (r.length > 2) r[2].style = 'third'
+				}
+				if (store.state.farmer) {
+					for (const row of r) {
+						if (row.id === store.state.farmer.id) row.me = 'me'
+					}
+				}
+				fun.value = false
+				pages.value = data.pages
+				ranking.value = r
+				LeekWars.setActions([{icon: 'mdi-magnify', click: () => openSearch()}])
+				LeekWars.setTitle(t('title'), t('boss'))
 				emitter.emit('loaded')
 			})
 		} else {
@@ -513,6 +628,77 @@
 </script>
 
 <style lang="scss" scoped>
+	.boss-controls {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 12px;
+		padding: 12px 0 4px;
+	}
+	.boss-tabs {
+		display: flex;
+		gap: 10px;
+		flex-wrap: wrap;
+		justify-content: center;
+		a { text-decoration: none; }
+	}
+	.boss-tab {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: flex-end;
+		min-width: 130px;
+		height: 90px;
+		padding: 4px 14px;
+		border-radius: 6px;
+		border: 2px solid var(--border);
+		cursor: pointer;
+		color: var(--text-color);
+		span { font-size: 13px; margin-top: 2px; white-space: nowrap; }
+		&:hover { background: var(--background-secondary); }
+		&.active {
+			border-color: var(--primary);
+			background: var(--background-secondary);
+		}
+	}
+	.mode-buttons {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+		justify-content: center;
+		a { text-decoration: none; display: flex; }
+		.mode-button.active { background: var(--primary); color: white; }
+		:deep(.mode-button) {
+			height: 42px;
+			margin: 0;
+			font-size: 15px;
+			padding: 0 18px;
+			.v-btn__content {
+				gap: 7px;
+			}
+			.v-icon {
+				font-size: 22px;
+			}
+		}
+	}
+	.boss-ranking {
+		tr.header a {
+			gap: 4px;
+			i { font-size: 18px; }
+		}
+		.column-country {
+			width: 60px;
+		}
+	}
+	.fight-link-cell {
+		a {
+			display: inline-flex;
+			color: var(--text-color-secondary);
+		}
+		a:hover {
+			color: var(--primary);
+		}
+	}
 	.pagination-buttons-filters {
 		display: flex;
 		align-items: center;
@@ -606,7 +792,7 @@
 		}
 		tr.inactive {
 			:deep(td), :deep(a) {
-				color: #777;
+				color: var(--text-color-secondary);
 				font-style: italic;
 			}
 		}
@@ -663,6 +849,42 @@
 		grid-template-columns: 1fr;
 		table {
 			margin: 6px 0;
+		}
+	}
+	#app.app {
+		.boss-controls {
+			gap: 8px;
+			padding: 8px 0 2px;
+		}
+		.boss-tab {
+			min-width: 44px;
+			width: auto;
+			height: 80px;
+			padding: 4px;
+			span { font-size: 10px; margin-top: 5px; }
+		}
+		.mode-buttons {
+			gap: 6px;
+			:deep(.v-btn) {
+				min-width: 0;
+				padding: 0 10px;
+			}
+			:deep(.v-btn__content) {
+				gap: 4px;
+			}
+		}
+		// Sur mobile, en-têtes triables réduites à leur icône (place/poireau/farmer restent en texte)
+		.boss-ranking {
+			min-width: 480px;
+			tr.header a span {
+				display: none;
+			}
+			tr.header a i {
+				font-size: 20px;
+			}
+			:deep(td), th {
+				padding: 5px 4px;
+			}
 		}
 	}
 	.query {

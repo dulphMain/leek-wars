@@ -1,17 +1,27 @@
 import { AIItem, Folder } from '@/component/editor/editor-item'
+import { getAICache, removeAICache, setAICache, clearAICache } from '@/model/ai-code-cache'
 import { AI } from '@/model/ai'
 import { i18n } from '@/model/i18n'
 import { LeekWars } from '@/model/leekwars'
-import { farmerId } from '@/model/store'
 import { emitter } from '@/model/vue'
 
 import { Keyword } from './keyword'
 import { reactive } from 'vue'
 
-// Clés localStorage namespacées par farmer ID — évite la collision entre
-// comptes quand deux IA partagent le même path (cf. issue #2678).
-export const aiCodeKey = (path: string) => 'ai/code/' + farmerId() + '/' + path
-export const aiMtimeKey = (path: string) => 'ai/mtime/' + farmerId() + '/' + path
+// Rémédiation one-shot #4318 : avant le correctif, le cache code/mtime (désormais IndexedDB)
+// n'était pas invalidé au rename/déplacement/suppression. Un path réutilisé pouvait alors
+// ressortir le contenu périmé d'un ancien fichier (« un fichier en contient un autre »).
+// On vide une seule fois le cache pour repartir propre ; les fichiers ouverts seront re-fetchés.
+// getAICache déclenche d'abord la migration localStorage→IndexedDB pour que le clear soit complet.
+try {
+	const CACHE_PURGE_FLAG = 'ai/cache/purged/4318'
+	if (!localStorage.getItem(CACHE_PURGE_FLAG)) {
+		getAICache('__purge_probe__')
+			.then(() => clearAICache())
+			.then(() => localStorage.setItem(CACHE_PURGE_FLAG, '1'))
+			.catch(() => { /* best-effort */ })
+	}
+} catch { /* localStorage indisponible (mode privé) : rien à purger */ }
 
 export interface FSFile {
 	path: string
@@ -179,25 +189,22 @@ class FileSystem {
 	 * Utilise le mtime du fichier pour éviter les re-fetch inutiles.
 	 */
 	public load(ai: AI): Promise<AI> {
-		const cachedMtime = parseInt(localStorage.getItem(aiMtimeKey(ai.path)) || '0', 10)
-		const cached = localStorage.getItem(aiCodeKey(ai.path))
-
-		// Cache hit : le mtime local correspond au mtime serveur
-		if (cached !== null && cachedMtime > 0 && cachedMtime >= ai.mtime) {
-			ai.code = cached
-			if (!ai.functions.length) { ai.analyze() }
-			return Promise.resolve(ai)
-		}
-
-		return new Promise<AI>((resolve, reject) => {
-			LeekWars.post('ai/read', { path: ai.path }).then((data) => {
-				ai.code = data.code
-				ai.mtime = data.mtime || Date.now()
-				localStorage.setItem(aiCodeKey(ai.path), ai.code)
-				localStorage.setItem(aiMtimeKey(ai.path), '' + ai.mtime)
-				ai.analyze()
-				resolve(ai)
-			}).error(reject)
+		return getAICache(ai.path).then((cached) => {
+			// Cache hit : le mtime local correspond au mtime serveur
+			if (cached !== null && cached.mtime > 0 && cached.mtime >= ai.mtime) {
+				ai.code = cached.code
+				if (!ai.functions.length) { ai.analyze() }
+				return ai
+			}
+			return new Promise<AI>((resolve, reject) => {
+				LeekWars.post('ai/read', { path: ai.path }).then((data) => {
+					ai.code = data.code
+					ai.mtime = data.mtime || Date.now()
+					setAICache(ai.path, ai.code, ai.mtime)
+					ai.analyze()
+					resolve(ai)
+				}).error(reject)
+			})
 		})
 	}
 
@@ -272,6 +279,9 @@ class FileSystem {
 		delete this.ais[oldPath]
 		ai.folder = -1
 		ai.path = '.trash/' + ai.name
+		// Le path réel est libéré : invalider son cache pour ne pas le ressortir sur un futur fichier (#4318)
+		removeAICache(oldPath)
+		removeAICache(ai.path)
 		this.bin.items.push(...item)
 		this.sortFolder(this.bin)
 		LeekWars.delete('ai/delete', {path: oldPath}).then((data) => {
@@ -367,6 +377,8 @@ class FileSystem {
 				this.cleanFolderRefs(item as Folder)
 			} else {
 				const ai = (item as AIItem).ai
+				// Path réel libéré (dossier supprimé) : invalider son cache (#4318)
+				removeAICache(ai.path)
 				delete this.ais[ai.path]
 			}
 		}
@@ -387,12 +399,52 @@ class FileSystem {
 		return this.isInBin(folder.parent)
 	}
 
-	public renameAI(ai: AI, name: string) {
-		delete this.ais[ai.path]
-		ai.name = name
-		ai.path = this.getAIFullPath(ai)
+	/**
+	 * Réattribue le path d'une IA de façon centralisée (rename, déplacement, ou rename/déplacement
+	 * du dossier parent). Re-clé la map, recalcule folderpath, invalide le cache IndexedDB de l'ancien
+	 * ET du nouveau path, et émet `ai-path-changed` pour que les consommateurs (onglets/éditeurs
+	 * ouverts) se réalignent. Centralise l'invalidation pour qu'aucun site de mutation de path ne
+	 * puisse l'oublier (#4318).
+	 */
+	public setPath(ai: AI, newPath: string) {
+		const oldPath = ai.path
+		if (oldPath === newPath) return
+		delete this.ais[oldPath]
+		ai.path = newPath
 		ai.folderpath = this.getFolderPath(this.folderById[ai.folder])
-		this.ais[ai.path] = ai
+		this.ais[newPath] = ai
+		removeAICache(oldPath)
+		removeAICache(newPath)
+		emitter.emit('ai-path-changed', { oldPath, newPath })
+	}
+
+	public renameAI(ai: AI, name: string) {
+		ai.name = name
+		this.setPath(ai, this.getAIFullPath(ai))
+	}
+
+	/** Recalcule récursivement le path de toutes les IA descendantes après rename/déplacement d'un dossier (#4318). */
+	public refreshSubtreePaths(folder: Folder) {
+		const ais: AI[] = []
+		this.collectDescendantAIs(folder, ais)
+		for (const ai of ais) {
+			this.setPath(ai, this.getAIFullPath(ai))
+		}
+	}
+
+	private collectDescendantAIs(folder: Folder, out: AI[]) {
+		for (const item of folder.items) {
+			if (item.folder) {
+				this.collectDescendantAIs(item as Folder, out)
+			} else {
+				out.push((item as AIItem).ai)
+			}
+		}
+	}
+
+	public renameFolder(folder: Folder, name: string) {
+		folder.name = name
+		this.refreshSubtreePaths(folder)
 	}
 
 	public clear() {
@@ -452,9 +504,9 @@ class FileSystem {
 			const fullPath = (repoFolder ? repoFolder + '/' : '') + file
 			const ai = this.getAIByPath(fullPath)
 			if (!ai) continue
-			localStorage.removeItem(aiMtimeKey(ai.path))
-			localStorage.removeItem(aiCodeKey(ai.path))
-			promises.push(this.load(ai).then(() => {
+			// Purge avant rechargement : le mtime mémoire peut encore satisfaire le
+			// cache après une opération git et servir une version périmée.
+			promises.push(removeAICache(ai.path).then(() => this.load(ai)).then(() => {
 				emitter.emit('file-reloaded', ai.path)
 			}))
 		}

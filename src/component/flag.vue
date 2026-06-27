@@ -25,10 +25,20 @@ const url = computed(() => props.code ? '/image/flag/' + props.code + '.png?2' :
 <style lang="scss" scoped>
 	.flag {
 		display: inline-flex;
+		// center : empêche le flex d'étirer l'image (sinon déformation Safari).
+		align-items: center;
+		justify-content: center;
 		position: relative;
 		img {
-			width: 100%;
-			height: 100%;
+			display: block;
+			// L'image se dimensionne sur la contrainte du parent (hauteur OU
+			// largeur) en gardant son ratio, et le conteneur se réduit à elle.
+			// Évite la boîte/ombre trop large quand Safari résout mal la taille
+			// auto d'un img en 100% dans un inline-flex (#4122).
+			max-width: 100%;
+			max-height: 100%;
+			width: auto;
+			height: auto;
 			border-radius: calc(1px + 6%);
 			box-shadow: 0 1px 2px 0 #0003;
 		}

@@ -159,9 +159,7 @@
 	})
 
 	onMounted(() => {
-		LeekWars.footer = false
-		LeekWars.box = true
-		LeekWars.large = true
+		// Layout (box/large/footer) posé par meta.layout de la route dans router.afterEach.
 		emitter.on('back', back)
 		emitter.on('focus', conversationRead)
 	})
@@ -241,7 +239,7 @@
 		if (currentChat.value && currentChat.value.type === ChatType.PM) {
 			LeekWars.setActions(actions.value)
 		} else if (LeekWars.isPublicChat(theId)) {
-			LeekWars.setActions([{icon: 'mdi-translate', click: (e: Event) => showLanguageDialog(e)}])
+			LeekWars.setActions([{icon: 'mdi-translate', click: (e?: MouseEvent) => showLanguageDialog(e!)}])
 		}
 		if (theId === 0) {
 			LeekWars.setTitle(t('new_message') as string)
@@ -315,11 +313,19 @@
 		min-height: 0;
 		flex-wrap: nowrap;
 	}
+	// min-height: 0 sur les colonnes ET leurs panels : sans ça le panel est un flex item
+	// en min-height: auto, qui refuse de rétrécir sous la hauteur de son contenu. Chrome le
+	// contraint quand même via height: 100%, mais les navigateurs mobiles (Safari/Firefox)
+	// ne re-résolvent pas ce pourcentage après une navigation client-side → le panel grandit
+	// à la hauteur de la conversation, impossible à scroller (#4150). min-height: 0 laisse le
+	// flex (align-items: stretch) le contraindre à la hauteur de l'écran de façon fiable.
 	.main-column, .side-column, .right-column {
 		height: 100%;
+		min-height: 0;
 		min-width: 0;
 		.panel {
 			height: 100%;
+			min-height: 0;
 			margin-bottom: 0;
 		}
 	}
@@ -344,7 +350,8 @@
 	.conversations {
 		overflow-y: auto;
 		overflow-x: hidden;
-		height: 100%;
+		flex: 1;
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;

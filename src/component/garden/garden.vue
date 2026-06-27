@@ -351,6 +351,9 @@
 												<v-icon v-for="d of 3" :key="d">{{ d > boss.difficulty ? 'mdi-star-outline' : 'mdi-star' }}</v-icon>
 											</div>
 										</div>
+										<router-link :to="'/ranking/boss-' + boss.id + '/turns'" class="boss-ranking-link">
+											<v-icon>mdi-podium</v-icon> {{ $t('main.ranking') }}
+										</router-link>
 										<div v-for="(squad, s) of LeekWars.bossSquads.squads[boss.id]" :key="s" class="squad" :class="{disabled: !squad.id}" @click="squad.id ? LeekWars.bossSquads.join(squad.id) : null">
 											<div class="farmers">
 												<avatar v-for="farmer of squad.farmers" :key="farmer.id" :farmer="farmer" />
@@ -567,9 +570,10 @@
 
 		emitter.on('back', back)
 		LeekWars.socket.send([SocketMessage.GARDEN_QUEUE_REGISTER])
-		emitter.on('garden-queue', (data: number) => queue.value = data)
+		emitter.on('garden-queue', (data: unknown) => queue.value = data as number)
 
-		emitter.on('update-team-talent', (message: { composition: number; talent: number }) => {
+		emitter.on('update-team-talent', (m: unknown) => {
+			const message = m as { composition: number; talent: number }
 			if (message.composition in compositions_by_id) {
 				compositions_by_id[message.composition].talent += message.talent
 			}
@@ -658,6 +662,9 @@
 			return
 		}
 		if (category.value) {
+			if (category.value !== 'challenge') {
+				localStorage.setItem('garden/category', category.value)
+			}
 			const category_underscore = category.value.replace('-', '_')
 			LeekWars.setTitle(t('garden_' + category_underscore), t('n_fights', store.state.farmer.fights) + (store.state.farmer.team_fights ? ' + ' + t('n_fights', store.state.farmer.team_fights) : ''))
 			LeekWars.splitShowContent()
@@ -852,12 +859,6 @@
 		}).error(error => LeekWars.toast(t(error.error) as string))
 	}
 
-	watch(category, () => {
-		if (category.value && category.value !== 'challenge') {
-			localStorage.setItem('garden/category', category.value)
-		}
-	})
-
 	watch(selectedLeek, () => {
 		if (selectedLeek.value) {
 			const key = category.value === 'arena' ? 'arena-leek' : 'garden/leek'
@@ -994,6 +995,17 @@
 		flex: 1;
 		height: 100%;
 	}
+	.boss-ranking-link {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+		margin: 6px 0;
+		font-size: 13px;
+		color: var(--text-color-secondary);
+		.v-icon { font-size: 18px; }
+		&:hover { color: var(--primary); }
+	}
 	.squad {
 		border: 1px solid var(--border);
 		text-align: left;
@@ -1116,16 +1128,28 @@
 	}
 	.dot {
 		display: inline-block;
+		position: relative;
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
 		background: var(--primary);
+	}
+	// Halo pulsé via un pseudo-élément animé en transform/opacity (compositables
+	// GPU, aucun repaint). L'ancienne version animait box-shadow, ce qui forçait
+	// un repaint à chaque frame et faisait chauffer un cœur de CPU à 100% (#11920).
+	.dot::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: 50%;
+		background: rgba(95, 173, 27, 0.6);
 		animation: arena-pulse 2s infinite;
+		pointer-events: none;
 	}
 	@keyframes arena-pulse {
-		0% { box-shadow: 0 0 0 0 rgba(95, 173, 27, 0.6); }
-		70% { box-shadow: 0 0 0 8px rgba(95, 173, 27, 0); }
-		100% { box-shadow: 0 0 0 0 rgba(95, 173, 27, 0); }
+		0% { transform: scale(1); opacity: 0.6; }
+		70% { transform: scale(3); opacity: 0; }
+		100% { transform: scale(3); opacity: 0; }
 	}
 	.arena-leek {
 		position: relative;

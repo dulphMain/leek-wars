@@ -26,6 +26,9 @@
 					<v-list-item prepend-icon="mdi-undo-variant" @click="undoLastCommit">
 						<v-list-item-title>{{ $t('undo_last_commit') }}</v-list-item-title>
 					</v-list-item>
+					<v-list-item prepend-icon="mdi-broom" @click="gc">
+						<v-list-item-title>{{ $t('optimize_repo') }}</v-list-item-title>
+					</v-list-item>
 				</v-list>
 			</v-menu>
 		</div>
@@ -243,14 +246,13 @@
 <script setup lang="ts">
 	import { LeekWars } from '@/model/leekwars'
 	import { fileSystem } from '@/model/filesystem'
-	import { mixins } from '@/model/i18n'
+	import { mixins, useNamespacedT } from '@/model/i18n'
 	import GitHistory from './git-history.vue'
 	import GitRemoteDialog from './git-remote-dialog.vue'
 	import { gitCall } from './git-log'
 	import { emitter } from '@/model/vue'
 	import type { DiffTab } from './editor-tabs.vue'
 	import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-	import { useI18n } from 'vue-i18n'
 	import { useRouter } from 'vue-router'
 
 	interface GitChange {
@@ -270,6 +272,8 @@
 		current?: string
 		branches?: { name: string, current: boolean, remote: boolean }[]
 		content?: string
+		changed_files?: string[]
+		conflicts?: boolean
 	}
 
 	defineOptions({ name: 'GitPanel', i18n: {}, mixins: [...mixins], components: { GitHistory, GitRemoteDialog } })
@@ -284,7 +288,7 @@
 		'show-merge': [payload: unknown]
 	}>()
 
-	const { t } = useI18n()
+	const t = useNamespacedT('GitPanel')
 	const router = useRouter()
 
 	const repos = ref<{folder: string, name: string}[]>([])
@@ -375,6 +379,18 @@
 			emitter.emit('reanalyze')
 		} catch (e: unknown) {
 			syncError.value = 'Undo: ' + gitErrorMessage(e)
+		}
+	}
+
+	async function gc() {
+		actionsMenuOpen.value = false
+		syncError.value = ''
+		syncInfo.value = ''
+		try {
+			const data = await gitCall<{ freed: number, size: number }>('git/gc', { folder: selectedRepo.value })
+			syncInfo.value = t('optimize_repo_done', [LeekWars.formatFileSize(data.freed)]) as string
+		} catch (e: unknown) {
+			syncError.value = 'Gc: ' + gitErrorMessage(e)
 		}
 	}
 
@@ -611,7 +627,7 @@
 		syncError.value = ''
 		syncInfo.value = ''
 		try {
-			const data = await gitCall<GitOpResult & { changed_files?: string[], conflicts?: boolean }>('git/pull', { folder: selectedRepo.value, rebase: pullRebase.value })
+			const data = await gitCall<GitOpResult>('git/pull', { folder: selectedRepo.value, rebase: pullRebase.value })
 			syncInfo.value = 'Pull: ' + (data.message || 'OK')
 			await Promise.all([fileSystem.reload(), refreshStatus()])
 			if (data.changed_files) fileSystem.reloadChangedFiles(selectedRepo.value, data.changed_files)
@@ -645,7 +661,7 @@
 		syncInfo.value = ''
 		loading.value = true
 		try {
-			const data = await gitCall<{ changed_files?: string[] }>('git/checkout', { folder: selectedRepo.value, branch: b })
+			const data = await gitCall<GitOpResult>('git/checkout', { folder: selectedRepo.value, branch: b })
 			syncInfo.value = 'Checkout: ' + b
 			await Promise.all([fileSystem.reload(), refreshStatus()])
 			if (data.changed_files) fileSystem.reloadChangedFiles(selectedRepo.value, data.changed_files)
@@ -723,7 +739,7 @@
 		syncError.value = ''
 		syncInfo.value = ''
 		try {
-			const data = await gitCall<GitOpResult & { changed_files?: string[] }>('git/rebase-continue', { folder: selectedRepo.value })
+			const data = await gitCall<GitOpResult>('git/rebase-continue', { folder: selectedRepo.value })
 			syncInfo.value = 'Rebase: ' + (data.message || 'OK')
 			await Promise.all([fileSystem.reload(), refreshStatus()])
 			if (data.changed_files) fileSystem.reloadChangedFiles(selectedRepo.value, data.changed_files)
@@ -741,7 +757,7 @@
 		syncError.value = ''
 		syncInfo.value = ''
 		try {
-			const data = await gitCall<{ changed_files?: string[] }>('git/rebase-abort', { folder: selectedRepo.value })
+			const data = await gitCall<GitOpResult>('git/rebase-abort', { folder: selectedRepo.value })
 			syncInfo.value = t('rebase_aborted') as string
 			await Promise.all([fileSystem.reload(), refreshStatus()])
 			if (data.changed_files) fileSystem.reloadChangedFiles(selectedRepo.value, data.changed_files)

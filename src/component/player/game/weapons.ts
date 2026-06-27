@@ -916,8 +916,8 @@ class Bazooka extends Firegun {
 	static textures = [T.shots, T.bullet, T.bazooka, T.cart_bazooka, T.rocket, T.fire, T.explosion_mark, T.explosion_rock, T.explosion_rock2]
 	static sounds = [S.rocket, S.explosion]
 
-	constructor(game: Game) {
-		super(game, T.bazooka, T.cart_bazooka, S.rocket, 29, DamageType.EXPLOSION)
+	constructor(game: Game, texture: Texture = T.bazooka, id: number = 29) {
+		super(game, texture, T.cart_bazooka, S.rocket, id, DamageType.EXPLOSION)
 	}
 
 	public throwBullet(x: number, y: number, z: number, angle: number, position: Position, targets: FightEntity[], caster: FightEntity, cell: Cell): number {
@@ -926,10 +926,54 @@ class Bazooka extends Firegun {
 		const distance = this.game.ground.field.real_distance(caster.cell!, cell)
 		const duration = (distance - 1) * 4
 
-		this.game.setEffectArea(cell, Area.CIRCLE3, 'red', duration + RealisticExplosion.LIFE)
-		this.game.particles.addRocket(x, y, z, angle, duration, cell, 3)
+		this.game.setEffectArea(cell, Area.CIRCLE3, this.areaColor(), duration + RealisticExplosion.LIFE)
+		this.game.particles.addRocket(x, y, z, angle, duration, cell, 3, this.rocketTexture(), this.explosionColorFn(), this.explosionDebris())
 
 		return duration + 10
+	}
+
+	protected areaColor(): string {
+		return 'red'
+	}
+
+	protected rocketTexture(): Texture {
+		return T.rocket
+	}
+
+	// Couleur de l'explosion selon l'âge des particules (sinon dégradé de feu)
+	// et débris de cailloux.
+	protected explosionColorFn(): ((t: number) => string) | undefined {
+		return undefined
+	}
+
+	protected explosionDebris(): boolean {
+		return true
+	}
+}
+
+class PlutoniumBazooka extends Bazooka {
+	static textures = [T.shots, T.bullet, T.plutonium_bazooka, T.cart_bazooka, T.plutonium_rocket, T.fire, T.explosion_mark]
+
+	constructor(game: Game) {
+		super(game, T.plutonium_bazooka, 26)
+	}
+
+	protected areaColor(): string {
+		return '#ffaa00'
+	}
+
+	protected rocketTexture(): Texture {
+		return T.plutonium_rocket
+	}
+
+	// Légère transition jaune → orange (t : 1 = neuve → 0 = éteinte), sans
+	// cailloux qui volent.
+	protected explosionColorFn(): (t: number) => string {
+		return (t: number) => 'rgb(255, ' + Math.round(165 + 90 * t) + ', 0)'
+	}
+
+	protected explosionDebris(): boolean {
+		return false
 	}
 }
 
@@ -978,4 +1022,4 @@ class QuantumRifle extends Firegun {
 	}
 }
 
-export { WeaponAnimation, WhiteWeaponAnimation, Axe, Bazooka, BLaser, Broadsword, DarkKatana, Destroyer, DoubleGun, Electrisor, EnhancedLightninger, ExplorerRifle, Fish, FlameThrower, Gazor, GrenadeLauncher, IllicitGrenadeLauncher, JLaser, Katana, Laser, Lightninger, MachineGun, Magnum, Neutrino, Rhino, MLaser, MysteriousElectrisor, Pistol, RevokedMLaser, Rifle, Shotgun, UnbridledGazor, UnstableDestroyer, Sword, HeavySword, QuantumRifle }
+export { WeaponAnimation, WhiteWeaponAnimation, Axe, Bazooka, BLaser, Broadsword, DarkKatana, Destroyer, DoubleGun, Electrisor, EnhancedLightninger, ExplorerRifle, Fish, FlameThrower, Gazor, GrenadeLauncher, IllicitGrenadeLauncher, JLaser, Katana, Laser, Lightninger, MachineGun, Magnum, Neutrino, PlutoniumBazooka, Rhino, MLaser, MysteriousElectrisor, Pistol, RevokedMLaser, Rifle, Shotgun, UnbridledGazor, UnstableDestroyer, Sword, HeavySword, QuantumRifle }

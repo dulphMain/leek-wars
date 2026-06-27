@@ -10,7 +10,7 @@
 				</rich-tooltip-farmer>
 				<h1 v-else>...</h1>
 				<div class="info state">
-					<span v-if="farmer && farmer.connected"><img src="/image/connected.png">{{ $t('connected') }}</span>
+					<span v-if="displayConnected"><img src="/image/connected.png">{{ $t('connected') }}</span>
 					<span v-else><img src="/image/disconnected.png">{{ $t('disconnected') }}</span>
 				</div>
 			</div>
@@ -129,8 +129,8 @@
 						<span v-if="$store.getters.moderator">{{ $t('registered_the', [LeekWars.formatDateTime(farmer.register_date)]) }}</span>
 						<span v-else>{{ $t('registered_the', [LeekWars.formatDate(farmer.register_date)]) }}</span>
 						<br>
-						<span v-if="farmer.connected">{{ $t('connected') }}</span>
-						<span v-else>{{ $t('last_connection', [LeekWars.formatDuration(farmer.last_connection)]) }}</span>
+						<span v-if="displayConnected">{{ $t('connected') }}</span>
+						<span v-else v-html="$t('last_connection', [LeekWars.formatDuration(farmer.last_connection)])"></span>
 						<br>
 						<span v-if="farmer.verified">{{ $t('verified') }}</span>
 						<span v-else>{{ $t('not_verified') }}</span>
@@ -249,18 +249,18 @@
 							<div v-if="farmer.candidacies && farmer.candidacies.length" class="candidacies">
 								<h4>{{ $t('candidacies') }}</h4>
 								<div v-for="c in farmer.candidacies" :key="c.team_id" class="candidacy-item">
-									<rich-tooltip-team :id="c.team_id">
+									<rich-tooltip-team v-if="c.team_id" :id="c.team_id">
 										<emblem :team="{id: c.team_id, emblem_changed: c.emblem_changed}" />
 									</rich-tooltip-team>
 									<router-link :to="'/team/' + c.team_id">{{ c.team_name }}</router-link>
-									<v-btn size="small" variant="outlined" @click="cancelCandidacy(c)">{{ $t('cancel_candidacy') }}</v-btn>
+									<v-btn size="small" variant="outlined" @click="cancelCandidacy({ team_id: c.team_id ?? 0 })">{{ $t('cancel_candidacy') }}</v-btn>
 								</div>
 							</div>
 							<div v-if="$store.state.farmer && $store.state.farmer.team_invitations && $store.state.farmer.team_invitations.length > 0" class="invitations">
 								<br>
 								<h4>{{ $t('team_invitations') }}</h4>
 								<div v-for="invitation in $store.state.farmer.team_invitations" :key="invitation.id" class="invitation">
-									<rich-tooltip-team :id="invitation.team_id" v-slot="{ props }">
+									<rich-tooltip-team v-if="invitation.team_id" :id="invitation.team_id" v-slot="{ props }">
 										<router-link :to="'/team/' + invitation.team_id" v-bind="props">
 											<emblem :team="{id: invitation.team_id, emblem_changed: invitation.emblem_changed}" />
 											<span>{{ invitation.team_name }}</span>
@@ -302,15 +302,15 @@
 				<div class="trophies" @mouseleave="hideTrophyTooltip">
 					<loader v-if="!farmer || !trophies" />
 					<template v-else-if="farmer.trophies > 0 && trophies_list && trophies_grid">
-						<div v-show="trophiesMode == 'list'" class="list trophies-container">
+						<div v-if="trophiesMode == 'list'" class="list trophies-container">
 							<router-link v-for="(trophy, t) in trophies_list" :key="t" :to="'/trophy/' + trophy.code" @mouseenter="showTrophyTooltip(trophy, $event)" @mouseleave="hideTrophyTooltip">
-								<img class="trophy" :src="'/image/trophy/' + trophy.code + '.svg'" loading="lazy">
+								<trophy-icon class="trophy" :code="trophy.code" />
 							</router-link>
 						</div>
-						<div v-show="trophiesMode == 'grid'" class="grid trophies-container">
+						<div v-else class="grid trophies-container">
 							<template v-for="(trophy, t) in trophies_grid" :key="t">
 								<router-link v-if="trophy != null" :to="'/trophy/' + trophy.code" class="card" @mouseenter="showTrophyTooltip(trophy, $event)" @mouseleave="hideTrophyTooltip">
-									<img :src="'/image/trophy/' + trophy.code + '.svg'" class="trophy" loading="lazy">
+									<trophy-icon :code="trophy.code" class="trophy" />
 								</router-link>
 								<div v-else class="locked">
 									<img class="trophy" src="/image/unknown.png" loading="lazy">
@@ -321,7 +321,7 @@
 							<h4 class="trophies-bonus">{{ $t('bonus_trophies') }}</h4>
 							<div class="trophies-container">
 								<router-link v-for="trophy in bonus_trophies" :key="trophy.id" :to="'/trophy/' + trophy.code" :class="{card: trophiesMode == 'grid'}" @mouseenter="showTrophyTooltip(trophy, $event)" @mouseleave="hideTrophyTooltip">
-									<img class="trophy" :src="'/image/trophy/' + trophy.code + '.svg'" loading="lazy">
+									<trophy-icon class="trophy" :code="trophy.code" />
 								</router-link>
 							</div>
 						</div>
@@ -354,14 +354,41 @@
 
 		<panel :title="$t('sponsorship')" toggle="trophies/sponsorship" icon="mdi-hat-fedora">
 			<template #actions>
-				<div v-if="myFarmer" class="button flat" @click="openGodfatherDialog"><v-icon>mdi-link-variant</v-icon> {{ $t('godfather_link') }}</div>
+				<div v-if="myFarmer && farmer && farmer.godsons.length" class="button flat" @click="godsonsManageOpen = true"><v-icon>mdi-account-supervisor</v-icon> {{ $t('manage_godsons') }}</div>
+				<div v-if="myFarmer" class="button flat" @click="godfatherDialog = true"><v-icon>mdi-link-variant</v-icon> {{ $t('godfather_link') }}</div>
+				<div v-if="!myFarmer && $store.state.connected && farmer && farmer.can_request_godfather" class="button flat" :class="{ disabled: farmer.godfather_request_sent }" @click="requestGodfather"><v-icon>mdi-hat-fedora</v-icon> {{ farmer.godfather_request_sent ? $t('godfather_request_sent') : $t('choose_as_godfather') }}</div>
 			</template>
 			<template #content>
 				<div class="content sponsorship">
+					<div v-if="myFarmer && farmer && farmer.aposteriori_rewards && farmer.aposteriori_rewards.claimable" class="aposteriori-banner">
+						<div class="ap-text">
+							<h4>{{ $t('aposteriori_title') }}</h4>
+							<div class="ap-desc grey">{{ $t('aposteriori_desc') }}</div>
+							<div class="ap-rewards">
+								<span v-if="farmer.aposteriori_rewards.crystals" class="ap-reward"><span class="crystal"></span> {{ $filters.number(farmer.aposteriori_rewards.crystals) }}</span>
+								<span v-if="farmer.aposteriori_rewards.habs" class="ap-reward"><span class="hab"></span> {{ $filters.number(farmer.aposteriori_rewards.habs) }}</span>
+								<span v-if="farmer.aposteriori_rewards.fights" class="ap-reward"><v-icon class="ap-fight-icon">mdi-sword-cross</v-icon> {{ farmer.aposteriori_rewards.fights }}</span>
+							</div>
+						</div>
+						<div v-ripple class="ap-claim" @click="claimAposterioriRewards">{{ $t('aposteriori_claim') }}</div>
+					</div>
+					<div v-if="myFarmer && godfatherRequests.length" class="godfather-requests">
+						<h4>{{ $t('godfather_requests') }}</h4>
+						<div v-for="req in godfatherRequests" :key="req.id" class="request-row">
+							<avatar :farmer="{ id: req.requester, name: req.name, avatar_changed: req.avatar_changed }" class="req-avatar" />
+							<div class="req-info">
+								<router-link :to="'/farmer/' + req.requester" class="req-name">{{ req.name }}</router-link>
+								<span class="req-stats grey">{{ $t('request_stats', [$filters.number(req.total_level), $filters.number(req.talent)]) }}</span>
+							</div>
+							<div class="spacer"></div>
+							<div v-ripple class="req-action accept" @click="acceptGodsonRequest(req)">{{ $t('accept') }}</div>
+							<div v-ripple class="req-action refuse" @click="refuseGodsonRequest(req)">{{ $t('reject') }}</div>
+						</div>
+					</div>
 					<div class="container">
-						<div v-if="farmer" class="column grey">
-							<div v-if="farmer.godfather">
-								<i18n-t keypath="godson_of" tag="div">
+						<div v-if="farmer" class="column grey godfather-manage">
+							<div v-if="farmer.godfather" class="gf-row">
+								<i18n-t keypath="godson_of" tag="span">
 									<template #farmer>
 										<router-link :to="'/farmer/' + farmer.godfather.id">
 											<rich-tooltip-farmer :id="farmer.godfather.id" v-slot="{ props }">
@@ -370,8 +397,9 @@
 										</router-link>
 									</template>
 								</i18n-t>
+								<span v-if="myFarmer" class="gf-action" @click="untieGodfather">{{ $t('untie_godfather') }}</span>
 							</div>
-							<div v-if="farmer.godsons.length">
+							<div v-if="farmer.godsons.length" class="godsons">
 								<i18n-t keypath="godfather_of" tag="div">
 									<template #farmers>
 										<template v-for="(godson, i) in farmer.godsons" :key="i">
@@ -389,6 +417,7 @@
 						<div class="column column-level">
 							<div class="grey">{{ $t('godsons_level') }}</div>
 							<div class="total-level">{{ farmer ? $filters.number(farmer.godsons_level) : '...' }}</div>
+							<div v-if="farmer && farmer.godsons_level_current < farmer.godsons_level" class="grey current-level">{{ $t('godsons_level_actual', [$filters.number(farmer.godsons_level_current)]) }}</div>
 							<v-tooltip>
 								<template #activator="{ props }">
 									<div class="bar" v-bind="props">
@@ -403,7 +432,7 @@
 					<div v-if="farmer" class="rewards">
 						<div v-for="(reward, r) of rewards" :key="r" class="reward card" :class="{'notif-trophy': Number(r) <= (farmer.godsons_level ?? 0)}">
 							<div class="level">{{ $filters.number(Number(r)) }}<v-icon v-if="Number(r) <= (farmer.godsons_level ?? 0)">mdi-check</v-icon></div>
-							<img v-if="reward.trophy" :src="'/image/trophy/' + reward.trophy + '.svg'">
+							<trophy-icon v-if="reward.trophy" :code="reward.trophy" />
 							<rich-tooltip-item v-else-if="reward.resource" v-slot="{ props }" :item="LeekWars.items[reward.item!]" :bottom="true">
 								<img v-bind="props" :src="'/image/resource/' + reward.resource + '.png'">
 							</rich-tooltip-item>
@@ -435,7 +464,7 @@
 				</template>
 				<template #content>
 					<loader v-if="!farmer" />
-					<fights-history v-else :fights="farmer.fight_history" />
+					<fights-history v-else :fights="farmer.fight_history" :progress="liveProgress" />
 				</template>
 			</panel>
 			<panel v-if="!farmer || farmer.tournaments.length > 0" :title="$t('main.tournaments')" icon="mdi-trophy">
@@ -493,12 +522,9 @@
 			</template>
 		</popup>
 
-		<popup v-if="farmer" v-model="godfatherDialog" :width="600" icon="mdi-hat-fedora" :title="$t('godfather_link')">
-			{{ $t('godfather_link_description') }} :
-			<br>
-			<br>
-			<div ref="godfatherLink" class="godfather-url">leekwars.com/godfather/{{ farmer.login }}</div>
-		</popup>
+		<invite-dialog v-if="farmer && myFarmer" v-model="godfatherDialog" :login="farmer.login" />
+
+		<godsons-manage-dialog v-if="myFarmer" v-model="godsonsManageOpen" @disowned="onGodsonDisowned" />
 
 		<popup v-if="farmer" v-model="countryDialog" :width="1000" icon="mdi-earth" :title="$t('country_selection')">
 			<div class="country-dialog">
@@ -576,7 +602,7 @@
 				Combat : <input v-model="giveTrophyFight" type="number">
 			</div>
 			<br>
-			<img v-for="trophy in giveTrophies" :key="trophy.id" :src="'/image/trophy/' + trophy.code + '.svg'" :title="trophy.code" class="give-trophy" @click="giveTrophyID = trophy.id">
+			<trophy-icon v-for="trophy in giveTrophies" :key="trophy.id" :code="trophy.code" :title="trophy.code" class="give-trophy" @click="giveTrophyID = trophy.id" />
 
 			<template #actions>
 				<div v-ripple @click="trophyDialog = false">{{ $t('cancel') }}</div>
@@ -603,6 +629,7 @@
 <script setup lang="ts">
 	import { Farmer } from '@/model/farmer'
 	import { LeekWars } from '@/model/leekwars'
+	import { useLiveHistory } from '@/model/use-live-history'
 	import { Warning } from '@/model/moderation'
 	import { store } from '@/model/store'
 	import { Team, TeamMemberLevel } from '@/model/team'
@@ -614,6 +641,8 @@
 	import RichTooltipItem from '@/component/rich-tooltip/rich-tooltip-item.vue'
 	import TitlePicker from '@/component/title/title-picker.vue'
 	import LwTitle from '@/component/title/title.vue'
+	import InviteDialog from '@/component/invite-dialog/invite-dialog.vue'
+	import GodsonsManageDialog from '@/component/godsons-manage-dialog/godsons-manage-dialog.vue'
 	import { emitter } from '@/model/vue'
 	import { Line } from 'vue-chartjs'
 	import type { ChartData, ChartOptions } from 'chart.js'
@@ -626,7 +655,7 @@
 	const ReportDialog = defineAsyncComponent(() => import('@/component/moderation/report-dialog.vue'))
 
 	defineOptions({ name: 'Farmer', i18n: {}, mixins: [...mixins], components: {
-		RichTooltipFarmer, RichTooltipTeam, RichTooltipLeek, TitlePicker, 'lw-title': LwTitle, 'rich-tooltip-item': RichTooltipItem, Line,
+		RichTooltipFarmer, RichTooltipTeam, RichTooltipLeek, TitlePicker, 'lw-title': LwTitle, 'rich-tooltip-item': RichTooltipItem, Line, InviteDialog, GodsonsManageDialog,
 	} })
 
 	const { locale: i18nLocale } = useI18n()
@@ -636,7 +665,6 @@
 	const avatarRef = useTemplateRef<ComponentPublicInstance>('avatar')
 	const avatarInput = useTemplateRef<HTMLInputElement>('avatarInput')
 	const pickerRef = useTemplateRef<InstanceType<typeof TitlePicker>>('picker')
-	const godfatherLink = useTemplateRef<HTMLElement>('godfatherLink')
 
 	type Trophy = (typeof LeekWars.trophies)[number]
 	const farmer = ref<Farmer | null>(null)
@@ -644,6 +672,9 @@
 	const trophiesMode = ref('list')
 	const trophyTooltip = ref<{ show: boolean, trophy: Trophy | null, x: number, y: number }>({ show: false, trophy: null, x: 0, y: 0 })
 	const godfatherDialog = ref(false)
+	const godsonsManageOpen = ref(false)
+	interface GodfatherRequest { id: number, requester: number, name: string, avatar_changed: number, talent: number, godsons_level: number, total_level: number, date: number }
+	const godfatherRequests = ref<GodfatherRequest[]>([])
 	const countryDialog = ref(false)
 	const createTeamDialog = ref(false)
 	const createTeamName = ref('')
@@ -691,6 +722,11 @@
 
 	const id = computed<number | null>(() => route.params.id ? parseInt(route.params.id as string, 10) : (store.state.farmer ? store.state.farmer.id : null))
 	const myFarmer = computed(() => store.state.farmer && id.value === store.state.farmer.id)
+	// Sur sa propre page, le `connected` du farmer en store est figé à false
+	// (calculé au login avant l'enregistrement de la présence WS) : on se voyait
+	// donc déconnecté tant qu'on n'avait pas rechargé (#11635). Si c'est ma page et
+	// que je suis connecté, je suis forcément en ligne.
+	const displayConnected = computed(() => !!farmer.value && (farmer.value.connected || (!!myFarmer.value && store.state.connected)))
 
 	const safeWebsite = computed(() => {
 		if (!farmer.value) return null
@@ -750,35 +786,61 @@
 		return bonus
 	})
 
-	const farmerTitleEnabled = computed(() => LeekWars.selectWhere(store.state.farmer!.pomps, 'template', 126))
+	const farmerTitleEnabled = computed(() => !!LeekWars.selectWhere(store.state.farmer!.pomps, 'template', 126))
 
 	// Pendant la navigation sortante, le composant reste monté le temps que la
 	// route suivante charge ; nuller farmer.value démonte les v-if des popups et
-	// casse les Teleport Vuetify (parentNode null). onBeforeRouteLeave ne fire pas
-	// sur /farmer/A → /farmer/B (même composant), le watch reste fonctionnel.
+	// casse les Teleport Vuetify (parentNode null). On ne pose le flag que si on
+	// quitte vraiment la page éleveur — /farmer ↔ /farmer/:id sont deux routes
+	// distinctes (le hook fire) mais utilisent le même composant et le watch
+	// doit pouvoir recharger les données.
 	let leaving = false
-	onBeforeRouteLeave(() => { leaving = true })
+	onBeforeRouteLeave((to) => {
+		const stillFarmer = to.matched.some(r => r.path === '/farmer' || r.path === '/farmer/:id')
+		if (!stillFarmer) leaving = true
+	})
 
 	watch(id, () => update(), { immediate: true })
 
+	// Mise à jour en direct du petit historique de combats. `update()` réutilise
+	// le store pour son propre profil (pas de refetch), donc on recharge ici
+	// directement le fight_history depuis le serveur.
+	function reloadFightHistory() {
+		if (id.value === null) return
+		LeekWars.get('farmer/get/' + id.value).then(data => {
+			if (farmer.value && data.farmer) farmer.value.fight_history = data.farmer.fight_history
+		})
+	}
+	const { progress: liveProgress } = useLiveHistory({
+		type: 'farmer',
+		id: () => farmer.value?.id,
+		fights: () => farmer.value?.fight_history,
+		reload: reloadFightHistory,
+	})
+
 	function update() {
 		if (leaving) return
-		farmer.value = null
-		trophies.value = null
+		if (id.value === null) return
+		// Ne PAS nuller farmer.value/trophies/chart ici : sur une nav /farmer/A -> /farmer/B
+		// (même composant, onBeforeRouteLeave ne fire pas), ça démonte le sous-arbre
+		// v-if="farmer" EN PLEIN patch in-place du <router-view> -> "parentNode of null"
+		// (#4163). On garde l'ancien farmer affiché ; init() swappe à l'arrivée des données.
 		notfound.value = false
 		invitationSent.value = false
 		tournamentRangeLoading.value = false
-		chartData.value = null
-		chartOptions.value = null
-		if (id.value === null) return
+		const reqId = id.value
 		if (myFarmer.value) {
 			setTimeout(() => {
+				if (reqId !== id.value) return
 				init(store.state.farmer!)
 			}, 10)
 		} else {
 			LeekWars.get('farmer/get/' + id.value).then(data => {
+				if (reqId !== id.value) return // une navigation plus récente a pris le relais
 				init(data.farmer)
 			}).error(() => {
+				if (reqId !== id.value) return
+				farmer.value = null
 				notfound.value = true
 			})
 		}
@@ -807,6 +869,13 @@
 		newWebsite.value = f.website
 		newGitHub.value = f.github
 		emitter.emit('loaded')
+		// Demandes de parrainage reçues (sens 2, parrainage a posteriori). #4118
+		godfatherRequests.value = []
+		if (myFarmer.value) {
+			LeekWars.get('farmer/get-godfather-requests').then(data => {
+				godfatherRequests.value = data.requests
+			}).catch(() => {})
+		}
 	}
 
 	function logout() {
@@ -874,7 +943,12 @@
 		if (farmer.value.trophies_list) {
 			trophies.value = farmer.value.trophies_list
 		} else {
+			const reqId = farmer.value.id
 			LeekWars.get('trophy/get-farmer-trophies/' + farmer.value.id + '/' + i18nLocale.value).then(data => {
+				// Réponse périmée : une navigation /farmer/A -> /farmer/B plus récente a
+				// pris le relais (le fetch de A ne doit pas écraser les trophées de B). Sans
+				// ce garde, la page éleveur affichait les trophées d'un autre éleveur (#11650).
+				if (!farmer.value || id.value !== reqId) return
 				trophies.value = data.trophies
 				if (myFarmer.value) {
 					store.commit('set-trophies', data.trophies)
@@ -902,19 +976,73 @@
 		}
 	}
 
-	function openGodfatherDialog() {
-		godfatherDialog.value = true
-		setTimeout(() => {
-			LeekWars.selectText(godfatherLink.value)
-		}, 100)
-	}
-
 	function selectCountry(code: string) {
 		if (farmer.value) {
 			farmer.value.country = code === 'null' ? null : code
 			countryDialog.value = false
 			LeekWars.post('farmer/change-country', {country_code: code})
 		}
+	}
+
+	// Parrainage a posteriori : se délier de son parrain. #4118 (renier filleul = dialogue de gestion)
+	function untieGodfather() {
+		LeekWars.post('farmer/remove-godfather').then(() => {
+			if (farmer.value) farmer.value.godfather = null
+		})
+	}
+
+	// Retour utilisateur sur échec d'une action de parrainage (sinon le clic semble ne rien faire). #4118
+	function godfatherError(e: unknown) {
+		const code = (e as { error?: string } | null)?.error
+		LeekWars.toast(t(code === 'godfather_cycle' ? 'error_godfather_cycle' : 'godfather_action_failed') as string)
+	}
+
+	// Réclame une fois les récompenses de parrainage a posteriori (anciens joueurs). #4118
+	function claimAposterioriRewards() {
+		LeekWars.post('farmer/claim-aposteriori-rewards').then((data: { crystals: number, habs: number, fights: number }) => {
+			if (farmer.value && farmer.value.aposteriori_rewards) farmer.value.aposteriori_rewards.claimable = false
+			// Passer par les mutations pour animer les compteurs (sinon animated_* ne rattrape jamais → cascade infinie). #4118
+			store.commit('update-habs', data.habs)
+			store.commit('update-crystals', data.crystals)
+			if (data.fights) store.commit('update-fights', data.fights)
+			LeekWars.toast(t('aposteriori_claimed') as string)
+		}).catch(godfatherError)
+	}
+
+	// Sens 2 : demander à ce joueur d'être notre parrain. #4118
+	function requestGodfather() {
+		if (!farmer.value || farmer.value.godfather_request_sent) return
+		LeekWars.post('farmer/request-godfather', { target: farmer.value.id }).then(() => {
+			if (farmer.value) farmer.value.godfather_request_sent = true
+			LeekWars.toast(t('godfather_request_sent_toast') as string)
+		}).catch(godfatherError)
+	}
+
+	// La cible accepte une demande reçue : le demandeur devient filleul. #4118
+	function acceptGodsonRequest(req: GodfatherRequest) {
+		LeekWars.post('farmer/accept-godson-request', { request_id: req.id }).then((data: { godsons_level_current: number }) => {
+			godfatherRequests.value = godfatherRequests.value.filter(r => r.id !== req.id)
+			if (farmer.value) {
+				farmer.value.godsons = [{ id: req.requester, name: req.name }, ...farmer.value.godsons]
+				farmer.value.godsons_level_current = data.godsons_level_current
+				farmer.value.godsons_level = Math.max(farmer.value.godsons_level, data.godsons_level_current)
+			}
+			LeekWars.toast(t('godson_request_accepted') as string)
+		}).catch(godfatherError)
+	}
+
+	// La cible refuse une demande reçue. #4118
+	function refuseGodsonRequest(req: GodfatherRequest) {
+		LeekWars.post('farmer/refuse-godson-request', { request_id: req.id }).then(() => {
+			godfatherRequests.value = godfatherRequests.value.filter(r => r.id !== req.id)
+		}).catch(godfatherError)
+	}
+
+	// MAJ instantanée du niveau récursif courant quand un filleul est renié dans le dialogue. #4118
+	function onGodsonDisowned(payload: { id: number, godsons_level_current: number }) {
+		if (!farmer.value) return
+		farmer.value.godsons = farmer.value.godsons.filter(g => g.id !== payload.id)
+		farmer.value.godsons_level_current = payload.godsons_level_current
 	}
 
 	function changeAvatar(e: Event) {
@@ -944,11 +1072,11 @@
 				LeekWars.toast(t('upload_success') as string)
 				farmer.value.avatar_changed = data.avatar_changed
 			}
-		}).error(error => {
-			LeekWars.toast(t('upload_failed', [error.error]) as string)
-			if (farmer.value) {
-				farmer.value.avatar_changed = LeekWars.time
-			}
+		}).error((error: { error?: string } | null) => {
+			// Ne PAS toucher avatar_changed ici : le forcer faisait pointer l'<img> vers
+			// un avatar inexistant (carré noir / image cassée) alors que l'upload a
+			// échoué (#11584). La preview optimiste reste affichée jusqu'au rechargement.
+			LeekWars.toast(t('upload_failed', [error && error.error ? error.error : '?']) as string)
 		})
 	}
 
@@ -1018,10 +1146,10 @@
 		LeekWars.post('team/cancel-candidacy-for-team', { team_id: candidacy.team_id }).then(() => {
 			if (farmer.value) {
 				LeekWars.toast(t('candidacy_canceled'))
-				farmer.value.candidacies = (farmer.value.candidacies as { team_id: number }[]).filter((c) => c.team_id !== candidacy.team_id)
+				farmer.value.candidacies = farmer.value.candidacies.filter((c) => c.team_id !== candidacy.team_id)
 			}
 		}).error(error => {
-			LeekWars.toast(error)
+			LeekWars.toast(error.error as string)
 		})
 	}
 
@@ -1298,7 +1426,7 @@
 			color: #999;
 		}
 		.v-icon {
-			color: #777;
+			color: var(--text-color-secondary);
 		}
 	}
 	.log-time, .godfather {
@@ -1427,7 +1555,7 @@
 		margin: 5px;
 	}
 	.trophies .grey {
-		color: #777;
+		color: var(--text-color-secondary);
 		text-align: center;
 		padding: 15px;
 	}
@@ -1472,7 +1600,7 @@
 		margin-top: 15px;
 		h4 {
 			margin-bottom: 8px;
-			color: #777;
+			color: var(--text-color-secondary);
 		}
 		.candidacy-item {
 			display: flex;
@@ -1492,7 +1620,7 @@
 	.invitations {
 		h4 {
 			margin-bottom: 8px;
-			color: #777;
+			color: var(--text-color-secondary);
 		}
 		.invitation {
 			display: flex;
@@ -1532,9 +1660,25 @@
 		width: 30px;
 		margin: 0 5px;
 	}
+	.button.flat.disabled {
+		opacity: 0.5;
+		pointer-events: none;
+	}
 	.sponsorship {
 		.grey {
 			color: #999;
+		}
+		.godfather-manage .gf-row {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 2px 0;
+		}
+		.godfather-manage .gf-action {
+			color: var(--error, #c0392b);
+			cursor: pointer;
+			font-size: 12px;
+			&:hover { text-decoration: underline; }
 		}
 		.container {
 			display: grid;
@@ -1552,6 +1696,103 @@
 		.total-level {
 			font-size: 32px;
 			font-weight: 500;
+		}
+		.current-level {
+			font-size: 13px;
+			margin-top: -2px;
+		}
+		.aposteriori-banner {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			flex-wrap: wrap;
+			padding: 12px;
+			margin-bottom: 14px;
+			border-radius: 4px;
+			background: rgba(90, 194, 0, 0.12);
+			border: 1px solid var(--primary);
+			.ap-text {
+				flex: 1;
+				min-width: 200px;
+			}
+			h4 {
+				margin: 0 0 2px;
+			}
+			.ap-desc {
+				font-size: 13px;
+				margin-bottom: 6px;
+			}
+			.ap-rewards {
+				display: flex;
+				gap: 14px;
+				flex-wrap: wrap;
+				font-weight: 500;
+			}
+			.ap-reward {
+				display: inline-flex;
+				align-items: center;
+				gap: 4px;
+			}
+			.ap-fight-icon {
+				font-size: 18px;
+				opacity: 0.8;
+			}
+			.ap-claim {
+				cursor: pointer;
+				padding: 8px 18px;
+				border-radius: 4px;
+				font-weight: 500;
+				color: #fff;
+				background: var(--primary);
+				white-space: nowrap;
+				&:hover { filter: brightness(1.1); }
+			}
+		}
+		.godfather-requests {
+			margin-bottom: 12px;
+			h4 {
+				margin: 0 0 6px;
+			}
+			.request-row {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				padding: 6px 4px;
+				border-bottom: 1px solid var(--border);
+				&:last-child { border-bottom: none; }
+			}
+			.req-avatar {
+				width: 40px;
+				height: 40px;
+				flex: 0 0 auto;
+			}
+			.req-info {
+				min-width: 0;
+				display: flex;
+				flex-direction: column;
+			}
+			.req-name {
+				font-weight: 500;
+			}
+			.req-stats {
+				font-size: 12px;
+			}
+			.req-action {
+				cursor: pointer;
+				padding: 6px 14px;
+				border-radius: 4px;
+				white-space: nowrap;
+				font-weight: 500;
+				&.accept {
+					color: #fff;
+					background: var(--primary);
+					&:hover { filter: brightness(1.1); }
+				}
+				&.refuse {
+					color: var(--error, #c0392b);
+					&:hover { background: rgba(192, 57, 43, 0.1); }
+				}
+			}
 		}
 		.rewards {
 			display: grid;

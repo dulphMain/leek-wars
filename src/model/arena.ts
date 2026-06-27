@@ -11,6 +11,16 @@ function arenaModeIcon(preference: number): string {
 	return ARENA_MODE_ICONS[preference] || 'mdi-help-circle-outline'
 }
 
+interface ArenaRegistration {
+	leek: number
+	preference: number
+	colossus: boolean
+}
+
+// Inscriptions à l'arène mémorisées par éleveur, pour pouvoir réinscrire le
+// poireau du bon compte après un changement de compte (multi-compte).
+const REGISTRATIONS_KEY = 'arena-registrations'
+
 class Arena {
 	static readonly MIN_PLAYERS = 10
 	static readonly MAX_PLAYERS = 20
@@ -21,12 +31,46 @@ class Arena {
 	countdown: number = -1
 	preference: number = -1
 
+	private loadRegistrations(): {[farmer: number]: ArenaRegistration} {
+		try {
+			return JSON.parse(localStorage.getItem(REGISTRATIONS_KEY) || '{}')
+		} catch {
+			return {}
+		}
+	}
+	private saveRegistrations(registrations: {[farmer: number]: ArenaRegistration}) {
+		localStorage.setItem(REGISTRATIONS_KEY, JSON.stringify(registrations))
+	}
+	private setRegistration(farmer: number, registration: ArenaRegistration) {
+		const registrations = this.loadRegistrations()
+		registrations[farmer] = registration
+		this.saveRegistrations(registrations)
+	}
+	// Migre l'ancien format mono-compte (clés à plat) vers la map par éleveur,
+	// pour ne pas perdre une inscription en cours lors du déploiement.
+	private migrateLegacy() {
+		const farmer = parseInt(localStorage.getItem('arena-farmer') || '', 10)
+		const leek = parseInt(localStorage.getItem('arena-leek') || '', 10)
+		if (localStorage.getItem('in-arena') && farmer && leek && !(farmer in this.loadRegistrations())) {
+			this.setRegistration(farmer, {
+				leek,
+				preference: parseInt(localStorage.getItem('arena-preference') || '-1', 10),
+				colossus: localStorage.getItem('arena-colossus') === '1'
+			})
+		}
+	}
+
 	init() {
-		if (localStorage.getItem('in-arena')) {
-			const leek = parseInt(localStorage.getItem('arena-leek') || '', 10)
-			const preference = parseInt(localStorage.getItem('arena-preference') || '-1', 10)
-			const wantsColossus = localStorage.getItem('arena-colossus') === '1'
-			if (leek) { this.register(leek, preference, wantsColossus) }
+		this.migrateLegacy()
+		if (!store.state.farmer) { return }
+		const registration = this.loadRegistrations()[store.state.farmer.id]
+		if (registration && registration.leek) {
+			// Réinscrit le poireau du compte actif s'il était inscrit.
+			this.register(registration.leek, registration.preference, registration.colossus)
+		} else if (localStorage.getItem('in-arena')) {
+			// Le slot actif appartient à un autre compte : le purger pour ne pas
+			// fuir la sélection d'un compte vers un autre.
+			this.clearActiveSlot()
 		}
 	}
 	register(leek: number, preference: number = -1, wantsColossus: boolean = false) {
@@ -35,6 +79,10 @@ class Arena {
 		localStorage.setItem('arena-preference', '' + preference)
 		localStorage.setItem('arena-colossus', wantsColossus ? '1' : '0')
 		localStorage.setItem('in-arena', '1')
+		if (store.state.farmer) {
+			localStorage.setItem('arena-farmer', '' + store.state.farmer.id)
+			this.setRegistration(store.state.farmer.id, { leek, preference, colossus: wantsColossus })
+		}
 		this.enabled = true
 		this.preference = preference
 		store.commit('arena-status', {enabled: true, preference})
@@ -49,11 +97,42 @@ class Arena {
 		}
 		LeekWars.setTitleTag('Arène ' + this.progress + '/' + Arena.MAX_PLAYERS)
 	}
-	leave() {
-		LeekWars.socket.send([SocketMessage.ARENA_LEAVE])
+	private clearActiveSlot() {
 		localStorage.removeItem('in-arena')
+		// On conserve volontairement 'arena-leek' : ce n'est pas un état
+		// d'inscription mais le dernier poireau choisi, mémorisé entre les
+		// sessions pour le repré-sélectionner dans le potager / le menu / le
+		// chat. Le purger ici (quitter l'arène ou combat lancé) faisait retomber
+		// la sélection sur le premier poireau.
 		localStorage.removeItem('arena-preference')
 		localStorage.removeItem('arena-colossus')
+		localStorage.removeItem('arena-farmer')
+	}
+	clearStorage() {
+		this.clearActiveSlot()
+		// Oublie l'inscription mémorisée du compte actif (départ / combat lancé).
+		if (store.state.farmer) {
+			const registrations = this.loadRegistrations()
+			if (store.state.farmer.id in registrations) {
+				delete registrations[store.state.farmer.id]
+				this.saveRegistrations(registrations)
+			}
+		}
+	}
+	leave() {
+		LeekWars.socket.send([SocketMessage.ARENA_LEAVE])
+		this.clearStorage()
+		this.reset()
+	}
+	// Changement de compte : désinscrit le poireau du compte qu'on quitte côté
+	// serveur (un seul compte inscrit à la fois) mais conserve la mémoire pour
+	// le réinscrire si on revient sur ce compte.
+	suspend() {
+		// Uniquement si le socket du compte courant est encore ouvert, sinon le
+		// message serait mis en file et envoyé sur le socket du nouveau compte.
+		if (this.enabled && LeekWars.socket.connected()) {
+			LeekWars.socket.send([SocketMessage.ARENA_LEAVE])
+		}
 		this.reset()
 	}
 	reset() {
@@ -67,16 +146,8 @@ class Arena {
 	}
 	start(data: [unknown, unknown]) {
 		if (data[1]) { // Garden arena (not automatic)
-			LeekWars.setTitleTag(null)
-			this.leeks = []
-			this.enabled = false
-			this.progress = 0
-			this.countdown = -1
-			this.preference = -1
-			store.commit('arena-status', {enabled: false, preference: -1})
-			localStorage.removeItem('in-arena')
-			localStorage.removeItem('arena-preference')
-			localStorage.removeItem('arena-colossus')
+			this.reset()
+			this.clearStorage()
 			store.commit('update-fights', -1)
 
 			// Redirect if on the garden page

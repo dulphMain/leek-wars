@@ -92,6 +92,12 @@ monaco.editor.addKeybindingRules([
 		keybinding: monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyU,
 		command: "editor.toggleFold",
 		when: "textInputFocus",
+	},
+	{
+		// Palette de commandes façon VSCode (#4317). F1 reste le raccourci natif Monaco.
+		keybinding: monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP,
+		command: "editor.action.quickCommand",
+		when: "textInputFocus",
 	}
 ]);
 
@@ -110,6 +116,23 @@ monaco.editor.registerCommand('findReferencesAtPosition', (_accessor, uri: monac
 const METHOD_REGEX = /^[ \t]+(?:(?:(?:public\s+)?(?:static\s+)?(?:[\w<>,?[\]]+\s+)+(\w+))|(constructor))\s*\(/
 const NON_METHOD_KEYWORDS = new Set(['function', 'for', 'while', 'if', 'class', 'var', 'return', 'new', 'else', 'switch', 'catch'])
 const RESERVED_SYMBOLS = new Set(['true', 'false', 'null', 'this', 'super'])
+
+// Extrait le nom d'une méthode déclarée sur une ligne indentée, ou null si la
+// ligne n'est pas une déclaration. METHOD_REGEX est permissif : son préfixe de
+// type de retour avale n'importe quel mot, donc une instruction comme
+// `return maFonction()` serait lue comme une méthode `maFonction` de type
+// `return` et recevrait un CodeLens « no references » parasite (#4257). On
+// rejette à la fois le nom capturé et le premier mot de la ligne s'ils sont des
+// mots-clés d'instruction.
+function methodNameFromLine(lineContent: string): string | null {
+	const m = METHOD_REGEX.exec(lineContent)
+	if (!m) return null
+	const name = m[1] || m[2]
+	if (NON_METHOD_KEYWORDS.has(name)) return null
+	const firstWord = lineContent.trim().match(/^\w+/)
+	if (firstWord && NON_METHOD_KEYWORDS.has(firstWord[0])) return null
+	return name
+}
 
 
 monaco.editor.defineTheme("leek-wars", {
@@ -213,7 +236,7 @@ monaco.languages.registerHoverProvider("leekscript", {
 					const line = hover.defined[1]
 					const column = hover.defined[2]
 					const args = encodeURIComponent(JSON.stringify({ ai: defAi.path, line, column }))
-					details += "[" + i18n.t('leekscript.defined_in', [ '`' + defAi.path + '`', line ]) + "](command:jump?" + args + ' "' + defAi.path + ':' + line + ':' + column + '")'
+					details += "[" + i18n.t('leekscript.defined_in', [ '`' + defAi.path + '`', line ], { escapeParameter: false }) + "](command:jump?" + args + ' "' + defAi.path + ':' + line + ':' + column + '")'
 				}
 				if (symbol) {
 					fileSystem.symbols[text] = symbol
@@ -373,10 +396,8 @@ monaco.languages.registerCodeLensProvider("leekscript", {
 		}
 		// Scan methods directly from code (line-by-line to avoid multi-line regex issues in ai.ts)
 		for (let i = 0; i < model.getLineCount(); i++) {
-			const m = METHOD_REGEX.exec(model.getLineContent(i + 1))
-			if (!m) continue
-			const name = m[1] || m[2]
-			if (NON_METHOD_KEYWORDS.has(name)) continue
+			const name = methodNameFromLine(model.getLineContent(i + 1))
+			if (!name) continue
 			if (name === 'constructor') {
 				const className = findEnclosingClassName(ai, i + 1)
 				if (className) {
@@ -468,10 +489,8 @@ monaco.languages.registerDocumentSymbolProvider("leekscript", {
 
 			// Methods (scan code like CodeLens does)
 			for (let i = cls.line; i <= classEndLine; i++) {
-				const m = METHOD_REGEX.exec(model.getLineContent(i))
-				if (!m) continue
-				const methodName = m[1] || m[2]
-				if (NON_METHOD_KEYWORDS.has(methodName)) continue
+				const methodName = methodNameFromLine(model.getLineContent(i))
+				if (!methodName) continue
 				const methodEndLine = findBlockEnd(model, i)
 				children.push({
 					name: methodName,
@@ -572,6 +591,8 @@ async function formatLeekScript(code:string): Promise<string> {
 		formatted = formatted.replace(/\\ =/g, ' \\=')
 		// js-beautify doesn't recognize the .. operator and will split it as: \ =
 		formatted = formatted.replace(/\. \./g, '..')
+		// js-beautify doesn't recognize the -> arrow operator and will split it as: - >
+		formatted = formatted.replace(/- >/g, '->')
 		formattedCode = formatted;
 	})
 	return formattedCode;

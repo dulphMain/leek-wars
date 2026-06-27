@@ -1,6 +1,7 @@
 import { FightEntity } from '@/component/player/game/entity'
 import { Game } from "@/component/player/game/game"
-import { Blood, Bubble, Bullet, BuryParticle, Cartridge, CriticalParticle, Explosion, Fire, Garbage, Gaz, Grenade, ImageParticle, Laser, LighningBall, Lightning, LineParticle, Meteorite, NUM_BLOOD_SPRITES, Orbital, Particle, Plasma, PrismParticle, RealisticExplosion, Rectangle, Rocket, Shot, SimpleFire, SmallExplosion, SpikeParticle, SpinningParticle } from '@/component/player/game/particle'
+import { Blood, Boulder, Bubble, Bullet, BuryParticle, Cartridge, CriticalParticle, Explosion, Fire, FlyingSpinningProjectile, Garbage, Gaz, Grenade, ImageParticle, Laser, LighningBall, Lightning, LineParticle, Meteorite, NUM_BLOOD_SPRITES, Orbital, Particle, Plasma, PrismParticle, RealisticExplosion, Rectangle, Rocket, Shot, SimpleFire, SmallExplosion, SpikeParticle, SpinningParticle } from '@/component/player/game/particle'
+import { Path } from './path'
 import { Position } from '@/component/player/game/position'
 import { T, Texture } from '@/component/player/game/texture'
 import { Cell } from '@/model/cell'
@@ -75,22 +76,24 @@ class Particles {
 		this.add(new Explosion(this.game, x, y, z, texture, life))
 		S.explosion.play(this.game)
 	}
-	public addRealisticExplosion(x: number, y: number, radius: number) {
-		// Explosion
-		this.add(new RealisticExplosion(this.game, x, y, radius))
+	public addRealisticExplosion(x: number, y: number, radius: number, colorFn?: (t: number) => string, debris: boolean = true) {
+		// Explosion (fonction de couleur optionnelle, sinon dégradé de feu)
+		this.add(new RealisticExplosion(this.game, x, y, radius, colorFn))
 		// Sound
 		S.explosion.play(this.game)
 		// Mark
 		this.game.ground.drawTextureScale(T.explosion_mark.texture, x, y, 0, 0.5, 0.5, 0.5)
 		// Debrits
-		const count = (3 + Math.random() * 5) * radius
-		for (let p = 0; p < count; ++p) {
-			const scale = 0.15 + Math.random() * 0.35
-			const dx = -4 + Math.random() * 8
-			const dy = -2 + Math.random() * 4
-			const dz = 1 + Math.random() * 6
-			const texture = Math.random() > 0.5 ? T.explosion_rock : T.explosion_rock2
-			this.addGarbage(x, y, 5, dx, dy, dz, texture, 1, Math.random() * 0.2, scale, Math.random() * Math.PI, 70)
+		if (debris) {
+			const count = (3 + Math.random() * 5) * radius
+			for (let p = 0; p < count; ++p) {
+				const scale = 0.15 + Math.random() * 0.35
+				const dx = -4 + Math.random() * 8
+				const dy = -2 + Math.random() * 4
+				const dz = 1 + Math.random() * 6
+				const texture = Math.random() > 0.5 ? T.explosion_rock : T.explosion_rock2
+				this.addGarbage(x, y, 5, dx, dy, dz, texture, 1, Math.random() * 0.2, scale, Math.random() * Math.PI, 70)
+			}
 		}
 	}
 	public addSmallExplosion(x: number, y: number, radius: number) {
@@ -128,8 +131,56 @@ class Particles {
 	public addSpinningParticle(x: number, y: number, angle: number, texture: Texture) {
 		this.particles.unshift(new SpinningParticle(this.game, x, y, angle, texture))
 	}
-	public addRocket(x: number, y: number, z: number, angle: number, duration: number, targetCell: Cell, radius: number) {
-		this.add(new Rocket(this.game, x, y, z, angle, duration, targetCell, radius))
+	public addFlyingSpinningProjectile(startX: number, startY: number, z: number, endX: number, endY: number, duration: number, texture: Texture, size?: number, rotation?: number) {
+		this.add(new FlyingSpinningProjectile(this.game, startX, startY, z, endX, endY, duration, texture, size, rotation))
+	}
+	public addBoulder(startX: number, startY: number, startZ: number, targetX: number, targetY: number, arcHeight: number, duration: number, texture: Texture, size?: number) {
+		this.add(new Boulder(this.game, startX, startY, startZ, targetX, targetY, arcHeight, duration, texture, size))
+	}
+	// Éclate une sprite en fragments procéduraux « parts de tarte » qui s'envolent,
+	// comme l'animation de mort d'un poireau (cf. entity.explode). displaySize =
+	// taille affichée de la sprite entière en pixels (fragments scalés en conséquence).
+	public addShatter(texture: Texture, x: number, y: number, z: number, displaySize: number, dx: number = 0, dy: number = 0) {
+		const tex = texture.texture
+		if (!tex || !tex.width || !tex.height) { return } // sprite pas (encore) chargée
+		const w = tex.width
+		const h = tex.height
+		const s = Math.max(w, h)
+		const scale = displaySize / s
+		const cx = w * (0.3 + Math.random() * 0.4)
+		const cy = h * (0.3 + Math.random() * 0.4)
+		const startAngle = Math.random() * Math.PI
+		const lines = 8 + Math.random() * 6 | 0
+		for (let f = 0; f < lines; ++f) {
+			const angle1 = startAngle + (f / lines) * Math.PI * 2
+			const angle3 = startAngle + ((f + 1) / lines) * Math.PI * 2
+			const angle2 = (angle1 + angle3) / 2
+			const path = new Path(0, 0, w, h)
+			path.moveTo(cx, cy)
+			path.lineTo(cx + Math.cos(angle1) * s, cy + Math.sin(angle1) * s)
+			path.lineTo(cx + Math.cos(angle3) * s, cy + Math.sin(angle3) * s)
+			path.closePath()
+			const canvas = document.createElement('canvas')
+			canvas.width = Math.max(1, Math.round(path.x2 - path.x1))
+			canvas.height = Math.max(1, Math.round(path.y2 - path.y1))
+			const fragmentCtx = canvas.getContext('2d')!
+			const fragment = new Texture('')
+			fragment.texture = canvas
+			fragmentCtx.translate(-path.x1, -path.y1)
+			fragmentCtx.drawImage(tex, 0, 0)
+			fragmentCtx.globalCompositeOperation = 'destination-in'
+			fragmentCtx.fill(path)
+			fragmentCtx.globalCompositeOperation = 'source-over'
+			const f_x = x + (-w / 2 + (path.x1 + path.x2) / 2) * scale
+			const f_z = z + (h / 2 - (path.y1 + path.y2) / 2) * scale
+			const fdx = dx + Math.cos(angle2) * 2.5
+			const fdz = dy + 1 + Math.random() * 2 // pop vers le haut
+			const rotation = -0.06 + Math.random() * 0.12
+			this.addGarbage(f_x, y, f_z, fdx, 0, fdz, fragment, 1, rotation, scale, 0, 70)
+		}
+	}
+	public addRocket(x: number, y: number, z: number, angle: number, duration: number, targetCell: Cell, radius: number, texture?: Texture, explosionColorFn?: (t: number) => string, explosionDebris: boolean = true) {
+		this.add(new Rocket(this.game, x, y, z, angle, duration, targetCell, radius, texture, explosionColorFn, explosionDebris))
 	}
 	public addLighningBall(x: number, y: number, z: number, angle: number, duration: number, radius: number, texture: Texture) {
 		this.add(new LighningBall(this.game, x, y, z, angle, duration, radius, texture))

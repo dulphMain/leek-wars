@@ -1,5 +1,5 @@
 <template>
-	<v-menu ref="menu" v-model="shown" :close-on-content-click="false" :width="width" location="top" offset-y>
+	<v-menu ref="menu" v-model="shown" :close-on-content-click="false" :width="width" location="top" offset-y content-class="emoji-picker-menu">
 		<template #activator="{ props }">
 			<div v-ripple class="chat-input-emoji" v-bind="props">
 				<div :class="{'emoji-font': !LeekWars.nativeEmojis}"><slot></slot></div>
@@ -8,7 +8,7 @@
 		<v-card>
 			<v-tabs :key="categories.length" v-model="activeTab" class="tabs" grow :show-arrows="false">
 				<v-tab v-for="(category, c) in categories" :key="c" :value="'tab-' + c" class="tab">
-					<span v-emojis>{{ category.icon }}</span>
+					<span v-html="formatEmojisText(category.icon)"></span>
 				</v-tab>
 			</v-tabs>
 			<v-tabs-window v-model="activeTab">
@@ -27,7 +27,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Emojis } from '@/model/emojis'
+import { Emojis, formatEmojisText } from '@/model/emojis'
 
 const props = defineProps<{
 	closeOnSelected?: boolean

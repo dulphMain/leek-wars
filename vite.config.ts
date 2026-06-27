@@ -90,10 +90,15 @@ function collectCriticalCss(bundle: Rollup.OutputBundle): Set<string> {
 // Plugin to generate multiple HTML outputs for each language
 function multiLanguagePlugin(): Plugin {
 	const templatePath = path.resolve(__dirname, 'index.html')
+	let isBeta = false
 
 	return {
 		name: 'multi-language-html',
 		enforce: 'pre',
+
+		configResolved(config) {
+			isBeta = config.mode === 'beta'
+		},
 
 		// Resolve virtual HTML files for each language
 		resolveId(id) {
@@ -109,16 +114,24 @@ function multiLanguagePlugin(): Plugin {
 				const lang = match[1]
 				const template = fs.readFileSync(templatePath, 'utf-8')
 				// Replace fr locale with requested language
-				return template.replace(
-					'src="/src/lang/locale/fr.ts"',
-					`src="/src/lang/locale/${lang}.ts"`
-				)
+				return template
+					.replace('<html>', `<html lang="${lang}">`)
+					.replace(
+						'src="/src/lang/locale/fr.ts"',
+						`src="/src/lang/locale/${lang}.ts"`
+					)
 			}
 		},
 
 		// Generate all language HTML files in the output
 		generateBundle(_options, bundle) {
-			const template = fs.readFileSync(templatePath, 'utf-8')
+			let template = fs.readFileSync(templatePath, 'utf-8')
+			// Beta build: pink "Leek Wars Beta" PWA manifest + pink browser theme-color
+			if (isBeta) {
+				template = template.replace('href="/manifest.json"', 'href="/manifest_beta.json"')
+				template = template.replace('name="theme-color" content="#4b9e06"', 'name="theme-color" content="#bb00bb"')
+				template = template.replace('<body>', '<body class="beta">')
+			}
 			let defaultHtml = ''
 
 			// Hoist work that doesn't depend on `lang` out of the loop.
@@ -147,6 +160,7 @@ function multiLanguagePlugin(): Plugin {
 				].filter(Boolean).join('\n\t\t')
 
 				let finalHtml = template.replace(scriptTagPattern, scripts)
+				finalHtml = finalHtml.replace('<html>', `<html lang="${lang}">`)
 				finalHtml = finalHtml.replace('</head>', `\t${cssLinks}\n\t</head>`)
 
 				this.emitFile({

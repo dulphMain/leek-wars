@@ -5,12 +5,12 @@
 			<div class="select-icon select">
 				<v-select v-model="icon" :items="icons" item-value="id" item-title="id" hide-details density="comfortable" variant="solo">
 					<template #selection>
-						<img v-if="icon" :src="'/image/trophy/' + LeekWars.trophies[icon - 1].code + '.svg'">
+						<trophy-icon v-if="icon" :code="LeekWars.trophies[icon - 1].code" />
 					</template>
 					<template #item="{ props: itemProps, item }">
 						<v-list-item v-bind="itemProps">
 							<template v-if="item.raw.id" #title>
-								<img class="icon" :src="'/image/trophy/' + item.raw.code + '.svg'">
+								<trophy-icon class="icon" :code="item.raw.code" />
 							</template>
 							<template v-else #title>{{ $t('main.none') }}</template>
 							<template v-if="item.raw.id" #append>
@@ -29,7 +29,7 @@
 						<template #item="{ props: itemProps, item }">
 							<v-list-item v-bind="itemProps">
 								<template v-if="item.value" #prepend>
-									<img class="icon" :src="'/image/trophy/' + item.raw.code + '.svg'">
+									<trophy-icon class="icon" :code="item.raw.code" />
 								</template>
 								<template v-if="item.value" #append>
 									<div class="rarity">{{ formatRarity(item.raw.rarity) }}%</div>
@@ -61,7 +61,7 @@
 						<template #item="{ props: itemProps, item }">
 							<v-list-item v-bind="itemProps">
 								<template v-if="item.value" #prepend>
-									<img class="icon" :src="'/image/trophy/' + item.raw.code + '.svg'">
+									<trophy-icon class="icon" :code="item.raw.code" />
 								</template>
 								<template v-if="item.value" #append>
 									<div class="rarity">{{ formatRarity(item.raw.rarity) }}%</div>
@@ -84,6 +84,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { LeekWars } from '@/model/leekwars'
 import LwTitle from '@/component/title/title.vue'
+import { titleAgreementGender, agreedTrophyKey } from '@/component/title/title-agreement'
 
 defineOptions({ name: 'TitlePicker' })
 
@@ -91,7 +92,7 @@ const props = defineProps<{
 	title: number[]
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 interface TrophyWord {
 	id: number
@@ -117,22 +118,25 @@ const genders = [
 	{ id: 2, code: 'female' }
 ]
 
+// Libellés des menus accordés comme le rendu (title.vue) : chaque nom s'accorde
+// avec son propre genre, chaque adjectif avec le genre imposé par le nom sélectionné.
 const nouns = computed(() => [{ code: '', id: 0, t: '', rarity: 0 }].concat(allNouns.value.filter((w: TrophyWord) => w.id !== adjective.value).map((w: TrophyWord) => {
-	const trophy = LeekWars.trophies[w.id - 1]
-	const gender_code = gender.value === 2 && (trophy.noun_translation as number & 2) && (((trophy.noun_gender as number) & 2) === 0) ? '_f' : ''
-	return { code: w.code, id: w.id, t: t('trophy.' + w.code + gender_code) as string, rarity: w.rarity }
+	const ag = titleAgreementGender(LeekWars.trophies[w.id - 1], gender.value, locale.value)
+	return { code: w.code, id: w.id, t: t(agreedTrophyKey(w.code, ag)) as string, rarity: w.rarity }
 }).sort((a, b) => a.t.localeCompare(b.t))))
 
-const adjectives = computed(() => [{ code: '', id: 0, t: '', rarity: 0 }].concat(allAdjectives.value.filter((w: TrophyWord) => w.id !== noun.value).map((w: TrophyWord) => {
-	const trophy = LeekWars.trophies[w.id - 1]
-	const gender_code = gender.value === 2 && (trophy.adj_translation as number & 2) && (((trophy.adj_gender as number) & 2) === 0) ? '_f' : ''
-	return { code: w.code, id: w.id, t: t('trophy.' + w.code + gender_code) as string, rarity: w.rarity }
-}).sort((a, b) => a.t.localeCompare(b.t))))
+const adjectives = computed(() => {
+	const nounTrophy = noun.value ? LeekWars.trophies[noun.value - 1] : null
+	const ag = titleAgreementGender(nounTrophy, gender.value, locale.value)
+	return [{ code: '', id: 0, t: '', rarity: 0 }].concat(allAdjectives.value.filter((w: TrophyWord) => w.id !== noun.value).map((w: TrophyWord) => {
+		return { code: w.code, id: w.id, t: t(agreedTrophyKey(w.code, ag)) as string, rarity: w.rarity }
+	}).sort((a, b) => a.t.localeCompare(b.t)))
+})
 
 LeekWars.loadTrophyWords().then(words => {
 	allNouns.value = (words as TrophyWord[]).filter((w: TrophyWord) => w.title & 1)
 	allAdjectives.value = (words as TrophyWord[]).filter((w: TrophyWord) => w.title & 2)
-	icons.value = [{ id: 0, code: '', t: '', rarity: 0 }].concat(words as TrophyWord[]).sort((a, b) => a.rarity - b.rarity)
+	icons.value = ([{ id: 0, code: '', t: '', rarity: 0 } as (TrophyWord | { id: 0, code: '', t: '', rarity: 0 })]).concat(words as TrophyWord[]).sort((a, b) => a.rarity - b.rarity)
 })
 
 function changeNoun() {

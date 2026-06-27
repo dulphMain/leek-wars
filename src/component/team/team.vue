@@ -1,4 +1,7 @@
 <template>
+	<!-- Racine STABLE unique (.page toujours montée) : v-if/v-else à la racine = Fragment dont
+	     l'el peut devenir null pendant le patch -> "parentNode of null" (#4163, cf leek.vue). -->
+	<div class="page">
 	<error v-if="error" :title="$t('not_found')">
 		<template #message><i18n-t keypath="not_found_id" tag="span"><template #id><b>{{ id }}</b></template></i18n-t></template>
 		<template #button>
@@ -7,7 +10,7 @@
 			</router-link>
 		</template>
 	</error>
-	<div v-else class="page">
+	<template v-else>
 		<div class="page-header page-bar">
 
 			<rich-tooltip-team v-if="team" :id="team.id" v-slot="{ props }" :bottom="true">
@@ -199,7 +202,7 @@
 		</div>
 
 		<panel v-if="myInvitation">
-			<div class="center">
+			<div v-if="myInvitation && myInvitation.sender_id !== undefined" class="center">
 				<b><i18n-t keypath="you_are_invited">
 					<template #sender>
 						<rich-tooltip-farmer :id="myInvitation.sender_id" v-slot="{ props }">
@@ -276,6 +279,9 @@
 				</div>
 				<div v-if="owner && !membersTableView && editMembers" class="button flat" @click="editMembers = false">
 					<v-icon>mdi-check</v-icon>
+				</div>
+				<div v-if="is_member" class="button flat" @click="inviteDialog = true">
+					<v-icon>mdi-account-plus</v-icon> {{ $t('invite_friends') }}
 				</div>
 				<div v-if="is_member || $store.state.farmer?.admin" class="button flat" @click="toggleMembersView">
 					<v-icon>{{ membersTableView ? 'mdi-view-grid' : 'mdi-view-list' }}</v-icon>
@@ -440,8 +446,8 @@
 									</router-link>
 								</rich-tooltip-leek>
 							</div>
-							<div class="p20">{{ $filters.number(leek.talent) }}</div>
-							<div class="p20">{{ $filters.number(leek.level) }}</div>
+							<div class="p20">{{ $filters.number(leek.talent ?? 0) }}</div>
+							<div class="p20">{{ $filters.number(leek.level ?? 0) }}</div>
 						</div>
 					</div>
 				</div>
@@ -463,7 +469,7 @@
 									</router-link>
 								</rich-tooltip-farmer>
 							</div>
-							<div class="p20">{{ $filters.number(farmer.talent) }}</div>
+							<div class="p20">{{ $filters.number(farmer.talent ?? 0) }}</div>
 							<div class="p15">
 								<flag v-if="farmer.country" :code="farmer.country" class="country" />
 							</div>
@@ -487,7 +493,7 @@
 									</router-link>
 								</rich-tooltip-farmer>
 							</div>
-							<div class="p25">{{ $filters.number(farmer.points) }}</div>
+							<div class="p25">{{ $filters.number(farmer.points ?? 0) }}</div>
 						</div>
 					</div>
 				</div>
@@ -617,7 +623,7 @@
 					</router-link>
 				</template>
 				<template #content>
-					<fights-history v-if="team" :fights="team.fights" />
+					<fights-history v-if="team" :fights="team.fights" :progress="liveProgress" />
 				</template>
 			</panel>
 
@@ -774,7 +780,7 @@
 				<div class="infos">
 					<h4>{{ $t('characteristic.characteristics') }}</h4>
 					<div class="card characteristics">
-						<characteristic-tooltip v-for="c in LeekWars.characteristics_table" :key="c" v-slot="{ props }" :characteristic="c" :value="turret[c]" :total="turret[c]" :leek="turret" :test="true">
+						<characteristic-tooltip v-for="c in LeekWars.characteristics_table" :key="c" v-slot="{ props }" :characteristic="c" :value="(turret[c] as number)" :total="(turret[c] as number)" :leek="{ level: team?.level ?? 0, ...turret }" :test="true">
 							<div class="characteristic" :class="c" v-bind="props">
 								<img :src="'/image/charac/' + c + '.png'">
 								<span class="stat" :class="'color-' + c">{{ turret[c] }}</span>
@@ -809,6 +815,9 @@
 			</v-radio-group>
 		</popup>
 
+		<invite-dialog v-model="inviteDialog" />
+
+	</template>
 	</div>
 </template>
 
@@ -822,7 +831,8 @@
 	import { LeekWars } from '@/model/leekwars'
 	import { Warning } from '@/model/moderation'
 	import { store } from '@/model/store'
-	import { Composition, Team, TeamMember } from '@/model/team'
+	import { Composition, Team, TeamMember, type TeamInvitation } from '@/model/team'
+	import { useLiveHistory } from '@/model/use-live-history'
 	import RichTooltipItem from '@/component/rich-tooltip/rich-tooltip-item.vue'
 	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 	import RichTooltipLeek from '@/component/rich-tooltip/rich-tooltip-leek.vue'
@@ -833,6 +843,7 @@
 	import ReportDialog from '@/component/moderation/report-dialog.vue'
 	import TurretImage from '@/component/turret-image.vue'
 	import AIElement from '@/component/app/ai.vue'
+	import InviteDialog from '@/component/invite-dialog/invite-dialog.vue'
 	import { CHIPS } from '@/model/chips'
 	import { computed, defineAsyncComponent, nextTick, ref, useTemplateRef, watch } from 'vue'
 	import { useI18n } from 'vue-i18n'
@@ -846,7 +857,7 @@
 	const Explorer = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/explorer/explorer.${locale}.i18n`))
 
 	defineOptions({ name: 'Team', i18n: {}, mixins: [...mixins], components: {
-		CharacteristicTooltip, RichTooltipItem, RichTooltipLeek, RichTooltipFarmer, RichTooltipComposition, RichTooltipTeam, FightsHistory, TournamentsHistory, ReportDialog, TurretImage, ai: AIElement, Line,
+		CharacteristicTooltip, RichTooltipItem, RichTooltipLeek, RichTooltipFarmer, RichTooltipComposition, RichTooltipTeam, FightsHistory, TournamentsHistory, ReportDialog, TurretImage, ai: AIElement, Line, InviteDialog,
 	} })
 
 	interface ColumnDef {
@@ -898,6 +909,7 @@
 	const captain = ref(false)
 	const owner = ref(false)
 	const showReport = ref(false)
+	const inviteDialog = ref(false)
 	const reasons = [Warning.INCORRECT_EMBLEM, Warning.INCORRECT_TEAM_NAME, Warning.INCORRECT_TEAM_DESCRIPTION]
 	const createCompoDialog = ref(false)
 	const createCompoName = ref('')
@@ -987,16 +999,17 @@
 		}
 	}
 
-	const membersHeaders = computed(() => membersColumns.value
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const membersHeaders = computed<any[]>(() => membersColumns.value
 		.map(key => {
 			const col = ALL_MEMBER_COLUMNS_MAP[key]
 			if (!col) return null
-			return { title: t(col.titleKey), value: key, sortable: true, align: col.align as 'start' | 'end' | 'center' | undefined }
+			return { title: t(col.titleKey), key: key, sortable: true, align: col.align as 'start' | 'end' | 'center' | undefined }
 		})
 		.filter((h): h is NonNullable<typeof h> => h !== null))
 
 	const turret = computed<Record<string, number | string>>(() => {
-		if (!team.value) return {}
+		if (!team.value) return {} as Record<string, number | string>
 		const team_ratio = 1 + (team.value.level / 100)
 		const max_life = 1000 + Math.round((4000 - 500) * team_ratio)
 		const characteristics_base_1000 = 100 + Math.round(950 * team_ratio)
@@ -1019,6 +1032,14 @@
 	})
 
 	watch(id, () => update(), { immediate: true })
+
+	// Mise à jour en direct du petit historique de combats.
+	const { progress: liveProgress } = useLiveHistory({
+		type: 'team',
+		id: () => team.value?.id,
+		fights: () => team.value?.fights,
+		reload: () => update(),
+	})
 
 	function update() {
 		if (id.value === null) return
@@ -1135,9 +1156,10 @@
 				team.value.emblem_changed = LeekWars.time
 				store.commit('update-emblem')
 			}
-		}).error(err => {
-			LeekWars.toast(t('upload_failed', [err.error]) as string)
-			team.value!.emblem_changed = LeekWars.time
+		}).error((err: { error?: string } | null) => {
+			// Ne pas forcer emblem_changed sur erreur (même bug que l'avatar #11584) :
+			// ça pointait l'<img> vers un emblème inexistant (carré noir / image cassée).
+			LeekWars.toast(t('upload_failed', [err && err.error ? err.error : '?']) as string)
 		})
 	}
 
@@ -1401,7 +1423,7 @@
 		saveColumnsConfig()
 	}
 
-	function cancelInvitation(invitation: {id: number}) {
+	function cancelInvitation(invitation: TeamInvitation) {
 		if (!team.value) return
 		LeekWars.post('team/cancel-invitation', {invitation_id: invitation.id}).then(() => {
 			if (team.value) {
@@ -2198,8 +2220,8 @@
 					font-weight: bold;
 				}
 			}
-			.characteristic:nth-child(8n+6),
-			.characteristic:nth-child(8n+8) {
+			.characteristic:nth-child(4n+3),
+			.characteristic:nth-child(4n+4) {
 				background: var(--background-secondary);
 			}
 		}

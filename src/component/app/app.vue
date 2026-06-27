@@ -1,8 +1,10 @@
 <template>
-	<div id="app" :class="{ connected: $store.state.connected, app: LeekWars.mobile, 'social-collapsed': LeekWars.socialCollapsed, 'menu-expanded': LeekWars.menuExpanded, sfw: LeekWars.sfw, xp: LeekWars.xpTheme, dark: LeekWars.darkMode, 'menu-collapsed': !LeekWars.mobile && LeekWars.menuCollapsed, beta: env.BETA, lightbar: LeekWars.lightBar }" data-app="true" @mousemove="mousemove">
+	<div id="app" :class="{ connected: $store.state.connected, app: LeekWars.mobile, 'social-collapsed': LeekWars.socialCollapsed, 'menu-expanded': LeekWars.menuExpanded, sfw: LeekWars.sfw, xp: LeekWars.xpTheme, dark: LeekWars.darkMode, 'menu-collapsed': !LeekWars.mobile && LeekWars.menuCollapsed, beta: env.BETA }" data-app="true" @mousemove="mousemove">
+				<a class="skip-link" href="#main-content">{{ $t('main.skip_to_content') }}</a>
+
 				<div :class="{visible: LeekWars.dark > 0}" :style="{opacity: LeekWars.dark}" class="dark-shadow" @click="darkClick"></div>
 
-				<div class="requests">{{ LeekWars.requests }} <v-btn size="x-small" @click="LeekWars.requests = 0">reset</v-btn></div>
+				<request-counter />
 
 				<lw-menu v-if="$store.state.connected" />
 
@@ -13,16 +15,16 @@
 				<lw-bar v-if="LeekWars.mobile" />
 
 				<div class="app-center">
-					<div :class="{large: LeekWars.large || LeekWars.flex, flex: LeekWars.flex, box: LeekWars.box}" class="app-wrapper">
+					<div ref="appWrapperEl" class="app-wrapper">
 						<lw-header v-if="!LeekWars.mobile || !$store.state.connected" />
-						<div class="page-wrapper">
-							<router-view />
-						</div>
-						<lw-footer v-if="LeekWars.footer" />
+						<main id="main-content" class="page-wrapper">
+							<page-host />
+						</main>
+						<lw-footer />
 					</div>
 				</div>
 
-				<div v-if="!LeekWars.mobile" class="big-leeks" :class="{flex: LeekWars.flex || LeekWars.large, hidden: LeekWars.didactitial}">
+				<div v-if="!LeekWars.mobile" ref="bigLeeksEl" class="big-leeks">
 					<div class="wrapper">
 						<img class="big-leek-1" width="252" height="372" :src="LeekWars.leekTheme ? '/image/big_leek_1_white.webp' : '/image/big_leek_1.webp'">
 						<img class="big-leek-2" width="398" height="508" fetchpriority="high" :src="LeekWars.leekTheme ? '/image/big_leek_2_white.webp' : '/image/big_leek_2.webp'">
@@ -37,19 +39,21 @@
 
 				<div class="toasts"></div>
 
-				<div v-if="shouldShowVerifyBanner" class="finish-register">
-					<div class="message">
-						<v-icon>mdi-account-plus</v-icon>
-						{{ $t('main.verify_message') }} <router-link class="green-link" to="/settings">{{ $t('main.verify_info') }}</router-link>
-						<v-icon @click="verifyMessage = false">mdi-close</v-icon>
-					</div>
-				</div>
+				<verify-banner v-if="shouldShowVerifyBanner" @verify="verifyPopupForced = true" />
 
 				<verify-popup v-if="showVerifyPopup" v-model="showVerifyPopup" />
 
 				<check-email-reminder v-if="showCheckEmailReminder" v-model="showCheckEmailReminder" />
 
+				<invite-dialog v-if="inviteDialogOpen" v-model="inviteDialogOpen" />
+
+				<tutorial-nudge-dialog v-if="tutorialNudgeOpen" v-model="tutorialNudgeOpen" />
+
+				<godfather-accept-dialog v-if="godfatherAcceptOpen" v-model="godfatherAcceptOpen" :login="godfatherAcceptLogin" />
+
 				<activation-welcome v-if="showActivationWelcome" v-model="showActivationWelcome" />
+
+			<visitor-banner v-if="!$store.state.connected" />
 
 				<img v-if="LeekWars.clover" :style="{top: LeekWars.cloverTop + 'px', left: LeekWars.cloverLeft + 'px'}" class="clover" src="/image/clover.png" @click="clickClover">
 
@@ -207,6 +211,8 @@
 	import { locale } from '@/locale'
 	import Bar from '@/component/app/bar.vue'
 	import Header from '@/component/app/header.vue'
+	import RequestCounter from '@/component/app/request-counter.vue'
+	import PageHost from '@/component/app/page-host.vue'
 	const Chats = defineAsyncComponent(() => import('@/component/app/chats.vue'))
 	const Footer = defineAsyncComponent(() => import('@/component/app/footer.vue'))
 	const Menu = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/app/menu.vue`))
@@ -216,12 +222,17 @@
 	const ConsoleWindow = defineAsyncComponent(() => import('./console-window.vue'))
 	const VerifyPopup = defineAsyncComponent(() => import('@/component/verify-popup/verify-popup.vue'))
 	const CheckEmailReminder = defineAsyncComponent(() => import('@/component/check-email-reminder/check-email-reminder.vue'))
+	const InviteDialog = defineAsyncComponent(() => import('@/component/invite-dialog/invite-dialog.vue'))
+	const TutorialNudgeDialog = defineAsyncComponent(() => import('@/component/tutorial-nudge-dialog/tutorial-nudge-dialog.vue'))
+	const GodfatherAcceptDialog = defineAsyncComponent(() => import('@/component/godfather-accept-dialog/godfather-accept-dialog.vue'))
 	const ActivationWelcome = defineAsyncComponent(() => import('@/component/activation-welcome/activation-welcome.vue'))
+	const VisitorBanner = defineAsyncComponent(() => import('@/component/visitor-banner/visitor-banner.vue'))
+	const VerifyBanner = defineAsyncComponent(() => import('@/component/verify-banner/verify-banner.vue'))
 	const ChangelogDialog = defineAsyncComponent(() => import('../changelog/changelog-dialog.vue'))
 	const Documentation = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/documentation/documentation.${locale}.i18n`))
 	const DidactitielNew = defineAsyncComponent(() => import(/* webpackChunkName: "[request]" */ `@/component/didactitiel-new/didactitiel-new.${locale}.i18n`))
 	export default {
-		components: {'lw-bar': Bar, 'lw-footer': Footer, 'lw-header': Header, 'lw-menu': Menu, 'lw-social': Social, Squares, Chats, 'mobile-br': MobileBR, ChangelogDialog, Documentation, DidactitielNew, ConsoleWindow }
+		components: {'lw-bar': Bar, 'lw-footer': Footer, 'lw-header': Header, 'lw-menu': Menu, 'lw-social': Social, Squares, Chats, 'mobile-br': MobileBR, ChangelogDialog, Documentation, DidactitielNew, ConsoleWindow, RequestCounter, PageHost }
 	}
 </script>
 <script lang="ts" setup>
@@ -241,7 +252,7 @@
 
 	const showConsole = ref(false)
 	const consoleValue = ref(false)
-	const changelog = ref<Record<string, unknown> | null>(null)
+	const changelog = ref<{ version: number, version_name: string, [key: string]: unknown } | null>(null)
 	const showChangelog = ref(false)
 	let konami = ''
 	const docEverywhere = ref(false)
@@ -249,23 +260,20 @@
 	let mouseX = 0
 	let mouseY = 0
 	let cloverSpeed = 200
-	const verifyMessage = ref(true)
 	const verifyPopupDismissed = ref(false)
+	const verifyPopupForced = ref(false)
 	const checkEmailReminderDismissed = ref(false)
 	const showActivationWelcome = ref(false)
 	const loggedOutOtherTab = ref(false)
 
-	// Bandeau header "Terminer votre inscription par e-mail" :
-	//  - Comptes pré-migration (pas de didactitiel_completed_at) : ancien
-	//    comportement, visible dès qu'on est non-verified.
-	//  - Comptes post-migration : caché tant que la verify-popup n'a pas été
-	//    explicitement dismissée, pour ne pas triple-solliciter à l'inscription.
+	// Bandeau bas "Valide ton compte" (verify-banner) : visible une fois le
+	// didactitiel terminé (ou au moins un combat joué pour les comptes
+	// pré-migration sans timestamp), jamais pendant la création du poireau.
 	const shouldShowVerifyBanner = computed(() => {
-		if (!verifyMessage.value) return false
 		const f = store.state.farmer
 		if (!f || f.verified) return false
-		if (!f.didactitiel_completed_at) return true
-		return !!f.verify_modal_dismissed_at
+		return !!f.didactitiel_completed_at
+			|| ((f.victories ?? 0) + (f.draws ?? 0) + (f.defeats ?? 0)) >= 1
 	})
 
 	// Tick réactif pour réévaluer showVerifyPopup. Désarmé dès que le verdict
@@ -290,16 +298,19 @@
 	}, { immediate: true })
 	onBeforeUnmount(() => { if (verifyPopupTimer) clearInterval(verifyPopupTimer) })
 
-	// La verify-popup s'affiche 5 minutes après la fin du didacticiel. L'horloge
+	// La verify-popup s'affiche 2 minutes après la fin du didacticiel. L'horloge
 	// vit côté serveur (farmer.didactitiel_completed_at) pour ne pas dépendre du
 	// localStorage : sinon un 2e compte créé sur le même navigateur voyait la
 	// modal immédiatement (bug observé sur la cohorte 2026-04). Fallback pour les
 	// comptes pré-migration (completed_at null) : 5 combats faits.
-	const VERIFY_POPUP_DELAY_MS = 5 * 60 * 1000
+	const VERIFY_POPUP_DELAY_MS = 2 * 60 * 1000
 	const showVerifyPopup = computed({
 		get() {
 			const f = store.state.farmer
 			if (!f || f.verified) return false
+			// Ouverture explicite depuis le bandeau verify-banner : prioritaire
+			// sur le dismiss et le snooze.
+			if (verifyPopupForced.value) return true
 			if (verifyPopupDismissed.value) return false
 			if (f.verify_modal_dismissed_at) return false
 			const snoozedUntil = parseInt(localStorage.getItem('verify-popup-snoozed-until') || '0')
@@ -309,10 +320,17 @@
 			}
 			// Pré-migration : on garde l'ancien déclencheur "5 combats" pour ne
 			// pas attendre indéfiniment sur les comptes qui n'ont pas de timestamp.
-			return (f.fights ?? 0) >= 5
+			// Compter les combats JOUÉS (victoires + nuls + défaites) : f.fights est
+			// le nombre de combats RESTANTS (50 à l'inscription), ce qui faisait
+			// surgir la popup immédiatement après un fast register hors didactitiel
+			// (inscription via le bandeau visiteur notamment).
+			return ((f.victories ?? 0) + (f.draws ?? 0) + (f.defeats ?? 0)) >= 5
 		},
 		set(value: boolean) {
-			if (!value) verifyPopupDismissed.value = true
+			if (!value) {
+				verifyPopupForced.value = false
+				verifyPopupDismissed.value = true
+			}
 		}
 	})
 
@@ -334,6 +352,73 @@
 			if (!value) checkEmailReminderDismissed.value = true
 		}
 	})
+
+	// Nudge parrainage : on propose au joueur engagé (15 victoires) d'inviter ses
+	// amis, une seule fois. Le flag vit en base (invite_dialog_seen_at) car le
+	// localStorage peut être vidé et reverrait le dialog sur un autre compte du
+	// même navigateur (même piège que la verify-popup). On ne concurrence pas le
+	// flux de validation email.
+	const inviteDialogOpen = ref(false)
+	watch(() => {
+		const f = store.state.farmer
+		if (!f || f.invite_dialog_seen_at) return false
+		if ((f.victories ?? 0) < 15) return false
+		if (!f.verified && (showVerifyPopup.value || showCheckEmailReminder.value)) return false
+		return true
+	}, (shouldShow) => {
+		if (shouldShow && !inviteDialogOpen.value) {
+			inviteDialogOpen.value = true
+			// Marque vu immédiatement pour ne jamais re-déclencher, sans fermer le
+			// dialog (piloté par inviteDialogOpen, découplé du flag).
+			const f = store.state.farmer!
+			f.invite_dialog_seen_at = Math.floor(Date.now() / 1000)
+			LeekWars.post('farmer/dismiss-invite-dialog')
+		}
+	}, { immediate: true })
+
+	// Nudge tutoriel : un joueur qui joue depuis un moment (compte > 1h, au moins
+	// quelques combats) mais n'a jamais ouvert le tutoriel LeekScript est incité,
+	// une seule fois, à le commencer. Cible la friction observée sur les cohortes
+	// scolaires (elles combattent mais ne codent pas, tutorial_progress = 0). Flag
+	// en localStorage par farmer : simple nudge, pas besoin d'un champ en base. On
+	// ne concurrence pas les dialogs de vérification / parrainage. Les clics sont
+	// mesurés via LeekWars.track (tutorial-nudge-shown/start/later).
+	const TUTORIAL_NUDGE_MIN_AGE_MS = 60 * 60 * 1000
+	const TUTORIAL_NUDGE_MIN_FIGHTS = 5
+	const tutorialNudgeOpen = ref(false)
+	watch(() => {
+		const f = store.state.farmer
+		if (!f) return false
+		if ((f.tutorial_progress ?? 0) > 0) return false
+		if ((f.fights ?? 0) < TUTORIAL_NUDGE_MIN_FIGHTS) return false
+		if (!f.register_date || Date.now() - f.register_date * 1000 < TUTORIAL_NUDGE_MIN_AGE_MS) return false
+		if (localStorage.getItem('tutorial-nudge-seen-' + f.id) === '1') return false
+		if (!f.verified && (showVerifyPopup.value || showCheckEmailReminder.value)) return false
+		if (inviteDialogOpen.value) return false
+		return true
+	}, (shouldShow) => {
+		if (shouldShow && !tutorialNudgeOpen.value) {
+			tutorialNudgeOpen.value = true
+			localStorage.setItem('tutorial-nudge-seen-' + store.state.farmer!.id, '1')
+			LeekWars.track('tutorial-nudge-shown')
+		}
+	}, { immediate: true })
+
+	// Parrainage a posteriori : un joueur connecté qui ouvre /godfather/:login et qui
+	// n'a pas encore de parrain se voit proposer ce parrain (accepter/refuser). #4118
+	// Source = path quand connecté (sinon '') : se redéclenche aussi quand connected
+	// passe à true sur un deep-link.
+	const godfatherAcceptOpen = ref(false)
+	const godfatherAcceptLogin = ref('')
+	watch(() => store.state.connected ? router.currentRoute.value.path : '', (path) => {
+		const m = path.match(/^\/godfather\/(.+)$/)
+		const f = store.state.farmer
+		if (m && f && !f.godfather && !godfatherAcceptOpen.value) {
+			godfatherAcceptLogin.value = decodeURIComponent(m[1])
+			godfatherAcceptOpen.value = true
+		}
+	}, { immediate: true })
+
 	const aprilFoolsDialog = ref(false)
 	const doc = useTemplateRef<import('vue').ComponentPublicInstance>('doc')
 
@@ -357,6 +442,34 @@
 			document.body.classList.remove('xp')
 	}, { immediate: true })
 
+	// Flags de layout (large/flex/box/footer/lightBar) appliqués en IMPÉRATIF, hors du
+	// rendu de app.vue. Crucial : si app.vue lit ces flags dans son template, toute
+	// nav (resetLayout en beforeEach, puis onMounted de la page) re-render app.vue et
+	// re-patche le <router-view> en plein swap → racine destination el=null → crash
+	// "parentNode of null" (#4163, cluster #3957-#3983). En togglant des classes sur des
+	// éléments stables (jamais re-patchés par Vue, classe statique), le router-view n'est
+	// jamais touché. Même principe éprouvé que darkMode/xpTheme sur body.
+	const appWrapperEl = useTemplateRef<HTMLElement>('appWrapperEl')
+	const bigLeeksEl = useTemplateRef<HTMLElement>('bigLeeksEl')
+	function applyLayout() {
+		const w = appWrapperEl.value
+		if (w) {
+			w.classList.toggle('large', LeekWars.large || LeekWars.flex)
+			w.classList.toggle('flex', LeekWars.flex)
+			w.classList.toggle('box', LeekWars.box)
+		}
+		const b = bigLeeksEl.value
+		if (b) {
+			b.classList.toggle('flex', LeekWars.flex || LeekWars.large)
+			b.classList.toggle('hidden', LeekWars.didactitial)
+		}
+		document.body.classList.toggle('lightbar', LeekWars.lightBar)
+	}
+	// mobile est inclus : big-leeks est en v-if="!mobile", il faut ré-appliquer ses
+	// classes quand il (re)monte. flush:'post' garantit que le DOM est à jour.
+	watch(() => [LeekWars.large, LeekWars.flex, LeekWars.box, LeekWars.didactitial, LeekWars.lightBar, LeekWars.mobile], applyLayout, { flush: 'post' })
+	onMounted(applyLayout)
+
 	emitter.on('connected', () => {
 		if (!store.state.farmer!.didactitiel_seen) {
 			LeekWars.show_didactitiel()
@@ -379,7 +492,8 @@
 				docEverywhereModel.value = true
 				nextTick(() => {
 					if (doc.value) {
-						doc.value.focus()
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						(doc.value as any).focus()
 					}
 				})
 			})
@@ -539,8 +653,24 @@
 </script>
 
 <style lang="scss" scoped>
-	#app.beta {
-		background: #492e46;
+	// Lien d'évitement (a11y) : invisible jusqu'au focus clavier, amène
+	// directement au contenu principal en sautant le menu et l'en-tête.
+	.skip-link {
+		position: absolute;
+		left: 8px;
+		top: -48px;
+		z-index: 10000;
+		padding: 10px 16px;
+		background: var(--primary);
+		color: #fff;
+		font-weight: 500;
+		border-radius: 0 0 4px 4px;
+		transition: top 0.15s ease;
+		&:focus {
+			top: 0;
+			outline: 2px solid #fff;
+			outline-offset: -4px;
+		}
 	}
 	.console-button.v-icon {
 		position: fixed;
@@ -565,7 +695,7 @@
 	#app.app {
 		overflow: hidden;
 	}
-	#app.app.connected:not(.lightbar) {
+	body:not(.lightbar) #app.app.connected {
 		padding-top: 56px;
 	}
 	#app.app .page {
@@ -773,16 +903,6 @@
 		}
 	}
 
-	.requests {
-		display: none;
-		background: rgba(0,0,0,0.8);
-		color: white;
-		padding: 10px;
-		position: fixed;
-		top: 10px;
-		left: 10px;
-		z-index: 100;
-	}
 	:deep(.v-overlay__content.doc) {
 		height: auto;
 		display: flex;
@@ -793,28 +913,6 @@
 		margin-top: 10vh !important;
 		.documentation-page {
 			max-height: 80vh;
-		}
-	}
-	.finish-register {
-		position: fixed;
-		top: 0;
-		right: 0;
-		left: 0;
-		display: flex;
-		justify-content: center;
-		z-index: 10;
-		.message {
-			background: var(--pure-white);
-			box-shadow: 0px 2px 1px -1px rgba(0,0,0,0.2), 0px 1px 1px 0px rgba(0,0,0,0.14), 0px 1px 3px 0px rgba(0,0,0,0.12);
-			border-bottom-left-radius: 5px;
-			border-bottom-right-radius: 5px;
-			padding: 4px 12px;
-			display: flex;
-			align-items: center;
-			gap: 10px;
-			i, button {
-				font-size: 18px;
-			}
 		}
 	}
 	.logout-accounts {

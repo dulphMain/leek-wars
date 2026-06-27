@@ -1,0 +1,10 @@
+{
+	"title": "Manage godsons",
+	"stats": "Level {0} · Talent {1} · Godsons lv. {2} · Joined {3}",
+	"disown": "Remove",
+	"empty": "No godsons yet.",
+	"disown_confirm_title": "Remove this godson?",
+	"disown_confirm_message": "You are about to remove {name} and lose {level} recursive godson levels.",
+	"cancel": "Cancel",
+	"error_disown_failed": "Couldn't remove this godson."
+}

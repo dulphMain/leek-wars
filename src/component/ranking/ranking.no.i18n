@@ -56,5 +56,13 @@
 	"turrets_killed": "Tårn",
 	"turrets_killed_title": "Tårn ødelagt",
 	"won": "Seire",
-	"xp": "XP"
+	"xp": "XP",
+	"boss": "Boss",
+	"turns": "Turns",
+	"power": "Level",
+	"date": "Date",
+	"boss_mode_turns": "Fastest",
+	"boss_mode_leeks": "Fewest leeks",
+	"boss_mode_power": "Lowest level",
+	"boss_mode_first": "First"
 }

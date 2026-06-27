@@ -56,5 +56,13 @@
 	"damage_title": "Danni inflitti",
 	"compositions": "Composizioni",
 	"composition": "Composizione",
-	"won": "Vittorie"
+	"won": "Vittorie",
+	"boss": "Boss",
+	"turns": "Turni",
+	"power": "Livello",
+	"date": "Data",
+	"boss_mode_turns": "Il più veloce",
+	"boss_mode_leeks": "Meno porri",
+	"boss_mode_power": "Livello più basso",
+	"boss_mode_first": "Primi"
 }

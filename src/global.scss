@@ -29,6 +29,20 @@
 .mdi-spin {
 	animation: mdi-spin 2s infinite linear;
 }
+// Respecter la préférence système « réduire les animations » (a11y, WCAG 2.3.3).
+// Les animations/transitions sont neutralisées mais laissées « instantanées »
+// (0.01ms) pour que les évènements animationend/transitionend continuent de se
+// déclencher côté JS.
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
 .theme--light.v-icon {
 	color: inherit;
 }
@@ -205,6 +219,10 @@ html {
 *, *:before, *:after {
 	box-sizing: inherit;
 }
+// Marqueur visuel de la beta : fond extérieur légèrement rosé (classe ajoutée dans vue.ts si env.BETA)
+body.beta {
+	background: #492e46;
+}
 body {
 	margin: 0;
 	font-family: "Roboto", sans-serif;
@@ -220,7 +238,7 @@ body {
 	--background-header: #e5e5e5;
 	--border: #ddd;
 	--text-color: #111;
-	--text-color-secondary: #777;
+	--text-color-secondary: #686868;
 	--type-color: #0000D0;
 	--link-color: #0645ad;
 	&.dark {
@@ -547,6 +565,11 @@ img.emoji {
 	vertical-align: middle;
 	margin-top: -2px;
 	float: none;
+}
+// L'emoji « fréquence » est un éclair noir : invisible sur fond sombre (forum #11727).
+// En mode sombre on l'inverse (éclair blanc), visible dans le chat comme dans le picker.
+body.dark img.emoji[src$="frequency.png"] {
+	filter: invert(1);
 }
 .emoji.large {
 	width: 30px;

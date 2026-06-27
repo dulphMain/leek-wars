@@ -9,18 +9,18 @@
 			<loader v-if="!composition" :size="30" />
 			<template v-else>
 				<div class="flex">
-					<router-link :to="'/team/' + composition.team.id">
+					<router-link v-if="composition.team" :to="'/team/' + composition.team.id">
 						<emblem :team="composition.team" />
 					</router-link>
 					<div class="info">
 						<span class="name">
-							<router-link :to="'/team/' + composition.team.id" class="text">{{ composition.team.name }} • {{ composition.name }}</router-link>
+							<router-link v-if="composition.team" :to="'/team/' + composition.team.id" class="text">{{ composition.team.name }} • {{ composition.name }}</router-link>
 							<!-- <router-link v-if="farmer.team" :to="'/team/' + farmer.team.id">
 								<emblem :team="farmer.team" :title="farmer.team.name" />
 							</router-link> -->
 						</span>
 						<talent :id="composition.id" :talent="composition.talent" :max_talent="composition.max_talent" category="team" />
-						<ranking-badge v-if="composition && composition.ranking <= 1000 && composition.in_garden" :id="composition.id" :ranking="composition.ranking" category="team" />
+						<ranking-badge v-if="composition && composition.ranking && composition.ranking <= 1000 && composition.in_garden" :id="composition.id" :ranking="composition.ranking" category="team" />
 						<span class="level">
 							• {{ composition.leeks.length }} <img src="/image/icon/black/leek.png">
 							• {{ $t('main.level_n', [composition.total_level]) }}
@@ -68,6 +68,7 @@ const props = defineProps<{
 	disabled?: boolean
 	bottom?: boolean
 	instant?: boolean
+	openDelay?: number
 }>()
 
 const emit = defineEmits<{
@@ -75,7 +76,14 @@ const emit = defineEmits<{
 }>()
 
 interface CompositionData {
+	id: number
+	name: string
 	leeks: Record<string, Record<string, number>>
+	team?: { id: number, name: string, emblem_changed: number }
+	ranking?: number
+	talent?: number
+	max_talent?: number
+	level?: number
 	[key: string]: unknown
 }
 const menu = useTemplateRef<{ updateLocation?: () => void }>('menu')
@@ -87,7 +95,7 @@ const locked = ref(false)
 const mouse = ref(false)
 const value = ref(false)
 
-const _open_delay = computed(() => props.instant ? 1 : 500)
+const _open_delay = computed(() => props.openDelay ?? (props.instant ? 1 : 500))
 const _close_delay = computed(() => props.instant ? 1 : 1)
 
 watch(() => props.id, () => {

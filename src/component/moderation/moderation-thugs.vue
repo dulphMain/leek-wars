@@ -46,7 +46,7 @@
 	}
 
 	const t = useNamespacedT('moderation-thugs')
-	const thugs = ref<Record<string, unknown>[] | null>(null)
+	const thugs = ref<{ id: number, name: string, warnings: number, [key: string]: unknown }[] | null>(null)
 
 	const breadcrumb_items = computed(() => [
 		{name: "Modération", link: '/moderation'},
@@ -54,15 +54,16 @@
 	])
 
 	LeekWars.get<ModerationRequest>('moderation/get-reportings').then(data => {
-		thugs.value = data.thugs
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		thugs.value = data.thugs as any
 		LeekWars.setTitle(t('title'))
 	})
 
-	function ban(farmer: Farmer) {
+	function ban(farmer: { id: number }) {
 		LeekWars.post('moderation/ban', {target: farmer.id}).then(() => {
 			LeekWars.toast("Éleveur banni")
 		}).error(error => {
-			LeekWars.toast(error)
+			LeekWars.toast(error.error as string)
 		})
 	}
 </script>

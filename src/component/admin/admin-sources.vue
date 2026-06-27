@@ -94,6 +94,16 @@
 									<v-icon>mdi-cog-outline</v-icon> {{ farmer.test_fights }}
 									<v-icon>mdi-trophy-outline</v-icon> {{ farmer.trophies }}
 								</div>
+								<div class="score">
+									<source-detail :id="farmer.id">
+										<div class="bar a" :title="barTitle('a', farmer.score && farmer.score.a)"><div class="fill" :style="{ height: (farmer.score && farmer.score.a || 0) + '%' }"></div></div>
+									</source-detail>
+									<source-friction :id="farmer.id">
+										<div class="bar b" :title="barTitle('b', farmer.score && farmer.score.b)"><div class="fill" :style="{ height: (farmer.score && farmer.score.b || 0) + '%' }"></div></div>
+									</source-friction>
+									<div class="bar c" :title="barTitle('c', farmer.score && farmer.score.c)"><div class="fill" :style="{ height: (farmer.score && farmer.score.c || 0) + '%' }"></div></div>
+									<div class="bar d" :title="barTitle('d', farmer.score && farmer.score.d)"><div class="fill" :style="{ height: (farmer.score && farmer.score.d || 0) + '%' }"></div></div>
+								</div>
 								<component :is="LeekWars.safeUrl(farmer.referer) ? 'a' : 'span'" class="source" :href="LeekWars.safeUrl(farmer.referer)" target="_blank" :title="farmer.referer">
 									{{ format(farmer.referer || '∅') }}
 								</component>
@@ -201,6 +211,8 @@
 	import { onBeforeUnmount, onMounted, ref } from 'vue'
 	import { useRouter } from 'vue-router'
 	import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
+	import SourceDetail from '@/component/admin/source-detail.vue'
+	import SourceFriction from '@/component/admin/source-friction.vue'
 	import Breadcrumb from '@/component/forum/breadcrumb.vue'
 	import { Line, Bar } from 'vue-chartjs'
 	import type { ChartData, ChartOptions } from 'chart.js'
@@ -266,12 +278,14 @@
 		team_id?: number
 		team_name?: string
 		ai_count: number
+		score?: { a: number, b: number, c?: number, d?: number }
 		[key: string]: unknown
 	}
 
 	const data = ref<Record<string, unknown> | null>(null)
 	const sources = ref<{ name: string, count: number, fights: number, test_fights: number, trophies: number }[] | null>(null)
 	const last = ref<SourceFarmer[] | null>(null)
+	const scoreLegend = ref<Record<string, string>>({})
 	const loading = ref(false)
 	let timer: ReturnType<typeof setInterval> | null = null
 	const last_farmers_by_day = ref<Record<string, SourceFarmer[]>>({})
@@ -318,6 +332,7 @@
 			data.value = d
 			sources.value = d.all
 			last.value = d.last
+			scoreLegend.value = (d.score_legend as Record<string, string>) || {}
 
 			last_farmers_by_day.value = {}
 			for (const farmer of last.value || []) {
@@ -421,6 +436,13 @@
 		return (v * 100).toFixed(1) + '%'
 	}
 
+	// Libellé d'une barre de score : texte fourni par le serveur (le client est public).
+	function barTitle(key: string, value: number | null | undefined): string {
+		const label = scoreLegend.value[key] || ''
+		if (value === null || value === undefined) return label
+		return label + ' : ' + Math.round(value) + '%'
+	}
+
 	function format(name: string) {
 		name = name.replace('https://', '')
 		if (name.endsWith('/')) name = name.substring(0, name.length - 1)
@@ -476,7 +498,7 @@
 		text-align: center;
 		.retention-label {
 			font-size: 13px;
-			color: #777;
+			color: var(--text-color-secondary);
 		}
 		.retention-value {
 			font-size: 24px;
@@ -594,6 +616,7 @@
 		/* ai     */ 34px
 		/* ip     */ minmax(120px, 1.1fr)
 		/* stats  */ minmax(100px, 1fr)
+		/* score  */ 64px
 		/* source */ minmax(80px, 1.3fr);
 	column-gap: 6px;
 	padding: 4px 6px;
@@ -707,14 +730,54 @@
 		.progress {
 			font-weight: 600;
 			font-size: 11px;
-			color: #777;
+			color: var(--text-color-secondary);
 			&.complete {
 				color: #4caf50;
 			}
 		}
 	}
-	.last-connection, .playtime, .ai-count {
-		color: #666;
+	.score {
+		display: flex;
+		flex-direction: row;
+		align-items: flex-end;
+		justify-content: center;
+		gap: 3px;
+		width: 100%;
+		height: 18px;
+		cursor: help;
+		// Le <span> activateur des menus (source-detail / source-friction) doit garder
+		// une vraie boîte alignée sur sa barre : avec `display: contents` il n'a aucune
+		// géométrie et l'overlay Vuetify se positionne en (0,0), coin haut-gauche.
+		> :deep(span) {
+			display: flex;
+			align-items: flex-end;
+			height: 100%;
+		}
+		.bar {
+			width: 12px;
+			height: 100%;
+			display: flex;
+			align-items: flex-end;
+			border-radius: 2px;
+			background: var(--background-disabled, #e0e0e0);
+			overflow: hidden;
+			.fill {
+				width: 100%;
+				border-radius: 2px;
+			}
+			&.a .fill {
+				background: #4caf50;
+			}
+			&.b .fill {
+				background: #ff9800;
+			}
+			&.c .fill {
+				background: #e53935;
+			}
+			&.d .fill {
+				background: #1e88e5;
+			}
+		}
 	}
 	.team-cell {
 		.team {
@@ -762,11 +825,11 @@ body.dark .farmer.connected {
 #app.app .last-farmers {
 	overflow-x: auto;
 	.farmer, .farmers > .date {
-		min-width: 1200px;
+		min-width: 1264px;
 	}
 }
 #app.app .farmer {
-	grid-template-columns: 60px minmax(100px, 1.3fr) 40px minmax(110px, 1.3fr) 60px minmax(70px, 1fr) minmax(80px, 1fr) 26px 30px minmax(110px, 1fr) minmax(90px, 1fr) minmax(70px, 1.1fr);
+	grid-template-columns: 60px minmax(100px, 1.3fr) 40px minmax(110px, 1.3fr) 60px minmax(70px, 1fr) minmax(80px, 1fr) 26px 30px minmax(110px, 1fr) minmax(90px, 1fr) 64px minmax(70px, 1.1fr);
 	column-gap: 4px;
 	font-size: 12px;
 }

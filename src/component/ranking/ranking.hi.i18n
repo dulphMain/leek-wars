@@ -56,5 +56,13 @@
 	"tournaments": "टूर्नामेंट",
 	"farmer_tournaments_title": "जीते गए एलेवर टूर्नामेंट",
 	"solo_tournaments_title": "जीते गए सोलो टूर्नामेंट",
-	"team_tournaments_title": "जीते गए टीम टूर्नामेंट"
+	"team_tournaments_title": "जीते गए टीम टूर्नामेंट",
+	"boss": "Boss",
+	"turns": "Turns",
+	"power": "Level",
+	"date": "Date",
+	"boss_mode_turns": "Fastest",
+	"boss_mode_leeks": "Fewest leeks",
+	"boss_mode_power": "Lowest level",
+	"boss_mode_first": "First"
 }

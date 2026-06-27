@@ -121,7 +121,18 @@
 	const route = useRoute()
 	const router = useRouter()
 
-	const options = reactive({
+	interface SearchOptions {
+		query: string
+		farmer: string
+		page: number
+		category: number | string
+		admin: boolean
+		moderator: boolean
+		order: string
+		resolved: string
+		[key: string]: unknown
+	}
+	const options = reactive<SearchOptions>({
 		query: '',
 		farmer: '',
 		page: 1,
@@ -130,7 +141,7 @@
 		moderator: false,
 		order: 'pertinence',
 		resolved: 'all',
-	} as Record<string, unknown>)
+	})
 	const defaultOptions = {
 		query: '',
 		farmer: '',
@@ -138,12 +149,13 @@
 		category: -1,
 		admin: false,
 		moderator: false,
-		order: 'pertinence'
+		order: 'pertinence',
+		resolved: 'all'
 	} as Record<string, unknown>
 	const queryLower = ref('')
 	const pages = ref(0)
-	const results = ref<Record<string, unknown>[] | null>(null)
-	const categories = ref<Record<string, unknown>[]>([])
+	const results = ref<{ id: number, pos: number, fname?: string, date: number, cid?: number, cname?: string, [key: string]: unknown }[] | null>(null)
+	const categories = ref<{ id: number, name: string, type: string }[]>([])
 	const searchStarted = ref(false)
 	const count = ref(0)
 	const floor = Math.floor
@@ -162,15 +174,19 @@
 		options.query = (route.query.query as string || '').replace(/\+/g, ' ')
 		queryLower.value = options.query.toLowerCase()
 		if (options.query === '-') { options.query = '' }
-		options.farmer = route.query.farmer || ''
+		options.farmer = (route.query.farmer as string) || ''
 		if (options.farmer === '-') { options.farmer = '' }
 		options.page = parseInt(route.query.page as string, 10) || 1
 		const category = route.query.category as string
-		options.category = (category === '-' || !category) ? -1 : category
-		options.order = route.query.order || 'pertinence'
-		options.admin = route.query.admin || false
-		options.moderator = route.query.moderator || false
-		options.resolved = route.query.resolved || 'all'
+		// Une catégorie forum couvre plusieurs langues (ex "2411,3") : on garde la
+		// liste d'ids telle quelle (le backend search2 filtre par id = ANY(...)), sinon
+		// parseInt la tronquait au 1er id (mauvaise langue) -> 0 résultat (#11974). Un id
+		// unique reste un number pour que le <select> de catégorie le retrouve.
+		options.category = (category === '-' || !category) ? -1 : (category.includes(',') ? category : parseInt(category, 10))
+		options.order = (route.query.order as string) || 'pertinence'
+		options.admin = !!route.query.admin
+		options.moderator = !!route.query.moderator
+		options.resolved = (route.query.resolved as string) || 'all'
 
 		searchStarted.value = false
 		results.value = null
@@ -196,28 +212,37 @@
 	const urlPagination = computed(() => {
 		const q = route.query
 		const parts: string[] = []
-		if (q.query && q.query !== '' && q.query !== '-') parts.push('query=' + q.query)
-		if (q.farmer && q.farmer !== '' && q.farmer !== '-') parts.push('farmer=' + q.farmer)
-		if (q.category && q.category !== '-1' && q.category !== '-') parts.push('category=' + q.category)
-		if (q.order && q.order !== 'pertinence') parts.push('order=' + q.order)
-		if (q.admin) parts.push('admin=' + q.admin)
-		if (q.moderator) parts.push('moderator=' + q.moderator)
-		if (q.resolved && q.resolved !== 'all') parts.push('resolved=' + q.resolved)
+		// encodeURIComponent sur chaque valeur : sinon une query avec apostrophe/espace/&
+		// produit une URL malformée que Vue Router/Firefox tentent de re-normaliser en
+		// boucle (spam de la barre d'URL, #4333).
+		const add = (key: string, value: unknown) => parts.push(key + '=' + encodeURIComponent(String(value)))
+		if (q.query && q.query !== '' && q.query !== '-') add('query', q.query)
+		if (q.farmer && q.farmer !== '' && q.farmer !== '-') add('farmer', q.farmer)
+		if (q.category && q.category !== '-1' && q.category !== '-') add('category', q.category)
+		if (q.order && q.order !== 'pertinence') add('order', q.order)
+		if (q.admin) add('admin', q.admin)
+		if (q.moderator) add('moderator', q.moderator)
+		if (q.resolved && q.resolved !== 'all') add('resolved', q.resolved)
 		return '/search?' + parts.join('&')
 	})
 
-	// URL pour la navigation au clic sur Rechercher — basé sur options (état courant des inputs).
-	const searchUrl = computed(() => {
-		const url = "/search"
-		const opts = Object.keys(options)
-			.filter(option => options[option] !== null && options[option] !== defaultOptions[option] && option !== 'page')
-			.map(option => option + '=' + options[option])
-			.join('&')
-		return url + '?' + opts
+	// Query pour la navigation au clic sur Rechercher — basé sur options (état courant des
+	// inputs). On passe un OBJET query (et non une string concaténée à la main) pour que
+	// Vue Router encode chaque valeur : une query avec apostrophe/espace (ex: "qualité d'une
+	// IA est affichée") produisait sinon une URL malformée bouclant en redirection (#4333).
+	const searchQuery = computed<Record<string, string>>(() => {
+		const query: Record<string, string> = {}
+		for (const option of Object.keys(options)) {
+			if (option === 'page') continue
+			const value = options[option]
+			if (value === null || value === defaultOptions[option]) continue
+			query[option] = String(value)
+		}
+		return query
 	})
 
 	function search() {
-		router.push(searchUrl.value)
+		router.push({ path: '/search', query: searchQuery.value })
 	}
 	function searchButton() {
 		search()
@@ -237,7 +262,7 @@
 	}
 	.label {
 		margin-right: 6px;
-		color: #777;
+		color: var(--text-color-secondary);
 		margin-bottom: 5px;
 	}
 	.search-button {
@@ -289,7 +314,7 @@
 		}
 	}
 	.result .headline {
-		color: #777;
+		color: var(--text-color-secondary);
 		font-size: 14px;
 	}
 	.result :deep(b) {

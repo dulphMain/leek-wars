@@ -118,6 +118,17 @@ class NotificationBuilder {
 			const godsonID = params[0]
 			const godsonName = params[1]
 			return new Notification(data, "/farmer/" + godsonID, "godfather.png", [godsonName])
+		} else if (type === NotificationType.GODFATHER_REQUEST) {
+			const requesterName = params[1]
+			return new Notification(data, "/farmer", "godfather.png", [requesterName])
+		} else if (type === NotificationType.GODFATHER_REQUEST_ACCEPTED) {
+			const godfatherID = params[0]
+			const godfatherName = params[1]
+			return new Notification(data, "/farmer/" + godfatherID, "godfather.png", [godfatherName])
+		} else if (type === NotificationType.GODFATHER_REQUEST_REFUSED) {
+			const targetID = params[0]
+			const targetName = params[1]
+			return new Notification(data, "/farmer/" + targetID, "godfather.png", [targetName])
 		} else if (type === NotificationType.FARMER_TOURNAMENT_END) {
 			const tournamentID = params[0]
 			const lastRound = parseInt(params[1])
@@ -208,7 +219,7 @@ class NotificationBuilder {
 			const teamID = params[0]
 			const farmerName = params[1]
 			return new Notification(data, "/team/" + teamID, "team_accepted.png", [farmerName])
-		} else if (type === NotificationType.BATTLE_ROYALE_REPORT || type === NotificationType.WAR_REPORT || type === NotificationType.CHEST_HUNT_REPORT || type === NotificationType.COLOSSUS_REPORT) {
+		} else if (type === NotificationType.BATTLE_ROYALE_REPORT || type === NotificationType.WAR_REPORT || type === NotificationType.CHEST_HUNT_REPORT || type === NotificationType.COLOSSUS_REPORT || type === NotificationType.COLOSSUS_OWN_REPORT) {
 			const fightID = params[0]
 			const result = params.length > 1 ? parseInt(params[1]) : 0
 			const leekName = params.length > 2 ? params[2] : ''

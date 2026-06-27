@@ -23,6 +23,9 @@
 		<image :x="avatarCx - avatarSize / 2" :y="y + size - avatarSize / 3 - avatarSize / 2" :width="avatarSize" :height="avatarSize" :xlink:href="farmerAvatar" :clip-path="'url(#' + clipId + ')'" />
 		<circle :cx="avatarCx" :cy="y + size - avatarSize / 3" :r="avatarSize / 2" fill="none" stroke="var(--background-disabled)" :stroke-width="1.5" />
 	</a>
+	<foreignObject v-if="displayName" :x="x" :y="nameAbove ? y - nameFontSize * 1.6 - 1 : y + size + 1" :width="size" :height="nameFontSize * 1.6" style="overflow: visible; pointer-events: none">
+		<div class="block-name-wrap"><span class="block-name" :style="nameStyle">{{ displayName }}</span></div>
+	</foreignObject>
 </template>
 
 <script setup lang="ts">
@@ -58,6 +61,7 @@ const props = defineProps<{
 	y: number
 	size: number
 	invert?: boolean
+	nameAbove?: boolean
 }>()
 
 const router = useRouter()
@@ -83,6 +87,22 @@ const entityId = computed(() => {
 	if (!props.item?.link) return 0
 	const match = props.item.link.match(/^\/(leek|farmer|team)\/(\d+)$/)
 	return match ? parseInt(match[2]) : 0
+})
+// Nom affiché sous la case du bracket (#4212) : confiné à la largeur de la case,
+// tronqué par CSS (ellipsis) seulement s'il déborde réellement. Le serveur suffixe
+// le nom par " (niveau)", retiré ici pour l'affichage.
+const displayName = computed(() => (props.item?.name ?? '').replace(/ \(\d+\)$/, ''))
+// Taille de texte proportionnelle à la case, progression adoucie sur les grosses
+// cases (base fixe + pente réduite) : ≈ 9px pour size 50, ≈ 14px pour size 120.
+const nameFontSize = computed(() => 5.5 + props.size * 0.07)
+const nameStyle = computed(() => {
+	const fs = nameFontSize.value
+	return {
+		fontSize: fs + 'px',
+		lineHeight: (fs * 1.3) + 'px',
+		padding: (fs * 0.08) + 'px ' + (fs * 0.35) + 'px',
+		borderRadius: (fs * 0.35) + 'px',
+	}
 })
 
 function activate() {
@@ -124,5 +144,24 @@ function mouseleave() {
 		width: 100%;
 		height: 100%;
 		cursor: pointer;
+	}
+	.block-name-wrap {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+	}
+	.block-name {
+		max-width: 100%;
+		box-sizing: border-box;
+		font-weight: 500;
+		color: #fff;
+		background: rgba(0, 0, 0, 0.55);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		pointer-events: none;
 	}
 </style>

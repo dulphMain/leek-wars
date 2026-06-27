@@ -183,27 +183,7 @@
 		tooltipVisible.value = false
 	}
 
-	interface SchemeData { id: number; result: number; items: ([number, number] | null)[] }
-
-	function isCraftable(scheme: SchemeData): boolean {
-		if (!store.state.farmer) return false
-		const farmer = store.state.farmer
-		for (const ingredient of scheme.items) {
-			if (!ingredient) continue
-			const [itemId, quantity] = ingredient
-			if (itemId === 148) {
-				if (farmer.habs < quantity) return false
-			} else {
-				const found = farmer.resources.find((i) => i.template === itemId)
-					|| farmer.components.find((i) => i.template === itemId)
-					|| farmer.potions.find((i) => i.template === itemId)
-					|| farmer.weapons.find((i) => i.template === itemId)
-					|| farmer.chips.find((i) => i.template === itemId)
-				if (!found || found.quantity < quantity) return false
-			}
-		}
-		return true
-	}
+	interface SchemeData { id: number; result: number; items: ([number, number] | null)[]; quantity: number }
 
 	const all_schemes = computed<SchemeData[]>(() => {
 		if (!store.state.farmer) return []
@@ -222,7 +202,7 @@
 			schemes = schemes.filter(s => LeekWars.items[s.result].type === filter.value)
 		}
 		if (craftableOnly.value) {
-			schemes = schemes.filter(s => isCraftable(s))
+			schemes = schemes.filter(s => store.getters.scheme_possible(s))
 		}
 		return [...schemes].sort((a, b) => {
 			if (sort.value === Sort.LEVEL) return LeekWars.items[b.result].level - LeekWars.items[a.result].level
@@ -245,6 +225,7 @@
 
 	function resizerMousedown(e: MouseEvent) {
 		const panel = bottomPanel.value
+		if (!panel) return
 		const column = (instance!.proxy!.$el as HTMLElement).querySelector('.column') as HTMLElement
 		const startY = e.clientY
 		const startHeight = panel.expanded ? bottomHeight.value : 0
@@ -323,7 +304,6 @@
 		font-size: 20px;
 		opacity: 1;
 		color: #aaa;
-		padding: 0 20px;
 	}
 	&:hover .v-icon {
 		opacity: 1;

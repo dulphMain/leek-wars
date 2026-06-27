@@ -33,6 +33,7 @@
 		mode: string
 		locale?: string
 	}>()
+	const emit = defineEmits<{ rendered: [] }>()
 
 	const { t, locale: i18nLocale } = useI18n()
 	const route = useRoute()
@@ -77,7 +78,12 @@
 
 			DOMPurify.removeHook('uponSanitizeElement')
 
-			html.value = links(sanitized)
+			const newHtml = links(sanitized)
+			// HTML identique (édit sans effet sur le rendu, ex. espace en fin de ligne) :
+			// le v-html ne recrée pas le DOM, re-traiter formaterait une seconde fois
+			// les blocs déjà formatés et re-monterait les sous-composants.
+			if (newHtml === html.value) { return }
+			html.value = newHtml
 
 			summary = { children: [] }
 			const stack: (SummaryNode | { children: SummaryNode[] })[] = [summary]
@@ -418,6 +424,7 @@
 						}
 					}
 				}
+				emit('rendered')
 			})
 		}
 
@@ -641,7 +648,7 @@
 	.md :deep(blockquote) {
 		padding: 0 1em;
 		p {
-			color: #777;
+			color: var(--text-color-secondary);
 			padding: 4px 0;
 		}
 		border-left: .3em solid #aaa;
@@ -764,7 +771,7 @@
 				}
 				.letter {
 					font-weight: 500;
-					color: #777;
+					color: var(--text-color-secondary);
 				}
 				.v-input {
 					display: inline-block;

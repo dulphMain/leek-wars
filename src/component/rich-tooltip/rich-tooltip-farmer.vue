@@ -20,7 +20,7 @@
 								<emblem :team="farmer.team" :title="farmer.team.name" />
 							</router-link>
 							<flag v-if="farmer.country" :code="farmer.country" class="country" />
-							<lw-title v-if="farmer.title.length" :title="farmer.title" />
+							<lw-title v-if="farmer.title && farmer.title.length" :title="farmer.title" />
 							<div class="spacer"></div>
 							<v-btn v-if="!store.state.farmer || id != store.state.farmer.id" variant="text" icon="mdi-chat" size="small" @click="sendMessage()" />
 						</span>
@@ -82,6 +82,7 @@ const props = defineProps<{
 	disabled?: boolean
 	bottom?: boolean
 	instant?: boolean
+	openDelay?: number
 }>()
 
 const emit = defineEmits<{
@@ -101,6 +102,21 @@ interface RichFarmerData {
 	name: string
 	avatar_changed: number
 	leeks: Record<string, RichFarmerLeek>
+	title?: number[]
+	talent: number
+	max_talent: number
+	talent_more: number
+	ranking: number
+	level: number
+	total_level: number
+	team?: { id: number, name: string, [key: string]: unknown } | null
+	team_emblem_changed?: number
+	points: number
+	forum_messages?: number
+	connected: boolean
+	color?: string
+	country?: string | null
+	in_garden?: boolean
 	[key: string]: unknown
 }
 
@@ -114,7 +130,7 @@ const locked = ref(false)
 const mouse = ref(false)
 const value = ref(false)
 
-const _open_delay = computed(() => props.instant ? 1 : 500)
+const _open_delay = computed(() => props.openDelay ?? (props.instant ? 1 : 500))
 const _close_delay = computed(() => props.instant ? 1 : 1)
 
 watch(() => props.id, () => {

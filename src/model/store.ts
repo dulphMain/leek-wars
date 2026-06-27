@@ -6,6 +6,7 @@ import { Notification, NotificationType } from '@/model/notification'
 import { Team } from '@/model/team'
 
 import Vuex, { Store } from 'vuex'
+import { clearAICache } from './ai-code-cache'
 import { fileSystem } from './filesystem'
 import { Hat } from './hat'
 import { Leek } from './leek'
@@ -16,6 +17,19 @@ import { Chip } from './chip'
 import { SchemeTemplate } from './scheme'
 import { Loadout } from './loadout'
 import { NotificationBuilder } from '@/model/notification-builder'
+
+// Met à jour (ou ajoute) l'entrée d'un farmer dans chat.farmers à partir d'une version
+// fraîche reçue du serveur, en rafraîchissant les champs d'affichage volatils (#11625).
+function updateChatFarmer(chat: Chat, farmer: Farmer) {
+	const existing = chat.farmers.find(f => f.id === farmer.id)
+	if (existing) {
+		existing.name = farmer.name
+		existing.avatar_changed = farmer.avatar_changed
+		existing.color = farmer.color
+	} else {
+		chat.farmers.push(farmer)
+	}
+}
 
 export interface AccountInfo {
 	id: number
@@ -91,6 +105,16 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 								return resource.quantity >= item[1]
 							}
 						}
+						for (const resource of state.farmer.hats) {
+							if (resource.template === item[0]) {
+								return resource.quantity >= item[1]
+							}
+						}
+						for (const resource of state.farmer.pomps) {
+							if (resource.template === item[0]) {
+								return resource.quantity >= item[1]
+							}
+						}
 					}
 				}
 				return false
@@ -114,14 +138,17 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 				token: string,
 				accounts?: AccountInfo[]
 			}) {
-			LeekWars.arena.reset()
+			// Désinscrit l'arène du compte précédent (socket encore actif) tout en
+			// gardant sa mémoire d'inscription pour la restaurer au retour.
+			LeekWars.arena.suspend()
 			LeekWars.bossSquads.leaveSquad()
+			// Lire les comptes sauvegardés AVANT le reset (qui supprime la clé localStorage)
+			let savedAccounts: AccountInfo[] = []
+			try { savedAccounts = JSON.parse(localStorage.getItem('accounts') || '[]') } catch { /* ignore corrupt localStorage */ }
 			store.commit("reset")
 			state.farmer = data.farmer
 			// Fusionner les comptes du serveur avec les comptes déconnectés en localStorage
 			const serverAccounts: AccountInfo[] = data.accounts || []
-			let savedAccounts: AccountInfo[] = []
-			try { savedAccounts = JSON.parse(localStorage.getItem('accounts') || '[]') } catch { /* ignore corrupt localStorage */ }
 			const merged = [...serverAccounts]
 			for (const saved of savedAccounts) {
 				if (!merged.find(a => a.id === saved.id)) {
@@ -176,6 +203,7 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 			localStorage.setItem('logout', '' + Date.now())
 			store.commit("reset")
 			// Supprime le cache des IAs et l'état de l'éditeur (confidentialité).
+			clearAICache() // code des IA (IndexedDB)
 			for (const key of Object.keys(localStorage)) {
 				if (key.startsWith('ai/') || key.startsWith('editor/tabs') || key.startsWith('editor/last-code-')
 					|| key.startsWith('editor/scroll/') || key.startsWith('editor/viewstate/')
@@ -354,9 +382,11 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 
 			chat.last_date = message.date
 			chat.last_farmer = message.farmer
-			if (!chat.farmers.find(f => f.id === message.farmer.id)) {
-				chat.farmers.push(message.farmer)
-			}
+			// Le serveur renvoie des infos d'auteur FRAÎCHES (Farmers.get = requête DB par
+			// message). On rafraîchit donc l'entrée existante (pp/pseudo/couleur) au lieu de
+			// la jeter : sinon le farmer mis en cache à l'ouverture de la conversation gardait
+			// son ancienne pp/pseudo après un changement côté envoyeur (#11625).
+			updateChatFarmer(chat, message.farmer)
 			if (data.unshift) {
 				chat.unshift(message)
 			} else {
@@ -397,8 +427,8 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 
 		'add-conversation-participant'(state: LeekWarsState, data: {id: number, farmer: Farmer}) {
 			const chat = state.chat[data.id]
-			if (chat && !chat.farmers.find(f => f.id === data.farmer.id)) {
-				chat.farmers.push(data.farmer)
+			if (chat) {
+				updateChatFarmer(chat, data.farmer)
 			}
 		},
 
@@ -703,6 +733,7 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 						level: hat_template.level,
 						hat_template: hat_template.id,
 						quantity,
+						time: data.time,
 					})
 				}
 			} else if (data.type === ItemType.POTION) {
@@ -866,6 +897,19 @@ const store: Store<LeekWarsState> = new Vuex.Store({
 				}
 			}
 			state.farmer.components.push({id: component.id, quantity: 1, template: component.template})
+		},
+
+		// Réconciliation en masse du stock libre (non équipé) après un apply de loadout :
+		// le serveur a déplacé des items entre stock et équipement, on remplace les listes
+		// sinon un item déséquipé "disparaît" de l'éditeur jusqu'au rechargement (#11972).
+		'set-weapons'(state: LeekWarsState, weapons: Weapon[]) {
+			if (state.farmer) { state.farmer.weapons = weapons }
+		},
+		'set-chips'(state: LeekWarsState, chips: Chip[]) {
+			if (state.farmer) { state.farmer.chips = chips }
+		},
+		'set-components'(state: LeekWarsState, components: Farmer['components']) {
+			if (state.farmer) { state.farmer.components = components }
 		},
 
 		'last-connection'(state: LeekWarsState, time: number) {

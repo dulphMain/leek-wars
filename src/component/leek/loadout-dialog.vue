@@ -14,7 +14,7 @@
 							<v-icon class="drag-handle">mdi-drag-vertical</v-icon>
 							<div class="loadout-icon">
 								<img v-if="isCharac(loadout.icon)" :src="'/image/charac/' + loadout.icon + '.png'" width="24" height="24">
-								<span v-else-if="loadout.icon" :key="loadout.icon" v-emojis class="emoji-icon">{{ loadout.icon }}</span>
+								<span v-else-if="loadout.icon" :key="loadout.icon" class="emoji-icon" v-html="formatEmojisText(loadout.icon)"></span>
 								<v-icon v-else size="24">mdi-package-variant-closed</v-icon>
 							</div>
 							<div class="loadout-name">
@@ -91,7 +91,7 @@
 				<div class="row-name-icon">
 					<emoji-picker class="icon-picker" @pick="pickEmoji">
 						<img v-if="isCharac(editing.icon)" :src="'/image/charac/' + editing.icon + '.png'" width="32" height="32">
-						<span v-else-if="editing.icon" :key="editing.icon" v-emojis class="emoji-display">{{ editing.icon }}</span>
+						<span v-else-if="editing.icon" :key="editing.icon" class="emoji-display" v-html="formatEmojisText(editing.icon)"></span>
 						<v-icon v-else size="32">mdi-emoticon-outline</v-icon>
 					</emoji-picker>
 					<input v-model="editing.name" class="name-input" :placeholder="$t('main.loadout_name_placeholder')" maxlength="60" type="text">
@@ -294,6 +294,7 @@
 	import { Loadout, LoadoutComponent, LoadoutStats } from '@/model/loadout'
 	import { capitalToStatBonus, statBonusToCapital, baseStatFor, totalCapitalForLevel } from '@/model/capital'
 	import { store } from '@/model/store'
+	import { formatEmojisText } from '@/model/emojis'
 	import EmojiPicker from '@/component/chat/emoji-picker.vue'
 	import Item from '@/component/item.vue'
 	import LoadoutStatsPicker from '@/component/leek/loadout-stats-picker.vue'
@@ -559,6 +560,7 @@
 		},
 		methods: {
 			isCharac(icon: string) { return CHARACTERISTICS.includes(icon) },
+			formatEmojisText,
 			skippedItemTKey(s: SkippedItem): string {
 				if (!s) return ''
 				const item = LeekWars.items[s.template]
@@ -598,7 +600,7 @@
 						current.splice(evt.newIndex, 0, item)
 						store.commit('set-loadouts', current)
 						LeekWars.post('loadout/reorder', { order: JSON.stringify(current.map(l => l.id)) })
-							.error((e) => LeekWars.toast(e))
+							.error((e) => LeekWars.toast(e.error as string))
 					},
 				})
 			},
@@ -778,14 +780,14 @@
 						this.editing = null
 						this.originalEditingSnapshot = ''
 						this.saving = false
-					}).error((e) => { LeekWars.toast(e); this.saving = false })
+					}).error((e) => { LeekWars.toast(e.error as string); this.saving = false })
 				} else {
 					LeekWars.post('loadout/create', payload).then((data) => {
 						store.commit('add-loadout', data.set)
 						this.editing = null
 						this.originalEditingSnapshot = ''
 						this.saving = false
-					}).error((e) => { LeekWars.toast(e); this.saving = false })
+					}).error((e) => { LeekWars.toast(e.error as string); this.saving = false })
 				}
 			},
 			apply(loadout: Loadout) {
@@ -805,6 +807,13 @@
 					this.leek!.weapons = data.leek.weapons
 					this.leek!.chips = data.leek.chips
 					this.leek!.components = data.leek.components
+					// Resync du stock libre (#11972) : un item déséquipé par l'apply doit
+					// réapparaître dans l'éditeur sans rechargement.
+					if (data.inventory) {
+						store.commit('set-weapons', data.inventory.weapons)
+						store.commit('set-chips', data.inventory.chips)
+						store.commit('set-components', data.inventory.components)
+					}
 					this.$emit('applied')
 					if (data.skipped && data.skipped.length > 0) {
 						this.skippedItems = data.skipped
@@ -814,7 +823,7 @@
 					}
 					this.applyingItemsOnly = null
 				}).error((e) => {
-					LeekWars.toast(e)
+					LeekWars.toast(e.error as string)
 					this.applyingItemsOnly = null
 				})
 			},
@@ -842,6 +851,13 @@
 					this.leek!.weapons = data.leek.weapons
 					this.leek!.chips = data.leek.chips
 					this.leek!.components = data.leek.components
+					// Resync du stock libre (#11972) : un item déséquipé par l'apply doit
+					// réapparaître dans l'éditeur sans rechargement.
+					if (data.inventory) {
+						store.commit('set-weapons', data.inventory.weapons)
+						store.commit('set-chips', data.inventory.chips)
+						store.commit('set-components', data.inventory.components)
+					}
 					if (data.stats_changed) {
 						// Mise à jour des stats du leek + décrément potion côté store
 						this.applyStatsLocally(loadout)
@@ -858,7 +874,7 @@
 				}).error((e) => {
 					if (e && e.error === 'no_restat_potion') LeekWars.toast(this.$t('main.loadout_no_restat_potion'))
 					else if (e && e.error === 'not_enough_capital') LeekWars.toast(this.$t('main.loadout_not_enough_capital'))
-					else LeekWars.toast(e)
+					else LeekWars.toast(e.error as string)
 					this.applying = null
 				})
 			},
@@ -905,7 +921,7 @@
 			remove(loadout: Loadout) {
 				LeekWars.delete('loadout/delete', { set_id: loadout.id }).then(() => {
 					store.commit('remove-loadout', loadout.id)
-				}).error((e) => { LeekWars.toast(e) })
+				}).error((e) => { LeekWars.toast(e.error as string) })
 			},
 		},
 	})

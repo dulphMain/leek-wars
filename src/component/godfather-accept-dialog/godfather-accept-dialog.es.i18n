@@ -1,0 +1,8 @@
+{
+	"title": "¿{0} como padrino?",
+	"stats": "Nivel {0} · {1} puerros",
+	"rewards": "Acepta y recibe 20.000 {habs} + 10 {crystals} + 20 combates.",
+	"accept": "Aceptar",
+	"refuse": "Rechazar",
+	"accepted": "¡{0} ahora es tu padrino!"
+}

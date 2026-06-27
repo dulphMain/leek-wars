@@ -9,6 +9,7 @@ import '@/component/editor/leekscript.scss'
 import '@/component/editor/leekscript-monokai.scss'
 import Emblem from '@/component/emblem.vue'
 import LeekImage from '@/component/leek-image.vue'
+import TrophyIcon from '@/component/trophy-icon.vue'
 import NotificationElement from '@/component/notifications/notification.vue'
 import Popup from '@/component/popup.vue'
 import RankingBadge from '@/component/ranking-badge.vue'
@@ -27,6 +28,9 @@ import { scroll_to_hash } from '@/router-functions'
 
 import { createVuetify } from 'vuetify'
 import 'vuetify/styles'
+import { da, de, en, es, fi, fr, id, it, ja, ko, nl, no, pl, pt, ru, sv, zhHans } from 'vuetify/locale'
+import { locale as initialLocale } from '@/locale'
+import { watch } from 'vue'
 import { aliases as mdiSvgAliases } from 'vuetify/iconsets/mdi-svg'
 import { mdiIconSet } from './icon-set'
 import { formatEmojis } from './emojis'
@@ -37,7 +41,15 @@ const Console = defineAsyncComponent(() => import('@/component/app/console.vue')
 
 const cspNonce = (document.querySelector('meta[name="csp-nonce"]') as HTMLMetaElement | null)?.content || undefined
 
+// Vuetify ne fournit pas de messages pour 'hi' (→ fallback 'en') et nomme le chinois 'zhHans'.
+const toVuetifyLocale = (lang: string) => lang === 'zh' ? 'zhHans' : lang
+
 const vuetify = createVuetify({
+	locale: {
+		locale: toVuetifyLocale(initialLocale),
+		fallback: 'en',
+		messages: { da, de, en, es, fi, fr, id, it, ja, ko, nl, no, pl, pt, ru, sv, zhHans },
+	},
 	icons: {
 		defaultSet: 'mdi',
 		aliases: mdiSvgAliases,
@@ -84,6 +96,12 @@ const vuetify = createVuetify({
 	},
 })
 
+// Garde la locale des composants Vuetify (footer v-data-table, etc.) synchronisée
+// quand la langue change à chaud, sans rechargement de page.
+watch(() => i18n.locale, (lang) => {
+	vuetify.locale.current.value = toVuetifyLocale(lang)
+})
+
 // Cache-busted reload on Vite asset errors, with a cooldown to break out of
 // refresh-on-every-click loops when the new bundle still errors.
 const PRELOAD_RELOAD_KEY = 'vite-preload-reload-at'
@@ -99,16 +117,68 @@ function reloadWithCacheBust() {
 	window.location.replace(url.toString())
 }
 
-window.addEventListener('vite:preloadError', reloadWithCacheBust)
+window.addEventListener('vite:preloadError', (event) => {
+	// Un preloadError pendant une navigation = chunk dynamique annulé par le navigateur
+	// (surtout Firefox), PAS forcément un déploiement périmé : l'asset existe souvent
+	// encore (HTTP 200). On ne recharge donc toute la page (#_r=) QUE si l'asset a vraiment
+	// disparu (404 = vrai chunk périmé) ; sinon on laisse Vite/le routeur réessayer.
+	// Le marqueur ":suppressed" mesure les rechargements intempestifs ainsi évités.
+	// Le message est soit "...module: https://.../assets/x.js" (URL absolue, erreurs JS),
+	// soit "Unable to preload CSS for /assets/x.css" (chemin relatif, erreurs CSS) : capter les deux.
+	const message = (event as { payload?: { message?: string } })?.payload?.message || ''
+	const assetUrl = message.match(/https?:\/\/\S+|\/[^\s'"]+\.(?:css|m?js)/)?.[0]
+	if (!assetUrl) { reloadWithCacheBust(); return }
+	fetch(assetUrl, { method: 'HEAD', cache: 'no-store' })
+		.then(r => {
+			if (r.ok) reportHidden('vite:preloadError:suppressed', message) // asset 200 → reload évité
+			else reloadWithCacheBust()                                      // 404 → vrai stale → reload
+		})
+		.catch(() => reportHidden('vite:preloadError:suppressed', message + ' (head error)'))
+})
+
+// Enregistre une erreur normalement avalée (bruit navigateur/cache, chunk périmé,
+// annulation Monaco) en "masquée" côté serveur : loggée pour mesurer son volume mais
+// sans issue GitHub ni notification admin, et exclue de la vue par défaut de #admin/errors.
+// Throttle 1s indépendant des vraies erreurs pour ne pas s'auto-étouffer mutuellement.
+let lastHiddenSent = 0
+function reportHidden(message: string, stack?: string) {
+	if (LeekWars.DEV) return
+	const now = Date.now()
+	if (now - lastHiddenSent < 1000) return
+	lastHiddenSent = now
+	try {
+		LeekWars.post('error/report', {
+			error: message,
+			stack: (stack || '(no stack)') + '\n\nOrigin: hidden',
+			file: document.location.href,
+			locale: i18n.locale,
+			user_agent: navigator.userAgent,
+			hidden: true,
+			build_date: typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : null,
+			build_commit: typeof __BUILD_COMMIT__ !== 'undefined' ? __BUILD_COMMIT__ : null,
+		})
+	} catch { /* best effort */ }
+}
 
 // Suppress Monaco internal error when hovering markers on a disposed editor
 window.addEventListener('error', (event) => {
 	if (event.error?.message?.includes('InstantiationService has been disposed')) {
+		reportHidden(event.error.message, event.error.stack)
 		event.preventDefault()
 	}
 })
 
 let lastErrorSent = 0
+
+// Instrumentation #4163 : tracer la SÉQUENCE d'erreurs (chunk/async-loader → cascade parentNode)
+// et l'écart depuis le dernier bump routerViewKey (rustine), pour distinguer un PREMIER crash
+// organique d'une cascade auto-induite par la rustine. Read-only, aucun changement de comportement.
+let droppedSinceLastReport = 0
+const recentEvents: { t: number, kind: string, msg: string }[] = []
+function recordEvent(kind: string, msg: unknown) {
+	recentEvents.push({ t: Date.now(), kind, msg: String(msg ?? '').slice(0, 80) })
+	if (recentEvents.length > 14) recentEvents.shift()
+}
 
 interface NavSnapshot {
 	fullPath: string
@@ -192,20 +262,53 @@ export function reportVueError(err: unknown, vm: unknown, info: unknown, origin:
 
 	if (LeekWars.DEV) return
 
+	// Instrumentation v2 (#4163) : mémoriser LA première erreur de la session (corrupteur
+	// racine d'un el null) en sessionStorage — le buffer roule et la perd. Capturée pour TOUT
+	// type d'erreur (y compris chunk/async-loader) et réinjectée dans chaque rapport complet.
+	let firstCrashTrace = ''
+	try {
+		const stored = sessionStorage.getItem('lw_first_crash')
+		if (!stored) {
+			sessionStorage.setItem('lw_first_crash', JSON.stringify({
+				m: (e?.message || String(e) || '').slice(0, 100), info: String(infoAny),
+				route: currentNav?.fullPath || null, prev: previousNav?.fullPath || null,
+				sinceNav: currentNav ? Date.now() - currentNav.at : null, at: Date.now(),
+			}))
+		} else {
+			const f = JSON.parse(stored)
+			firstCrashTrace = '\n\nFirst crash this session (' + (Date.now() - f.at) + 'ms ago): ' + f.m +
+				' | info=' + f.info + ' | route=' + f.route + ' prev=' + f.prev + ' sinceNav=' + f.sinceNav + 'ms'
+		}
+	} catch { /* empty */ }
+
+	// Échecs de chargement de chunk/CSS (Chrome: "Failed to fetch...", Firefox: "error loading...").
+	// On les logge en masqué SANS recharger : la récupération après déploiement est gérée par le
+	// handler `vite:preloadError` (HEAD-checké) qui fire pour le même échec et ne recharge que sur un vrai 404.
 	if (e?.message?.includes('Failed to fetch dynamically imported module') ||
+		e?.message?.includes('error loading dynamically imported module') ||
 		e?.message?.includes('Loading chunk') ||
 		e?.message?.includes('Loading CSS chunk') ||
 		e?.message?.includes('Unable to preload CSS')) {
+		recordEvent('chunk', e?.message)
+		reportHidden(e?.message || String(e), e?.stack)
 		return
 	}
 
+	// runtime-13 = ASYNC_COMPONENT_LOADER : sur un échec de chunk, le handler vite:preloadError
+	// gère déjà la récup ; sur un vrai throw de composant, recharger ne sert à rien (boucle). On logge.
 	if (infoAny?.includes?.('runtime-13')) {
-		reloadWithCacheBust()
+		recordEvent('async-loader', e?.message)
+		reportHidden((e?.message || String(e)) + ' [' + infoAny + ']', e?.stack)
 		return
 	}
 
-	if (Date.now() - lastErrorSent < 1000) return
+	if (Date.now() - lastErrorSent < 1000) {
+		droppedSinceLastReport++
+		recordEvent('dropped', e?.message)
+		return
+	}
 	lastErrorSent = Date.now()
+	recordEvent('crash', e?.message)
 
 	let errorBody: string
 	try {
@@ -273,15 +376,48 @@ export function reportVueError(err: unknown, vm: unknown, info: unknown, origin:
 		if (currentNav) lines.push('Route: ' + currentNav.fullPath + (currentNav.name ? ' [' + currentNav.name + ']' : ''))
 		if (previousNav) lines.push('Previous route: ' + previousNav.fullPath + (previousNav.name ? ' [' + previousNav.name + ']' : ''))
 		if (currentNav) lines.push('Since last navigation: ' + (Date.now() - currentNav.at) + 'ms')
+		// Écart entre les 2 dernières navs : un gap minuscule = double-nav rapprochée
+		// (interruption probable de la nav précédente pendant son démontage).
+		if (currentNav && previousNav) lines.push('Gap prev→current nav: ' + (currentNav.at - previousNav.at) + 'ms')
 		if (routeSubtree) lines.push('Route subtree: <' + routeSubtree + '>')
 		if (nullElPath) lines.push('Null-el path: ' + nullElPath)
 		if (lines.length) navTrace = '\n\n' + lines.join('\n')
 	} catch { /* empty */ }
 
-	const stack = (e?.stack || '(no stack)') + '\n\nOrigin: ' + origin + '\nVue info: ' + infoAny + componentTrace + navTrace
+	let instrTrace = ''
+	try {
+		const now = Date.now()
+		const lastReload = parseInt(sessionStorage.getItem('parentNode-reload-at') || '0', 10)
+		const reloadAge = lastReload ? (now - lastReload) + 'ms' : 'never'
+		const seq = recentEvents.map(ev => ev.kind + ' +' + (now - ev.t) + 'ms' + (ev.msg ? ' ' + ev.msg : '')).join('\n  ')
+		instrTrace = '\n\nSince last auto-reload: ' + reloadAge +
+			'\nDropped since last report: ' + droppedSinceLastReport +
+			'\nRecent events (oldest→newest):\n  ' + seq
+		droppedSinceLastReport = 0
+	} catch { /* empty */ }
+
+	const stack = (e?.stack || '(no stack)') + '\n\nOrigin: ' + origin + '\nVue info: ' + infoAny + componentTrace + navTrace + instrTrace + firstCrashTrace
 	const build_date = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : null
 	const build_commit = typeof __BUILD_COMMIT__ !== 'undefined' ? __BUILD_COMMIT__ : null
 	LeekWars.post('error/report', { error, stack, file, locale, user_agent, build_date, build_commit })
+
+	// Récupération après corruption de l'arbre de vnodes (un el devenu null : Vue re-render
+	// fait alors parentNode/nextSibling/style(null) → crash, et la session crashe en BOUCLE).
+	// Le reset par routerViewKey++ (essayé 06/2026) NE RÉCUPÈRE PAS : observé en prod via
+	// l'instrumentation #4163, la session crashe en boucle 4+ min malgré les bumps. On revient
+	// au HARD RELOAD (le comportement d'avant le 11/06), qui repart d'un arbre Vue sain. Délai
+	// court pour laisser le POST error/report partir ; cooldown 30s anti-boucle de reload.
+	const m = e?.message || ''
+	if (m.includes('parentNode') || m.includes('nextSibling') ||
+		m.includes("reading 'style'") || m.includes('property "style"') || m.includes("reading 'el'")) {
+		const RELOAD_KEY = 'parentNode-reload-at'
+		const last = parseInt(sessionStorage.getItem(RELOAD_KEY) || '0', 10)
+		if (Date.now() - last > 30_000) {
+			recordEvent('reload', '')
+			sessionStorage.setItem(RELOAD_KEY, Date.now().toString())
+			setTimeout(() => location.reload(), 400)
+		}
+	}
 }
 
 export function createSubApp(component: Component, props?: Record<string, unknown>, origin: string = 'sub-app'): VueApp {
@@ -326,7 +462,11 @@ const app = createApp({
 			} else if (event.altKey && event.which === 39) {
 				emitter.emit('next', event)
 			} else if (event.ctrlKey && event.keyCode === 80) {
-				emitter.emit('ctrlP', event)
+				if (event.shiftKey) {
+					emitter.emit('ctrlShiftP', event)
+				} else {
+					emitter.emit('ctrlP', event)
+				}
 			}
 		})
 		window.addEventListener('keyup', (event) => {
@@ -386,6 +526,7 @@ const app = createApp({
 		// Ignore Monaco "Canceled" errors (normal behavior when switching files/canceling operations)
 		window.addEventListener('unhandledrejection', (event) => {
 			if (event.reason?.message === 'Canceled' || event.reason?.message === 'Model not found') {
+				reportHidden(event.reason.message, event.reason.stack)
 				event.preventDefault()
 			}
 		})
@@ -524,6 +665,7 @@ app.mixin({
 })
 
 app.component('leek-image', LeekImage)
+app.component('trophy-icon', TrophyIcon)
 app.component('avatar', Avatar)
 app.component('emblem', Emblem)
 app.component('talent', Talent)
@@ -644,6 +786,10 @@ const dochash = {
 
 app.directive('dochash', dochash)
 
+// ⚠️ N'utiliser v-emojis QUE sur un élément en v-html (contenu opaque pour Vue).
+// Sur des enfants trackés par Vue (interpolation {{ }} ou v-text), le replaceChild
+// ci-dessous désynchronise vnode.el → crash "parentNode of null" (#4163).
+// Pour du texte brut tracké, utiliser formatEmojisText(...) en v-html à la place.
 app.directive('emojis', (el: HTMLElement) => {
 	el.childNodes.forEach((child: ChildNode) => {
 		if (child.nodeType === Node.TEXT_NODE) {
@@ -685,6 +831,32 @@ const vm = app.mount('#app2') as ComponentPublicInstance & {
 }
 setVueMain(vm)
 
+// Firefox : le chargement natif loading="lazy" est peu fiable sur les pages à
+// forte densité d'images (trophées d'éleveur, marché). Les images restent non
+// chargées, même dans le viewport (plaintes joueurs 06/2026). On force eager en
+// passant l'attribut lazy à eager dès qu'une image entre dans le DOM (couvre les
+// trophées rendus en asynchrone). Firefox uniquement : Chrome gère bien le lazy
+// natif et conserve le gain de bande passante.
+if (LeekWars.firefox) {
+	const eagerify = (root: ParentNode) => {
+		(root as Element).querySelectorAll?.('img[loading="lazy"]').forEach((img) => img.setAttribute('loading', 'eager'))
+	}
+	eagerify(document)
+	new MutationObserver((mutations) => {
+		for (const mutation of mutations) {
+			for (const node of mutation.addedNodes) {
+				if (node.nodeType !== Node.ELEMENT_NODE) continue
+				const el = node as Element
+				if (el.tagName === 'IMG') {
+					if (el.getAttribute('loading') === 'lazy') el.setAttribute('loading', 'eager')
+				} else {
+					eagerify(el)
+				}
+			}
+		}
+	}).observe(document.body, { childList: true, subtree: true })
+}
+
 // Restore saved locale in dev/local mode
 if (LeekWars.DEV || LeekWars.LOCAL) {
 	const savedLocale = localStorage.getItem('locale')
@@ -693,7 +865,19 @@ if (LeekWars.DEV || LeekWars.LOCAL) {
 	}
 }
 
-router.afterEach((to) => {
+// Instrumentation #4163 : tracer le DÉPART de chaque navigation dans le buffer, pour révéler
+// les navigations rapprochées/interrompues (hypothèse : RouterView met à jour pendant le
+// démontage de la page précédente → oldSubTree.el null → crash). beforeEach = capture aussi
+// les navs qui n'aboutissent pas (redirect, annulation), invisibles dans afterEach.
+router.beforeEach((to) => {
+	recordEvent('nav-start', to.fullPath)
+	return true
+})
+
+router.afterEach((to, _from, failure) => {
+	// failure.type : 4=duplicated (push vers la route courante), 2=aborted, 8/16=redirect.
+	// Un nav-done SANS nav-start = nav qui a sauté beforeEach → ce type le caractérise (#4163).
+	recordEvent('nav-done' + (failure ? '✗' + ((failure as { type?: number }).type ?? '?') : ''), to.fullPath)
 	previousNav = currentNav
 	currentNav = {
 		fullPath: to.fullPath,

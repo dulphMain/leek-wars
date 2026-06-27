@@ -3,9 +3,8 @@
 </template>
 
 <script setup lang="ts">
-import type { FightLeek } from '@/model/fight'
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 defineProps<{
-	leek: FightLeek
+	leek: any
 }>()
 </script>

@@ -1,5 +1,5 @@
 <template lang="html">
-	<div v-if="LeekWars.header" class="header">
+	<header v-if="LeekWars.header" class="header">
 		<div class="header-left">
 			<router-link to="/">
 				<div class="logo-wrapper">
@@ -43,6 +43,14 @@
 						</v-list-item>
 					</v-list>
 				</v-menu>
+				<div class="button-wrapper">
+					<router-link to="/help">
+						<div class="header-button">
+							<v-icon>mdi-help-circle-outline</v-icon>
+							<span class="help-label">{{ $t('main.help') }}</span>
+						</div>
+					</router-link>
+				</div>
 				<div class="button-wrapper">
 					<router-link to="/login">
 						<div class="header-button">
@@ -175,7 +183,7 @@
 				</div>
 			</div>
 		</div>
-	</div>
+	</header>
 </template>
 
 <script lang="ts" setup>
@@ -381,7 +389,7 @@
 		padding: 8px;
 		display: block;
 		text-align: center;
-		color: #777;
+		color: var(--text-color-secondary);
 	}
 	.see-all:hover {
 		background: var(--pure-white);
@@ -416,6 +424,9 @@
 		}
 	}
 	@media screen and (max-width: 599px) {
+		.help-label {
+			display: none;
+		}
 		#app.connected .header {
 			display: none;
 		}

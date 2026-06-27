@@ -90,6 +90,9 @@
 		<panel v-if="group" toggle="group/members" icon="mdi-account-group">
 			<template #title>{{ $t('members') }} ({{ group.members.length }})</template>
 			<template #actions>
+				<div v-if="group.is_supervisor" class="button" @click="inviteDialog = true">
+					<v-icon>mdi-account-plus</v-icon> {{ $t('invite_friends') }}
+				</div>
 				<div v-if="group.is_supervisor" class="button" @click="giveMoneyDialog = true; giveMoneyTarget = null">
 					<v-icon>mdi-hand-coin-outline</v-icon>
 				</div>
@@ -182,7 +185,7 @@
 					<b v-else class="level">{{ $t('main.level_n', [group.level]) }}</b>
 					<div class="card characteristics">
 						<div v-for="c in LeekWars.characteristics_table" :key="c" class="characteristic" :class="c">
-							<characteristic-tooltip  v-slot="{ props }" :characteristic="c" :value="characteristics[c]" :total="characteristics[c]" :leek="characteristics" :test="true">
+							<characteristic-tooltip  v-slot="{ props }" :characteristic="c" :value="characteristics[c]" :total="characteristics[c]" :leek="{ level: group?.level ?? 1, ...characteristics }" :test="true">
 								<img v-bind="props" :src="'/image/charac/' + c + '.png'">
 							</characteristic-tooltip>
 							<span class="stat" :class="'color-' + c" v-html="characteristics[c]"></span>
@@ -293,13 +296,13 @@
 						<avatar :farmer="item" />
 						<div>
 							<input v-model="item.name" type="text" :class="{error: item.name_error}" @focusout="updateMemberName(item)">
-							<div v-if="item.name_error" class="error">{{ $t('error_' + item.name_error.error, item.name_error.params) }}</div>
+							<div v-if="item.name_error" class="error">{{ $t('error_' + item.name_error.error, (item.name_error.params ?? []) as (string | number)[]) }}</div>
 						</div>
 					</div>
 				</template>
 				<template #item.leek="{ item }">
 					<input v-model="item.leek" type="text" :class="{error: item.leek_error}" @focusout="updateMemberLeekName(item)">
-					<div v-if="item.leek_error" class="error">{{ $t('error_' + item.leek_error.error, item.leek_error.params) }}</div>
+					<div v-if="item.leek_error" class="error">{{ $t('error_' + item.leek_error.error, (item.leek_error.params ?? []) as (string | number)[]) }}</div>
 				</template>
 				<template #item.team="{ item }">
 					<rich-tooltip-team v-if="item.team" :id="item.team.id" v-slot="{ props }" :bottom="true">
@@ -311,11 +314,11 @@
 				</template>
 				<template #item.mail="{ item }">
 					<input v-model="item.mail" type="email" :class="{error: item.mail_error}" @focusout="updateMemberEmail(item)">
-					<div v-if="item.mail_error" class="error">{{ $t('error_' + item.mail_error.error, item.mail_error.params) }}</div>
+					<div v-if="item.mail_error" class="error">{{ $t('error_' + item.mail_error.error, (item.mail_error.params ?? []) as (string | number)[]) }}</div>
 				</template>
 				<template #item.password="{ item }">
 					<input v-model="item.password" type="text" :class="{error: item.password_error}" @focusout="updateMemberPassword(item)">
-					<div v-if="item.password_error" class="error">{{ $t('error_' + item.password_error.error, item.password_error.params) }}</div>
+					<div v-if="item.password_error" class="error">{{ $t('error_' + item.password_error.error, (item.password_error.params ?? []) as (string | number)[]) }}</div>
 				</template>
 				<template #item.actions="{ item }">
 					<div class="flex actions">
@@ -450,6 +453,8 @@
 
 		<capital-dialog ref="capitalDialog" v-model="capitalDialogOpened" :leek="(characteristics as any)" :total-capital="totalCapital" :restat="true" />
 
+		<invite-dialog v-model="inviteDialog" />
+
 		<popup v-if="group" v-model="giveItemDialog" :width="800" class="give-item-dialog">
 			<template #icon>
 				<v-icon>mdi-gift-outline</v-icon>
@@ -556,10 +561,12 @@
 	import CharacteristicTooltip from '@/component/leek/characteristic-tooltip.vue'
 	import RichTooltipItem from '@/component/rich-tooltip/rich-tooltip-item.vue'
 	import { Weapon, WeaponsData, WeaponTemplate } from '@/model/weapon'
+	import type { ItemTemplate } from '@/model/item'
 	import { ORDERED_CHIPS } from '@/model/sorted_chips'
 	import { CHIPS } from '@/model/chips'
 	import Item from '@/component/item.vue'
 	import CapitalDialog from '../leek/capital-dialog.vue'
+	import InviteDialog from '@/component/invite-dialog/invite-dialog.vue'
 	import { computed, defineAsyncComponent, reactive, ref, useTemplateRef } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useRoute, useRouter } from 'vue-router'
@@ -569,7 +576,7 @@
 	const TournamentsHistory = defineAsyncComponent(() => import('@/component/history/tournaments-history.vue'))
 	const Chat = defineAsyncComponent(() => import(/* webpackChunkName: "chat" */ `@/component/chat/chat.vue`))
 
-	defineOptions({ name: 'Group', i18n: {}, mixins: [...mixins], components: { RichTooltipTeam, RichTooltipFarmer, CharacteristicTooltip, RichTooltipItem, CapitalDialog, Item } })
+	defineOptions({ name: 'Group', i18n: {}, mixins: [...mixins], components: { RichTooltipTeam, RichTooltipFarmer, CharacteristicTooltip, RichTooltipItem, CapitalDialog, Item, InviteDialog } })
 
 	useI18n() // initialize local scope for <i18n-t>
 	const t = useNamespacedT('group')
@@ -590,13 +597,14 @@
 	const capitalDialog = useTemplateRef<{ capital: number }>('capitalDialog')
 	const applyingEquipment = ref(false)
 	const membersDialog = ref(false)
+	const inviteDialog = ref(false)
 	const characteristics = reactive<{[key: string]: number} & {level: number}>({ level: 0 })
 	const deleteMemberDialog = ref(false)
 	const memberToDelete = ref<Member | null>(null)
 	const giveItemDialog = ref(false)
 	const giveItemTab = ref('tab-0')
 	const giveItemConfirmDialog = ref(false)
-	const itemToGive = ref<{id: number} | null>(null)
+	const itemToGive = ref<ItemTemplate | null>(null)
 	const giveItemTarget = ref<Member | null>(null)
 	const giveMoneyDialog = ref(false)
 	const giveMoneyTarget = ref<Member | null>(null)
@@ -994,7 +1002,7 @@
 	}
 
 	function giveItemFinal() {
-		if (!group.value || !giveItemTarget.value) { return }
+		if (!group.value || !giveItemTarget.value || !itemToGive.value) { return }
 		LeekWars.post('groupe/give-item', {
 			group_id: group.value.id,
 			member_id: giveItemTarget.value.id,

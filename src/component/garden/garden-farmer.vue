@@ -1,5 +1,5 @@
 <template lang="html">
-	<rich-tooltip-farmer :id="farmer.id" v-slot="{ props }" :bottom="farmer.id !== $store.state.farmer?.id" :instant="true" class="rich">
+	<rich-tooltip-farmer :id="farmer.id" v-slot="{ props }" :bottom="farmer.id !== $store.state.farmer?.id" :instant="true" :open-delay="10" class="rich">
 		<div class="elem" v-bind="props">
 			<avatar :farmer="farmer" />
 			<div class="name">{{ farmer.name }}</div>
@@ -18,7 +18,7 @@
 import RichTooltipFarmer from '@/component/rich-tooltip/rich-tooltip-farmer.vue'
 
 defineProps<{
-	farmer: Record<string, unknown>
+	farmer: { id: number, name: string, talent: number, leek_count?: number, total_level?: number, country?: string | null, [key: string]: unknown }
 }>()
 </script>
 

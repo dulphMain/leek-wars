@@ -47,7 +47,10 @@ class Texture {
 			game.resourceLoaded(this.path)
 			this.loaded = true
 		}
-		const onerror = () => () => {
+		// Double flèche d'origine `() => () => {...}` : le corps n'était jamais
+		// exécuté, donc une texture en échec/abort (réseau instable) n'incrémentait
+		// pas loadedData et pouvait bloquer le compteur de chargement (#11573).
+		const onerror = () => {
 			console.warn("Error loading : " + this.path)
 			game.resourceLoaded(this.path)
 			this.texture.removeEventListener('load', onload)
@@ -141,6 +144,7 @@ class T {
 	public static cyan_lightning = new Texture(LeekWars.STATIC + 'image/weapon/cyan_lightning.png')
 	public static purple_lightning = new Texture(LeekWars.STATIC + 'image/weapon/purple_lightning.png')
 	public static red_lightning = new Texture(LeekWars.STATIC + 'image/weapon/red_lightning.png')
+	public static yellow_lightning = new Texture(LeekWars.STATIC + 'image/weapon/yellow_lightning.png')
 	public static blue_lightning = new Texture(LeekWars.STATIC + 'image/weapon/blue_lightning.png')
 	public static green_lightning = new Texture(LeekWars.STATIC + 'image/weapon/green_lightning.png')
 	public static double_gun = new Texture(LeekWars.STATIC + 'image/weapon/double_gun.png', true, SHADOW_QUALITY)
@@ -185,6 +189,8 @@ class T {
 	public static bazooka = new Texture(LeekWars.STATIC + 'image/weapon/bazooka.png', true, SHADOW_QUALITY)
 	public static cart_bazooka = new Texture(LeekWars.STATIC + 'image/weapon/cart_bazooka.png')
 	public static rocket = new Texture(LeekWars.STATIC + 'image/weapon/rocket.png')
+	public static plutonium_rocket = new Texture(LeekWars.STATIC + 'image/weapon/plutonium_rocket.png')
+	public static plutonium_bazooka = new Texture(LeekWars.STATIC + 'image/weapon/plutonium_bazooka.png', true, SHADOW_QUALITY)
 	public static neutrino = new Texture(LeekWars.STATIC + 'image/weapon/neutrino.png', true, SHADOW_QUALITY)
 	public static cart_neutrino = new Texture(LeekWars.STATIC + 'image/weapon/cart_neutrino.png')
 	public static dark_katana = new Texture(LeekWars.STATIC + 'image/weapon/dark_katana.png', true, SHADOW_QUALITY)
@@ -307,6 +313,7 @@ class T {
 	public static explosion_mark = new Texture(LeekWars.STATIC + 'image/fight/explosion_mark.png')
 	public static explosion_rock = new Texture(LeekWars.STATIC + 'image/fight/explosion_rock.png')
 	public static explosion_rock2 = new Texture(LeekWars.STATIC + 'image/fight/explosion_rock2.png')
+	public static boulder = new Texture(LeekWars.STATIC + 'image/fight/boulder.png')
 	public static summon_leaf = new Texture(LeekWars.STATIC + 'image/fight/summon_leaf.png')
 	public static japan_grass = new Texture(LeekWars.STATIC + 'image/map/japan_grass.png')
 	public static japan_rock = new Texture(LeekWars.STATIC + 'image/map/japan_rock.png')
@@ -378,6 +385,13 @@ class T {
 	public static chip_doping = new Texture(LeekWars.STATIC + 'image/chip/glyph/doping.png')
 	public static chip_adrenaline = new Texture(LeekWars.STATIC + 'image/chip/glyph/adrenaline.png')
 	public static chip_motivation = new Texture(LeekWars.STATIC + 'image/chip/glyph/motivation.png')
+	// Chips boss (icones directes faute de glyph dédié)
+	public static chip_kemuridama = new Texture(LeekWars.STATIC + 'image/chip/kemuridama.png')
+	public static chip_shuriken = new Texture(LeekWars.STATIC + 'image/chip/shuriken.png')
+	public static shuriken_star = new Texture(LeekWars.STATIC + 'image/chip/shuriken_star.png')
+	public static chip_fire_ball = new Texture(LeekWars.STATIC + 'image/chip/fire_ball.png')
+	public static chip_trebuchet = new Texture(LeekWars.STATIC + 'image/chip/trebuchet.png')
+	public static chip_thunder = new Texture(LeekWars.STATIC + 'image/chip/thunder.png')
 	public static chip_rage = new Texture(LeekWars.STATIC + 'image/chip/glyph/rage.png')
 	public static chip_seven_league_boots = new Texture(LeekWars.STATIC + 'image/chip/glyph/seven_league_boots.png')
 	public static chip_leather_boots = new Texture(LeekWars.STATIC + 'image/chip/glyph/leather_boots.png')

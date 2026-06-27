@@ -1,6 +1,9 @@
 <template>
-	<error v-if="error" :title="$t('trophy')" :message="$t('main.page_not_found')" />
-	<div v-else class="page">
+	<!-- Racine STABLE unique (.page toujours montée) : un v-if/v-else à la racine crée un Fragment
+	     dont l'el peut devenir null pendant le patch/unmount -> "parentNode of null" (#4163, cf leek.vue). -->
+	<div class="page">
+		<error v-if="error" :title="$t('trophy')" :message="$t('main.page_not_found')" />
+		<template v-else>
 		<div class="page-bar page-header">
 			<h1>
 				<breadcrumb :items="[{name: $t('trophies'), link: '/trophies'}, {name: $t('trophy.' + code), link: ''}]" :raw="true" />
@@ -11,7 +14,7 @@
 		</panel>
 		<panel v-if="trophy" class="first">
 			<div class="flex">
-				<img class="image" :src="'/image/trophy/' + code + '.svg'" :class="{clickable: trophy.code === 'joker'}" @click="trophy.code === 'joker' && LeekWars.lucky(true)">
+				<trophy-icon class="image" :code="code" :class="{clickable: trophy.code === 'joker'}" @click="trophy.code === 'joker' && LeekWars.lucky(true)" />
 				<div class="right">
 					<div class="name">
 						{{ $t('trophy.' + code) }}
@@ -48,8 +51,8 @@
 					</div>
 				</div>
 				<div>
-					<h4><v-icon>mdi-chart-line-variant</v-icon> {{ $t('progress') }}</h4>
-					<div v-if="trophy.variable" class="bar-wrapper">
+					<h4 v-if="trophy.variable && trophy.progression != null"><v-icon>mdi-chart-line-variant</v-icon> {{ $t('progress') }}</h4>
+					<div v-if="trophy.variable && trophy.progression != null" class="bar-wrapper">
 						{{ $filters.number(trophy.progression) }} / {{ $filters.number(trophy.threshold) }}
 						<div class="trophy-bar" :class="{full: trophy.unlocked}">
 							<div :style="{width: Math.floor(100 * Math.min(trophy.threshold, trophy.progression) / trophy.threshold) + '%'}" class="bar striked"></div>
@@ -153,6 +156,7 @@
 				<div v-ripple class="red" @click="deleteTrophy()">{{ $t('main.delete') }}</div>
 			</template>
 		</popup>
+		</template>
 	</div>
 </template>
 

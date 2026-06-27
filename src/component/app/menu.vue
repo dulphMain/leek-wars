@@ -1,5 +1,5 @@
 <template lang="html">
-	<div class="menu">
+	<nav class="menu">
 
 		<div v-if="!LeekWars.mobile" class="menu-button" @click="LeekWars.menuCollapsed = !LeekWars.menuCollapsed">
 			<v-icon v-if="LeekWars.menuCollapsed">mdi-chevron-right</v-icon>
@@ -239,7 +239,7 @@
 					<template v-for="reward in $store.state.farmer.rewards" :key="reward.trophy">
 					<div v-if="TROPHIES[reward.trophy - 1]" class="reward">
 						<router-link :to="'/trophy/' + TROPHIES[reward.trophy - 1].code">
-							<img :src="'/image/trophy/' + TROPHIES[reward.trophy - 1].code + '.svg'">
+							<trophy-icon :code="TROPHIES[reward.trophy - 1].code" />
 							{{ $t('trophy.' + TROPHIES[reward.trophy - 1].code) }}
 							<div class="spacer"></div>
 							<div>{{ $filters.number(reward.habs) }} <span class="hab"></span></div>
@@ -250,7 +250,7 @@
 				</div>
 			</v-card>
 		</v-menu>
-	</div>
+	</nav>
 </template>
 
 <script setup lang="ts">
@@ -298,6 +298,10 @@
 	let lastT = 0
 
 	function onPointerDown(e: PointerEvent) {
+		// Le swipe n'ouvre le menu en tiroir qu'en mode mobile. Quand le menu
+		// normal est déjà affiché en barre latérale (iPad large, desktop), on
+		// ignore le geste pour éviter d'animer un tiroir par-dessus.
+		if (!LeekWars.mobile) { return }
 		downX = e.clientX
 		downY = e.clientY
 		if (LeekWars.menuExpanded || downX < window.innerWidth / 3) {
@@ -814,16 +818,28 @@
 	}
 	.arena-dot {
 		display: inline-block;
+		position: relative;
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
 		background: var(--primary);
+	}
+	// Halo pulsé via un pseudo-élément animé en transform/opacity (compositables
+	// GPU, aucun repaint). L'ancienne version animait box-shadow, ce qui forçait
+	// un repaint à chaque frame et faisait chauffer un cœur de CPU à 100% (#11920).
+	.arena-dot::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: 50%;
+		background: rgba(95, 173, 27, 0.6);
 		animation: arena-pulse 2s infinite;
+		pointer-events: none;
 	}
 	@keyframes arena-pulse {
-		0% { box-shadow: 0 0 0 0 rgba(95, 173, 27, 0.6); }
-		70% { box-shadow: 0 0 0 8px rgba(95, 173, 27, 0); }
-		100% { box-shadow: 0 0 0 0 rgba(95, 173, 27, 0); }
+		0% { transform: scale(1); opacity: 0.6; }
+		70% { transform: scale(3); opacity: 0; }
+		100% { transform: scale(3); opacity: 0; }
 	}
 	.arena-popup-my-leeks {
 		display: flex;

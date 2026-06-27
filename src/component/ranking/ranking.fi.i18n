@@ -53,5 +53,13 @@
 	"turrets_killed": "Tornit",
 	"turrets_killed_title": "Torneja tuhottu",
 	"damage": "Vahinko",
-	"damage_title": "Aiheutettu vahinko"
+	"damage_title": "Aiheutettu vahinko",
+	"boss": "Boss",
+	"turns": "Turns",
+	"power": "Level",
+	"date": "Date",
+	"boss_mode_turns": "Fastest",
+	"boss_mode_leeks": "Fewest leeks",
+	"boss_mode_power": "Lowest level",
+	"boss_mode_first": "First"
 }

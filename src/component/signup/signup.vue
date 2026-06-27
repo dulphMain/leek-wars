@@ -1,5 +1,16 @@
 <template lang="html">
 	<div>
+		<div v-if="godfather_info" class="godfather-invite-banner">
+			<avatar :farmer="(godfather_info as any)" class="godfather-avatar" />
+			<div class="godfather-text">
+				<div class="invite">{{ $t('godfather_invite', [godfather_info.name]) }}</div>
+				<div class="stats">{{ $t('godfather_stats', [godfather_info.total_level, godfather_info.leek_count]) }}</div>
+				<i18n-t keypath="godfather_rewards" tag="div" class="rewards">
+					<template #habs><span class="hab"></span></template>
+					<template #crystals><span class="crystal"></span></template>
+				</i18n-t>
+			</div>
+		</div>
 		<div class="page-header page-bar">
 			<h1>{{ $t('title') }}</h1>
 		</div>
@@ -353,6 +364,7 @@
 	 * for file in *.webp; do convert $file -resize 400 small_$file; done
 	 */
 	import ChangelogVersion from '@/component/changelog/changelog-version.vue'
+	import Avatar from '@/component/avatar.vue'
 	import { locale } from '@/locale'
 	import { mixins, useNamespacedT } from '@/model/i18n'
 	import { LeekWars } from '@/model/leekwars'
@@ -383,6 +395,7 @@
 	const router = useRouter()
 
 	const godfather = ref('')
+	const godfather_info = ref<{ id: number, name: string, avatar_changed: number, total_level: number, leek_count: number } | null>(null)
 	const leek_count = ref(85290)
 	const farmer_ranking = ref<RankingFarmerRow[]>([])
 	const leek_ranking = ref<RankingLeekRow[]>([])
@@ -448,6 +461,11 @@
 
 	LeekWars.setTitle("Leek Wars: online leek programming game")
 	godfather.value = 'godfather' in route.params ? route.params.godfather as string : ''
+	if (godfather.value) {
+		LeekWars.get('farmer/get-godfather-info/' + encodeURIComponent(godfather.value)).then(data => {
+			godfather_info.value = data ?? null
+		})
+	}
 	LeekWars.get('leek/get-count').then(data => {
 		leek_count.value = data.leeks
 	})
@@ -460,10 +478,12 @@
 		leek_ranking.value = data.leeks
 		team_ranking.value = data.teams
 	})
-	import(/* webpackChunkName: "changelog-[request]" */ `@/component/changelog/changelog.${i18nLocale.value}.yaml`).then((module) => {
+	// Seules ces langues ont un changelog traduit ; les autres retombent sur l'anglais.
+	const changelogLocale = ['fr', 'en', 'es', 'it'].includes(i18nLocale.value) ? i18nLocale.value : 'en'
+	import(/* webpackChunkName: "changelog-[request]" */ `@/component/changelog/changelog.${changelogLocale}.yaml`).then((module) => {
 		translations.value = module.default
 	})
-	LeekWars.get('changelog/get/' + i18nLocale.value).then(data => {
+	LeekWars.get('changelog/get/' + changelogLocale).then(data => {
 		last_version.value = data.changelog[0]
 	})
 
@@ -500,7 +520,7 @@
 				router.push('/signup/success/' + login.value)
 			}
 		}).error(errs => {
-			for (const error of errs) {
+			for (const error of (errs as unknown as [number, string, (string | number)[]][])) {
 				const form = ['login', 'leek', 'email', 'password1', 'password2', 'godfather'][error[0]]
 				addError(form, t('error_' + error[1], error[2]) as string)
 			}
@@ -530,6 +550,43 @@
 </script>
 
 <style lang="scss" scoped>
+	.godfather-invite-banner {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		background: var(--primary);
+		color: white;
+		padding: 12px 20px;
+		border-radius: 4px;
+		margin-bottom: 12px;
+		.godfather-avatar {
+			width: 56px;
+			height: 56px;
+			flex: 0 0 auto;
+		}
+		.godfather-text {
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+			min-width: 0;
+		}
+		.invite {
+			font-size: 18px;
+			font-weight: 500;
+		}
+		.stats {
+			font-size: 14px;
+			opacity: 0.85;
+		}
+		.rewards {
+			font-size: 15px;
+			margin-top: 4px;
+			.hab, .crystal {
+				vertical-align: middle;
+				margin: 0 2px;
+			}
+		}
+	}
 	@media screen and (max-width: 900px) {
 		.top .column6:nth-child(2) .panel {
 			margin-top: 12px;

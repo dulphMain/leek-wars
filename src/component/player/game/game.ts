@@ -3,7 +3,7 @@ import Player from '@/component/player/player.vue'
 import { Bubble } from '@/component/player/game/bubble'
 import { Bulb } from '@/component/player/game/bulb'
 import { Farmer } from '@/model/farmer'
-import { Acceleration, Adrenaline, Alteration, Antidote, Armor, Armoring, Arsenic, Awakening, BallAndChain, Bandage, Bark, BoxingGlove, Brainwashing, Bramble, Burning, Carapace, ChipAnimation, Collar, Covetousness, Covid, Crushing, Cure, Desintegration, DevilStrike, DivineProtection, Dome, Doping, Drip, Elevation, Exasperation, Ferocity, Fertilizer, Flame, Flash, Fortress, Fracture, Grapple, Helmet, Ice, Iceberg, Inversion, Jump, Knowledge, LeatherBoots, Liberation, Lightning, Loam, Manumission, Meteorite, Mirror, Motivation, Mutation, Pebble, Plague, Plasma, Precipitation, Prism, Protein, Punishment, Rage, Rampart, Reflexes, Regeneration, Remission, Repotting, Resurrection, Rock, Rockfall, Serum, SevenLeagueBoots, Shield, Shock, SlowDown, Solidification, Soporific, Spark, Stalactite, Steroid, Stretching, Summon, Teleportation, Therapy, Thorn, Toxin, Tranquilizer, Transmutation, Vaccine, Vampirization, Venom, Wall, WarmUp, Whip, WingedBoots, Wizardry } from '@/component/player/game/chips'
+import { Acceleration, Adrenaline, Alteration, Antidote, Armor, Armoring, Arsenic, Awakening, BallAndChain, Bandage, Bark, BoxingGlove, Brainwashing, Bramble, Burning, Carapace, ChipAnimation, Collar, effectRecipients, Covetousness, Covid, Crushing, Cure, Desintegration, DevilStrike, DivineProtection, Dome, Doping, Drip, Elevation, Exasperation, Ferocity, Fertilizer, FireBall, Flame, Flash, Fortress, Fracture, Grapple, Helmet, Ice, Iceberg, Inversion, Jump, Kemuridama, Knowledge, LeatherBoots, Liberation, Lightning, Loam, Manumission, Meteorite, Mirror, Motivation, Mutation, Pebble, Plague, Plasma, Precipitation, Prism, Protein, Punishment, Rage, Rampart, Reflexes, Regeneration, Remission, Repotting, Resurrection, Rock, Rockfall, Serum, SevenLeagueBoots, Shield, Shock, Shuriken, SlowDown, Solidification, Soporific, Spark, Stalactite, Steroid, Stretching, Summon, Teleportation, Therapy, Thorn, Thunder, Toxin, Tranquilizer, Transmutation, Trebuchet, Vaccine, Vampirization, Venom, Wall, WarmUp, Whip, WingedBoots, Wizardry } from '@/component/player/game/chips'
 import { DamageType, EntityDirection, EntityType, FightEntity } from '@/component/player/game/entity'
 import { Ground, GroundTexture, OBSTACLES } from '@/component/player/game/ground'
 import { Leek } from '@/component/player/game/leek'
@@ -12,7 +12,7 @@ import { Obstacle } from '@/component/player/game/obstacle'
 import { Particles } from '@/component/player/game/particles'
 import { S, Sound } from '@/component/player/game/sound'
 import { T, Texture } from '@/component/player/game/texture'
-import { Axe, Bazooka, BLaser, Broadsword, DarkKatana, Destroyer, DoubleGun, Electrisor, EnhancedLightninger, Excalibur, ExplorerRifle, Fish, FlameThrower, Gazor, GrenadeLauncher, HeavySword, IllicitGrenadeLauncher, JLaser, Katana, Laser, Lightninger, MachineGun, Magnum, MLaser, MysteriousElectrisor, Neutrino, Odachi, Pistol, RevokedMLaser, Rhino, Rifle, Scythe, Shotgun, Sword, UnbridledGazor, UnstableDestroyer, QuantumRifle } from '@/component/player/game/weapons'
+import { Axe, Bazooka, BLaser, Broadsword, DarkKatana, Destroyer, DoubleGun, Electrisor, EnhancedLightninger, Excalibur, ExplorerRifle, Fish, FlameThrower, Gazor, GrenadeLauncher, HeavySword, IllicitGrenadeLauncher, JLaser, Katana, Laser, Lightninger, MachineGun, Magnum, MLaser, MysteriousElectrisor, Neutrino, Odachi, Pistol, PlutoniumBazooka, RevokedMLaser, Rhino, Rifle, Scythe, Shotgun, Sword, UnbridledGazor, UnstableDestroyer, QuantumRifle } from '@/component/player/game/weapons'
 import { locale } from '@/locale'
 import { Action, ActionType } from '@/model/action'
 import { Area } from '@/model/area'
@@ -55,9 +55,11 @@ interface GameTextMarker {
 /** Console line (action, log, trophy…) displayed in the side panel */
 interface ConsoleLine {
 	id?: string
-	action?: unknown
-	log?: unknown
-	trophy?: unknown
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	action?: any
+	log?: unknown[]
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	trophy?: any
 }
 
 /** Progress-bar marker for the timeline */
@@ -183,7 +185,7 @@ export const WEAPONS = [
 	Rhino, // 23
 	ExplorerRifle, // 24
 	Lightninger, // 25
-	null, // 26
+	PlutoniumBazooka, // 26
 	Neutrino, // 27
 	null, // 28
 	Bazooka, // 29
@@ -200,7 +202,7 @@ export const WEAPONS = [
 	QuantumRifle, // 40
 ]
 
-const CHIP_ANIMATIONS = [
+export const CHIP_ANIMATIONS = [
 	Bandage, // 1
 	Cure, // 2
 	Drip, // 3
@@ -305,12 +307,12 @@ const CHIP_ANIMATIONS = [
 	null,
 	null,
 	Prism, // 104
-	null, // 105
-	null, // 106
-	null, // 107
-	null, // 108
+	Shuriken, // 105
+	Kemuridama, // 106
+	FireBall, // 107
+	Trebuchet, // 108
 	Awakening, // 109
-	null, // 110
+	Thunder, // 110
 	null, // 111
 	null, // 112
 	DivineProtection, // 113
@@ -485,7 +487,7 @@ class Game {
 
 		this.mapType = this.data.map.type + 1
 		this.map = this.maps[this.mapType]
-		if (this.mapType === 0 && this.dark) {
+		if (this.mapType === 0 && this.isDark()) {
 			this.map = this.darkNexus
 		}
 		this.map.seed = fight.id
@@ -1274,7 +1276,7 @@ class Game {
 
 			const caster = this.leeks[this.currentPlayer!]
 			const chip_template = CHIPS[LeekWars.chipTemplates[chip].item]
-			const targets = this.ground.field.getTargets(cell, chip_template.area, caster.cell!, chip_template.max_range) as FightEntity[]
+			const targets = this.ground.field.getTargets(cell, chip_template.area, caster.cell!, chip_template.max_range, chip_template.min_range) as FightEntity[]
 
 			action.entity = caster
 			action.item = chip_template
@@ -1304,10 +1306,16 @@ class Game {
 				}
 				// Update leeks cells after inversion / repotting
 				if (chip === 39 || chip === 83) {
-					if (targets.length && !caster.states.has(State.STATIC) && !targets[0].states.has(State.STATIC)) { // C'est possible de lancer dans le vide
+					// Filtre par le masque de cibles de l'effet, comme la lecture normale
+					// (Repotting.launch via recipientsOf) : sinon le chemin de saut
+					// intervertit aussi avec un ennemi alors que le Rempotage (masque 22)
+					// ne le cible pas, d'où un décalage visuel (#11548). L'Inversion
+					// (masque 31) continue de swapper les ennemis.
+					const recipient = effectRecipients(chip_template.effects, caster, targets)[0]
+					if (recipient && !caster.states.has(State.STATIC) && !recipient.states.has(State.STATIC)) { // C'est possible de lancer dans le vide
 						const launcher_cell = caster.cell!
 						cell.setEntity(caster)
-						launcher_cell.setEntity(targets[0])
+						launcher_cell.setEntity(recipient)
 					}
 				}
 				this.actionDone()
@@ -1358,7 +1366,7 @@ class Game {
 			}
 
 			// console.log(leek.weapon, weapon_template)
-			const targets = this.ground.field.getTargets(cell, weapon_template.area, leek.cell!, weapon_template.max_range) as FightEntity[]
+			const targets = this.ground.field.getTargets(cell, weapon_template.area, leek.cell!, weapon_template.max_range, weapon_template.min_range) as FightEntity[]
 
 			const duration = leek.useWeapon(cell, targets, result)
 			this.actionDone(Math.max(6, duration))
@@ -1424,12 +1432,15 @@ class Game {
 				entity.cell.entity = null
 				entity.cell = null
 			}
+			// Toujours logger la mort, y compris pendant un jump, sinon l'annonce
+			// disparait du panneau quand on revient en arrière et ne réapparait
+			// qu'en rejouant l'action (#11649).
+			this.log(action)
 			if (this.jumping) {
 				entity.active = false
 				entity.kill(false, DamageType.DEFAULT, 0, 0)
 				this.actionDone()
 			} else {
-				this.log(action)
 				const killer = this.leeks[action.params[2]]
 				if (killer) {
 					const dx = (entity.x - killer.x)
@@ -1461,24 +1472,29 @@ class Game {
 		}
 		case ActionType.SAY: {
 			action.entity = this.leeks[this.currentPlayer!]
-			this.log(action)
-			action.entity.looseTP(1, this.jumping)
-			if (!this.jumping) {
-				let message = action.params[1]
-				if (action.entity.farmer && action.entity.farmer.muted) {
-					message = "@*%#$€"
+			// currentPlayer peut être null (ex: say() dans le hook afterFight(), logué après END_TURN)
+			if (action.entity) {
+				this.log(action)
+				action.entity.looseTP(1, this.jumping)
+				if (!this.jumping) {
+					let message = action.params[1]
+					if (action.entity.farmer && action.entity.farmer.muted) {
+						message = "@*%#$€"
+					}
+					action.entity.say(this.ctx, message)
 				}
-				action.entity.say(this.ctx, message)
 			}
 			this.actionDone(40)
 			break
 		}
 		case ActionType.LAMA: {
 			action.entity = this.leeks[this.currentPlayer!]
-			this.log(action)
-			action.entity.looseTP(1, this.jumping)
-			if (!this.jumping) {
-				this.leeks[this.currentPlayer!].sayLama()
+			if (action.entity) {
+				this.log(action)
+				action.entity.looseTP(1, this.jumping)
+				if (!this.jumping) {
+					action.entity.sayLama()
+				}
 			}
 			this.actionDone(40)
 			break
@@ -1519,6 +1535,17 @@ class Game {
 				entity.initialMaxLife = entity.maxLife
 			}
 			entity.reborn()
+			// Une entité ressuscitée peut être absente de game.teams (ex: add de boss
+			// inactif à l'init, non ajouté ligne ~709) : reborn() la remet vivante mais
+			// elle n'aurait pas de section dans la barre de vie du haut, d'où un décalage
+			// sections/entités sur les combats de boss avec résurrections (#11806). On
+			// garantit sa présence dans l'équipe (sans doublon).
+			if (this.teams[entity.team - 1] === undefined) {
+				this.teams[entity.team - 1] = []
+			}
+			if (!this.teams[entity.team - 1].includes(entity)) {
+				this.teams[entity.team - 1].push(entity)
+			}
 			cell.setEntity(entity)
 			if (!this.jumping) {
 				entity.setCell(cell)
@@ -1688,7 +1715,7 @@ class Game {
 					const template = LeekWars.items[item].params
 					const img = ["pistol", "machine_gun", "double_gun", "shotgun", "magnum", "laser", "grenade_launcher", "flamme", "destroyer", "gaz_icon", "electrisor", "m_laser", "b_laser", "katana", "broadsword", "axe", "j_laser", "illicit_grenade_launcher", "mysterious_electrisor", "unbridled_gazor", "revoked_m_laser", "rifle", "rhino", "explorer_rifle",
 					"lightninger",
-					null, // 26
+					"plutonium_bazooka", // 26
 					"neutrino", // 27
 					null, // 28
 					"bazooka", // 29
@@ -1773,6 +1800,7 @@ class Game {
 				break
 			case EffectType.BUFF_RESISTANCE:
 			case EffectType.RAW_BUFF_RESISTANCE:
+			case EffectType.DAMAGE_TO_RESISTANCE:
 				leek.buffResistance(value, this.jumping)
 				break
 			case EffectType.SHACKLE_MP:
@@ -1891,6 +1919,7 @@ class Game {
 			break
 		case EffectType.BUFF_RESISTANCE:
 		case EffectType.RAW_BUFF_RESISTANCE:
+		case EffectType.DAMAGE_TO_RESISTANCE:
 			leek.resistance -= value
 			break
 		case EffectType.DAMAGE_RETURN:
@@ -1995,6 +2024,7 @@ class Game {
 			break
 		case EffectType.BUFF_RESISTANCE:
 		case EffectType.RAW_BUFF_RESISTANCE:
+		case EffectType.DAMAGE_TO_RESISTANCE:
 			leek.resistance += delta
 			break
 		case EffectType.DAMAGE_RETURN:
@@ -3100,7 +3130,7 @@ class Game {
 
 	public updateMap() {
 		this.map = this.maps[this.mapType]
-		if (this.mapType === 0 && this.dark) {
+		if (this.mapType === 0 && this.isDark()) {
 			this.map = this.darkNexus
 		}
 		this.map.create()
@@ -3113,15 +3143,22 @@ class Game {
 		this.redraw()
 	}
 
+	// État sombre effectif : en mode auto on suit le thème du site, sinon le
+	// réglage manuel (touche N / switch). Pilote le choix Nexus / DarkNexus.
+	public isDark(): boolean {
+		return this.autoDark ? LeekWars.darkMode : this.dark
+	}
+
 	public toggleDark() {
 		if (this.mapType == 0) {
-			if (this.dark) {
+			if (this.isDark()) {
 				this.map = this.darkNexus
 			} else {
 				this.map = this.maps[this.mapType]
 			}
 			this.map.create()
 			this.atmosphere = this.map.options.sound
+			this.redraw()
 		}
 	}
 }

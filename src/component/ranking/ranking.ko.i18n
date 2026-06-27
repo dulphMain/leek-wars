@@ -56,5 +56,13 @@
 	"turrets_killed": "포탑",
 	"turrets_killed_title": "파괴한 터릿",
 	"won": "승리",
-	"xp": "경험치"
+	"xp": "경험치",
+	"boss": "Boss",
+	"turns": "Turns",
+	"power": "Level",
+	"date": "Date",
+	"boss_mode_turns": "Fastest",
+	"boss_mode_leeks": "Fewest leeks",
+	"boss_mode_power": "Lowest level",
+	"boss_mode_first": "First"
 }

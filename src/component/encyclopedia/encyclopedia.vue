@@ -76,7 +76,7 @@
 							{{ $t('redirected_from', [redirectedFrom]) }}
 						</div>
 
-						<markdown :content="content" mode="encyclopedia" :class="{main: page.reference === 1 }" :locale="page.language" />
+						<markdown :content="content" mode="encyclopedia" :class="{main: page.reference === 1 }" :locale="page.language" @rendered="onMarkdownRendered" />
 
 						<div v-if="page.new && !edition" class="nopage">
 							<v-icon>mdi-book-open-page-variant</v-icon>
@@ -280,6 +280,15 @@
 	const edition = ref(false)
 	const editor = ref<Monaco.editor.IStandaloneCodeEditor | null>(null)
 	let scrolling = false
+	// Date du dernier édit. Taper modifie la hauteur du contenu des deux côtés :
+	// Monaco émet un event de scroll dès que sa scrollHeight change (pas seulement
+	// le scrollTop), et le navigateur clampe le scrollTop de la preview lors de son
+	// re-render. Ces events ne sont pas des scrolls utilisateur ; les répercuter via
+	// la synchro fait sauter l'éditeur et dériver la preview à chaque touche. On
+	// désactive donc la synchro dans les deux sens juste après une frappe, le temps
+	// que le reflow se stabilise.
+	const REFLOW_STABILIZE_DELAY = 400
+	let lastEditTime = 0
 	const modified = ref(false)
 	const statsExpanded = ref(false)
 	const redirectedFrom = ref<string | null>(null)
@@ -290,6 +299,7 @@
 	const diffEditor = ref<Monaco.editor.IStandaloneDiffEditor | null>(null)
 	const referencedBy = ref<ReferencedBy | null>(null)
 	let destroyed = false
+	let loadedPending = false
 
 	const language = computed(() => {
 		const lang = route.params && route.params.lang ? route.params.lang as string : i18nLocale.value as string
@@ -399,13 +409,51 @@
 		i18n.global.mergeLocaleMessage(locale, { doc: docMessages.default })
 	})
 
+	// Met à jour les balises SEO/partage pour la page d'encyclopédie chargée :
+	// description tirée du contenu, URL canonique propre, et hreflang vers les traductions.
+	function updatePageMeta(p: EncyclopediaPage) {
+		const path = '/encyclopedia/' + p.language + '/' + p.title.replace(/ /g, '_')
+		const canonical = 'https://leekwars.com' + path
+
+		let description = p.content
+			.replace(/```[\s\S]*?```/g, ' ')           // blocs de code
+			.replace(/\{\{[^}]*\}\}/g, ' ')             // tokens de template encyclo ({{ summary }}, ...)
+			.replace(/<[^>]*>/g, ' ')                   // HTML inline (avant de retirer les > du markdown)
+			.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')  // liens / images → texte
+			.replace(/[#>*_`~|[\]-]/g, ' ')             // syntaxe markdown
+			.replace(/\s+/g, ' ')
+			.trim()
+		if (description.length > 200) {
+			description = description.slice(0, 200).replace(/\s+\S*$/, '') + '…'
+		}
+
+		const alternates = [
+			{ lang: p.language, url: canonical },
+			...Object.entries(p.translations).map(([lang, t]) => ({
+				lang,
+				url: 'https://leekwars.com/encyclopedia/' + lang + '/' + t.replace(/ /g, '_')
+			}))
+		]
+
+		LeekWars.setMeta({
+			title: p.title,
+			description: description || null,
+			canonical,
+			alternates
+		})
+	}
+
 	watch(lanuage_and_code, async () => {
 		await LeekWars.loadEncyclopedia(language.value)
 		if (destroyed) { return }
 
 		if (code.value === 'Page au hasard') {
-			const ps = Object.values(LeekWars.encyclopedia[i18nLocale.value])
-			router.replace('/encyclopedia/' + i18nLocale.value + '/' + ps[Math.random() * ps.length | 0].title)
+			await LeekWars.loadEncyclopedia(i18nLocale.value)
+			if (destroyed) { return }
+			const ps = Object.values(LeekWars.encyclopedia[i18nLocale.value] || {})
+			if (ps.length) {
+				router.replace('/encyclopedia/' + i18nLocale.value + '/' + ps[Math.random() * ps.length | 0].title)
+			}
 			return
 		}
 
@@ -437,7 +485,11 @@
 				setEditorContent()
 			}
 			LeekWars.setTitle(title.value)
-			emitter.emit('loaded')
+			updatePageMeta(p)
+			// Les id des headings sont posés par <markdown> après son rendu ;
+			// on attend son événement 'rendered' avant d'émettre 'loaded'
+			// pour que le scroll_to_hash global trouve l'ancre.
+			loadedPending = true
 		})
 		.error((err) => {
 			const result = err as { translations?: Record<string, string> }
@@ -527,10 +579,12 @@ ${ret}
 					overviewRulerLanes: 0,
 					overviewRulerBorder: false,
 					renderLineHighlight: "line",
+					accessibilitySupport: 'off', // Workaround Firefox : sélection backward + remplacement (#2802)
 				}))
 
 				editor.value.onDidChangeModelContent(() => {
 					modified.value = true
+					lastEditTime = Date.now()
 					if (page.value) page.value.content = editor.value!.getValue()
 					// La page parent est déclarée par le premier blockquote (« > Titre ») du
 					// contenu. On la résout depuis le rendu markdown après mise à jour du DOM.
@@ -548,6 +602,9 @@ ${ret}
 
 				editor.value.onDidScrollChange((e) => {
 					if (scrolling) { scrolling = false; return }
+					// Scroll provoqué par la frappe (croissance de scrollHeight), pas par
+					// l'utilisateur : ne pas le répercuter sur la preview (sinon elle dérive).
+					if (Date.now() - lastEditTime < REFLOW_STABILIZE_DELAY) { return }
 					const scrollTop = e.scrollTop
 					const scrollHeight = e.scrollHeight
 					const editorHeight = editor.value!.getLayoutInfo().height
@@ -602,8 +659,17 @@ ${ret}
 		}
 	}
 
+	function onMarkdownRendered() {
+		if (!loadedPending) return
+		loadedPending = false
+		emitter.emit('loaded')
+	}
+
 	function markdownScroll() {
 		if (scrolling) { scrolling = false; return }
+		// Scroll émis par le reflow de la preview suite à une frappe, pas par
+		// l'utilisateur : ne pas le répercuter sur l'éditeur (sinon il saute).
+		if (Date.now() - lastEditTime < REFLOW_STABILIZE_DELAY) { return }
 		const md = markdownRef.value
 		if (!md) return
 		const percent = md.scrollTop / (md.scrollHeight - md.clientHeight)
@@ -648,9 +714,11 @@ ${ret}
 		})
 
 		modified.value = false
-		page.value.last_edition_time = Date.now() / 1000
-		page.value.last_editor = store.state.farmer!.id
-		page.value.last_editor_name = store.state.farmer!.name
+		if (page.value) {
+			page.value.last_edition_time = Date.now() / 1000
+			page.value.last_editor = store.state.farmer!.id
+			page.value.last_editor_name = store.state.farmer!.name
+		}
 	}
 
 	function toggleStats() {

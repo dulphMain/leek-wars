@@ -20,6 +20,7 @@ const AdminTournaments = () => import(/* webpackChunkName: "admin" */ `@/compone
 const AdminFunnels = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-funnels.vue`)
 const AdminDashboards = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-dashboards.vue`)
 const AdminMatchmaking = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-matchmaking.vue`)
+const AdminGameAnimations = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin-game-animations.vue`)
 const Admin = () => import(/* webpackChunkName: "admin" */ `@/component/admin/admin.vue`)
 const Api = () => import(/* webpackChunkName: "[request]" */ `@/component/api/api.${locale}.i18n`)
 import Error from '@/component/app/error.vue'
@@ -131,6 +132,11 @@ const disconnected = (to: RouteLocationNormalized, _from: RouteLocationNormalize
 	}
 }
 
+// Layout déclaré par route, appliqué dans router.afterEach avant le 1er rendu (cf. #4150).
+// Objets partagés (lus, jamais mutés) pour éviter de répéter le littéral sur chaque route.
+const LAYOUT_BOX = { layout: { box: true, footer: false } }
+const LAYOUT_BOX_LARGE = { layout: { box: true, large: true, footer: false } }
+
 const routes: RouteRecordRaw[] = [
 	{ path: '/', component: Home },
 	{ path: '/godfather', component: Home },
@@ -155,9 +161,13 @@ const routes: RouteRecordRaw[] = [
 	{ path: '/admin/tournaments', component: AdminTournaments, beforeEnter: connected },
 	{ path: '/admin/funnels', component: AdminFunnels, beforeEnter: connected },
 	{ path: '/admin/funnels/:funnel', component: AdminFunnels, beforeEnter: connected },
-	{ path: '/admin/dashboards', component: AdminDashboards, beforeEnter: connected },
-	{ path: '/admin/dashboards/:id', component: AdminDashboards, beforeEnter: connected },
+	// Un seul record (param :id optionnel) : avec deux records distincts, le replace
+	// vers /:id après chargement comparait un loader lazy non encore résolu (record :id)
+	// à un composant déjà résolu (record de base, muté par vue-router) → toComponent !==
+	// fromComponent → resetLayout() intempestif, sans remount donc sans re-set du large.
+	{ path: '/admin/dashboards/:id?', component: AdminDashboards, beforeEnter: connected },
 	{ path: '/admin/matchmaking', component: AdminMatchmaking, beforeEnter: connected },
+	{ path: '/admin/game-animations', component: AdminGameAnimations, meta: LAYOUT_BOX_LARGE, beforeEnter: connected },
 	{ path: '/about', component: About },
 	{ path: '/app', component: MobileApp },
 	{ path: '/conditions', component: Conditions },
@@ -170,16 +180,14 @@ const routes: RouteRecordRaw[] = [
 	{ path: '/dev-blog/:id', component: DevBlogArticle },
 	{ path: '/creator', component: Creator, beforeEnter: connected },
 	{ path: '/creator/:id', component: Creator, beforeEnter: connected },
-	{ path: '/dev-blog', component: DevBlog },
-	{ path: '/dev-blog/:id', component: DevBlogArticle },
 	{ path: '/encyclopedia', component: Encyclopedia, meta: {scrollOffset: 45} },
 	{ path: '/encyclopedia/:page', component: Encyclopedia, meta: {scrollOffset: 45} },
 	{ path: '/encyclopedia/:lang/:page', component: Encyclopedia, meta: {scrollOffset: 45} },
 	{ path: '/encyclopedia-search', component: EncyclopediaSearch },
-	{ path: '/editor', component: Editor, beforeEnter: connected },
-	{ path: '/editor/:id(.+)/diff', component: Editor, beforeEnter: connected },
-	{ path: '/editor/:id(.+)/h/:hash', component: Editor, beforeEnter: connected },
-	{ path: '/editor/:id(.+)', component: Editor, beforeEnter: connected },
+	{ path: '/editor', component: Editor, meta: LAYOUT_BOX, beforeEnter: connected },
+	{ path: '/editor/:id(.+)/diff', component: Editor, meta: LAYOUT_BOX, beforeEnter: connected },
+	{ path: '/editor/:id(.+)/h/:hash', component: Editor, meta: LAYOUT_BOX, beforeEnter: connected },
+	{ path: '/editor/:id(.+)', component: Editor, meta: LAYOUT_BOX, beforeEnter: connected },
 	{ path: '/group/:id', component: Group, beforeEnter: connected },
 	{ path: '/groups', component: Groups },
 	{ path: '/error/:message', component: Error },
@@ -197,15 +205,15 @@ const routes: RouteRecordRaw[] = [
 	{ path: '/garden/:category/:type/:target', component: Garden, beforeEnter: connected },
 	{ path: '/garden/:category/:type/:target/:item', component: Garden, beforeEnter: connected },
 	{ path: '/help', component: Encyclopedia },
-	{ path: '/help/api', component: Api },
-	{ path: '/help/api/:module/:function', component: Api, props: { popup: false } },
-	{ path: '/help/documentation', component: Documentation, props: { popup: false } },
-	{ path: '/help/documentation/:item', component: Documentation, props: { popup: false } },
+	{ path: '/help/api', component: Api, meta: LAYOUT_BOX },
+	{ path: '/help/api/:module/:function', component: Api, props: { popup: false }, meta: LAYOUT_BOX },
+	{ path: '/help/documentation', component: Documentation, props: { popup: false }, meta: LAYOUT_BOX },
+	{ path: '/help/documentation/:item', component: Documentation, props: { popup: false }, meta: LAYOUT_BOX },
 	{ path: '/help/items', component: Items },
 	{ path: '/help/line-of-sight', component: LineOfSight },
 	{ path: '/help/general', component: GeneralHelp },
 	{ path: '/help/tutorial', component: Tutorial },
-	{ path: '/inventory', component: InventoryPage },
+	{ path: '/inventory', component: InventoryPage, meta: LAYOUT_BOX },
 	{ path: '/legal', component: Legal },
 	{ path: '/login', component: Login, beforeEnter: disconnected },
 	{ path: '/login/:token', component: Login },
@@ -213,9 +221,9 @@ const routes: RouteRecordRaw[] = [
 	{ path: '/leek/:id/history', component: History, props: {type: 'leek'} },
 	{ path: '/market', name: 'market', component: Market, meta: {noscrollapp: true}, beforeEnter: connected },
 	{ path: '/market/:item', component: Market, meta: {noscrollapp: true}, beforeEnter: connected },
-	{ path: '/messages', component: Messages, beforeEnter: connected },
-	{ path: '/messages/conversation/:id', component: Messages, beforeEnter: connected },
-	{ path: '/messages/new/:farmer_id/:name/:avatar_changed', component: Messages, beforeEnter: connected },
+	{ path: '/messages', component: Messages, meta: LAYOUT_BOX_LARGE, beforeEnter: connected },
+	{ path: '/messages/conversation/:id', component: Messages, meta: LAYOUT_BOX_LARGE, beforeEnter: connected },
+	{ path: '/messages/new/:farmer_id/:name/:avatar_changed', component: Messages, meta: LAYOUT_BOX_LARGE, beforeEnter: connected },
 	{ path: '/moderation', component: Moderation, meta: {noscroll: true}, beforeEnter: connected },
 	{ path: '/moderation/fault/:id', component: Moderation, meta: {noscroll: true}, beforeEnter: connected },
 	{ path: '/moderation/thugs', component: ModerationThugs, meta: {noscroll: true}, beforeEnter: connected },
@@ -257,9 +265,9 @@ if (import.meta.env.VITE_SOCIAL !== 'false') {
 		{ path: '/forum/category-:category/topic-:topic', component: ForumTopic },
 		{ path: '/forum/category-:category/topic-:topic/page-:page', component: ForumTopic },
 		{ path: '/search', component: ForumSearch, beforeEnter: connected },
-		{ path: '/chat', component: Messages, beforeEnter: connected },
-		{ path: '/chat/:id', component: Messages, beforeEnter: connected },
-		{ path: '/chat/new/:farmer_id/:name/:avatar_changed', component: Messages, beforeEnter: connected },
+		{ path: '/chat', component: Messages, meta: LAYOUT_BOX_LARGE, beforeEnter: connected },
+		{ path: '/chat/:id', component: Messages, meta: LAYOUT_BOX_LARGE, beforeEnter: connected },
+		{ path: '/chat/new/:farmer_id/:name/:avatar_changed', component: Messages, meta: LAYOUT_BOX_LARGE, beforeEnter: connected },
 	)
 }
 if (import.meta.env.VITE_BANK !== 'false') {
@@ -349,6 +357,19 @@ router.beforeEach(async (to: RouteLocationNormalized, from: RouteLocationNormali
 	LeekWars.splitShowList()
 	LeekWars.actions = []
 
+	// Mettre à jour le store ici (avant le nextTick) pour que ce changement réactif
+	// soit batché avec resetLayout() dans le même flush, plutôt que de créer un second
+	// flush non drainé juste avant next() (ce second flush s'exécuterait en même temps
+	// que le swap <RouterView> → risque accru de "parentNode of null").
+	if (window.__FARMER__) {
+		store.commit('connected', '$')
+	} else {
+		const token = LeekWars.DEV ? localStorage.getItem('token') : '$'
+		if (localStorage.getItem('connected') === 'true') {
+			store.commit('connected', token)
+		}
+	}
+
 	// Reset des flags de layout par page à leurs valeurs par défaut AVANT le swap de
 	// <router-view> : chaque page ré-applique son layout dans onMounted (après le swap).
 	// On ne reset que si le COMPOSANT de destination diffère de celui d'origine : sinon
@@ -360,27 +381,52 @@ router.beforeEach(async (to: RouteLocationNormalized, from: RouteLocationNormali
 	const toComponent = to.matched[to.matched.length - 1]?.components?.default
 	const fromComponent = from.matched[from.matched.length - 1]?.components?.default
 	if (toComponent !== fromComponent) {
-		LeekWars.resetLayout()
-		// resetLayout() mute des flags réactifs bindés sur la classe de app.vue (ancêtre
-		// du <router-view>). Sans ce tick, le re-render de app.vue et le swap de route
-		// flushent ensemble : app.vue re-patche son sous-arbre PENDANT que <RouterView>
-		// monte la page de destination, dont le vnode racine a alors `el` null → crash
-		// "parentNode of null" dans le scheduler (cluster #4050-#4059, Firefox). En
-		// attendant un tick, app.vue se stabilise AVANT le swap. Ne touche aucune valeur
-		// de layout (le gating par composant est conservé) → pas de régression éditeur.
+		// store.commit('connected') ci-dessus mute un flag réactif (connected) bindé sur
+		// app.vue (ancêtre du <router-view>). Sans ce tick, le re-render de app.vue et le
+		// swap de route flushent ensemble : app.vue re-patche son sous-arbre PENDANT que
+		// <RouterView> monte la page de destination, dont le vnode racine a alors `el` null
+		// → crash "parentNode of null" dans le scheduler. En attendant un tick, app.vue se
+		// stabilise AVANT le swap.
+		// Le layout (resetLayout + meta.layout) est posé dans afterEach (après confirmation,
+		// batché avec le swap) et non ici : sinon le changement de layout s'applique sur la
+		// page encore affichée pendant le chargement du chunk lazy → flash (élargissement /
+		// dé-box de la page précédente) (#4150).
 		await nextTick()
 	}
 
-	if (window.__FARMER__) {
-		store.commit('connected', '$')
-	} else {
-		const token = LeekWars.DEV ? localStorage.getItem('token') : '$'
-		if (localStorage.getItem('connected') === 'true') {
-			store.commit('connected', token)
+	next()
+})
+
+// Réinitialise les balises meta SEO/partage à chaque navigation : pose le canonical et
+// l'og:url de l'URL courante + remet les valeurs par défaut. Les pages publiques surchargent
+// ensuite via LeekWars.setMeta() dans leur onMounted (après le swap de <router-view>).
+router.afterEach((to, from, failure) => {
+	// Layout posé ICI (afterEach) et non dans beforeEach : la navigation est confirmée et le
+	// chunk lazy chargé, donc resetLayout()/meta.layout se batchent avec le swap de
+	// <router-view> → appliqués sur la page de DESTINATION, jamais sur la page courante encore
+	// affichée. Posé dans beforeEach, le layout s'appliquait sur la page quittée pendant le
+	// chargement du chunk → flash (élargissement `large` / dé-box de la page précédente)
+	// (#4150). Les flags de layout ne sont plus lus par le template de app.vue (depuis
+	// e703b37e3, #4163) → les muter ici ne re-render pas app.vue, le swap reste sûr.
+	// `failure` : afterEach est aussi appelé sur une navigation AVORTÉE (un onBeforeRouteLeave
+	// qui fait next(false) : éditeur/encyclopédie qui annulent la confirmation "modifs non
+	// sauvées"). La nav échoue mais on reste sur la page courante → ne PAS toucher son layout
+	// (sinon elle rapetisse/dé-boxe en place). On gate donc le layout sur l'absence d'échec.
+	// Gating par composant : sur une nav de paramètres (même composant), on préserve les
+	// flags déjà posés (la page ne re-monte pas). meta.layout pose le layout de façon
+	// déterministe AVANT le 1er rendu de la page (comme au refresh) plutôt que dans son
+	// onMounted, où la fenêtre resetLayout(box=false)/onMounted(box=true) pouvait laisser
+	// box=false après nav → chat/doc à la hauteur du contenu, sans scroll (#4150).
+	const toComponent = to.matched[to.matched.length - 1]?.components?.default
+	const fromComponent = from.matched[from.matched.length - 1]?.components?.default
+	if (!failure && toComponent !== fromComponent) {
+		LeekWars.resetLayout()
+		const layout = to.meta.layout as Record<string, boolean> | undefined
+		if (layout) {
+			for (const key in layout) { (LeekWars as unknown as Record<string, boolean>)[key] = layout[key] }
 		}
 	}
-
-	next()
+	LeekWars.setMeta()
 })
 
 export function getRedirectAfterLogin(): string {

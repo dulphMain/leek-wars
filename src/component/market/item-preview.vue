@@ -13,7 +13,7 @@
 		</div>
 		<div v-if="item.type === ItemType.WEAPON || item.type === ItemType.CHIP" class="constant">{{ item.name.toUpperCase() }}</div>
 		<div class="image" :class="{sound: category === 'chip' || category === 'weapon'}">
-			<img v-if="item.type === ItemType.WEAPON" :src="'/image/weapon/' + item.name.replace(category + '_', '') + '.png'" :width="WeaponsData[item.params].width" @click="playSound(item, category)">
+			<img v-if="item.type === ItemType.WEAPON" :src="'/image/weapon/' + item.name.replace(category + '_', '') + '.png'" :width="WeaponsData[item.params]?.width" @click="playSound(item, category)">
 			<scheme-image v-else-if="item.type === ItemType.SCHEME" :scheme="LeekWars.schemes[item.params]" />
 			<img v-else :src="'/image/' + category + '/' + item.name.replace(category + '_', '') + '.png'" @click="playSound(item, category)">
 		</div>
@@ -26,7 +26,8 @@
 		<hat-preview v-else-if="item.type === ItemType.HAT" :hat="LeekWars.hats[item.params]" />
 		<pomp-preview v-else-if="item.type === ItemType.POMP" :pomp="LeekWars.pomps[item.id]" />
 		<resource-preview v-else-if="item.type === ItemType.RESOURCE" :resource="LeekWars.items[item.id]" />
-		<component-preview v-else-if="item.type === ItemType.COMPONENT" :component="LeekWars.components[item.params]" @update:model-value="$emit('update:modelValue', $event)" />
+		<!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -->
+		<component-preview v-else-if="item.type === ItemType.COMPONENT" :component="(LeekWars.components[item.params] as any)" @update:model-value="$emit('update:modelValue', $event)" />
 		<scheme-preview v-else-if="item.type === ItemType.SCHEME" :scheme="LeekWars.schemes[item.params]" :show-craft="!!inventory" @update:model-value="$emit('update:modelValue', $event)" />
 		<!-- <fight-pack-preview v-else-if="item.type === ItemType.FIGHT_PACK" :resource="LeekWars.items[item.id]" /> -->
 

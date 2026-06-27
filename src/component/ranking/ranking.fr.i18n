@@ -56,5 +56,13 @@
 	"turrets_killed_title": "Tourelles détruites",
 	"won": "Victoires",
 	"damage": "Dégâts",
-	"damage_title": "Dégâts infligés"
+	"damage_title": "Dégâts infligés",
+	"boss": "Boss",
+	"turns": "Tours",
+	"power": "Niveau",
+	"date": "Date",
+	"boss_mode_turns": "Le plus rapide",
+	"boss_mode_leeks": "Le moins de poireaux",
+	"boss_mode_power": "Plus bas niveau",
+	"boss_mode_first": "Premiers"
 }

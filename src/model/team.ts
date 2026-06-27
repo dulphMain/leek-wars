@@ -1,6 +1,7 @@
 import { Farmer } from '@/model/farmer'
 import { Fight } from '@/model/fight'
 import { Leek } from '@/model/leek'
+import { Tournament } from '@/model/tournament'
 
 const TEAM_COLORS = [
 	"#0b30ea", // blue
@@ -40,6 +41,10 @@ interface TeamCandidacy {
 interface TeamInvitation {
 	id: number
 	team_id?: number
+	team_name?: string
+	emblem_changed?: number
+	sender_id?: number
+	sender_name?: string
 	farmer: { id: number, name: string, [key: string]: unknown }
 	[key: string]: unknown
 }
@@ -78,7 +83,7 @@ class Team {
 	public membersById!: {[key: number]: TeamMember}
 	public compositions!: Composition[]
 	public compositionsById!: {[key: number]: Composition}
-	public tournaments!: unknown[]
+	public tournaments!: Tournament[]
 	public leeks!: Leek[]
 	public unengaged_leeks!: Leek[]
 	public opened!: boolean
